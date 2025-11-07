@@ -109,7 +109,7 @@ void StreamViewer::run() {
         std::string text_frame = "frames: " + std::to_string(s.frames);
         std::string text_fps = "fps: " + std::to_string(int(s.fps));
         std::string text_perdidos = "lost: " + std::to_string(s.lost);
-        std::string text_resolution = "resolution: " + std::to_string(w_frame) + "*" + std::to_string(h_frame)
+        std::string text_resolution = "resolution: " + std::to_string(w_frame) + "*" + std::to_string(h_frame);
 
         cv::putText(display, text_channel, cv::Point(10, 20), cv::FONT_HERSHEY_SIMPLEX, 0.5, color_text, 1);
         cv::putText(display, text_frame, cv::Point(10, 40), cv::FONT_HERSHEY_SIMPLEX, 0.5, color_text, 1);
