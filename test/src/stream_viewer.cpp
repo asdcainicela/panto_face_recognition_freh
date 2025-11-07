@@ -49,7 +49,6 @@ void StreamViewer::print_final_stats() {
     std::cout << "frames totales: " << frames << " | frames perdidos: " << lost << "\n";
     std::cout << "fps promedio: " << (frames / duration) << "\n";
 }
-
 void StreamViewer::run() {
     try {
         cap = open_cap(pipeline);
@@ -59,6 +58,14 @@ void StreamViewer::run() {
     }
 
     cv::namedWindow(window_name, cv::WINDOW_NORMAL);
+    cv::resizeWindow(window_name, display_size.width, display_size.height);  // forzar 
+    
+    // separar las ventanas en la pantalla
+    if (stream_type == "main") {
+        cv::moveWindow(window_name, 0, 0);
+    } else {
+        cv::moveWindow(window_name, 650, 0);
+    }
 
     while (true) {
         if (!cap.read(frame)) {
