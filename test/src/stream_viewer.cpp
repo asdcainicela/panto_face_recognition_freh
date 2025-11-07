@@ -8,12 +8,13 @@ StreamViewer::StreamViewer(const std::string& user, const std::string& pass,
                            cv::Size display_size, int fps_interval)
     : user(user), pass(pass), ip(ip), port(port), stream_type(stream_type),
       display_size(display_size), fps_interval(fps_interval),
-      frames(0), lost(0) {
+      frames(0), lost(0), current_fps(0.0) {
     
     pipeline = gst_pipeline(user, pass, ip, port, stream_type);
     window_name = "rtsp " + ip + "/" + stream_type + " " + std::to_string(port) + " stream";
     start_main = std::chrono::steady_clock::now();
     start_fps = start_main;
+    cached_stats = {0.0, 0, 0};
 }
 
 bool StreamViewer::reconnect() {
@@ -28,26 +29,25 @@ bool StreamViewer::reconnect() {
     }
 }
 
-StreamStats StreamViewer::stats() {
-    StreamStats s{};
-    s.frames = frames;
-    s.lost = lost;
-    
-    // Calcular FPS solo cada fps_interval frames
+void StreamViewer::update_fps() {
     if (frames % fps_interval == 0 && frames > 0) {
         auto now = std::chrono::steady_clock::now();
-        s.fps = fps_interval / std::chrono::duration<double>(now - start_fps).count();
+        current_fps = fps_interval / std::chrono::duration<double>(now - start_fps).count();
         start_fps = now;
-    } else {
-        s.fps = 0.0;
     }
     
-    return s;
+    cached_stats.fps = current_fps;
+    cached_stats.frames = frames;
+    cached_stats.lost = lost;
+}
+
+const StreamStats& StreamViewer::get_stats() {
+    return cached_stats;
 }
 
 void StreamViewer::print_stats() {
     if (frames % fps_interval == 0) {
-        auto s = stats();
+        const auto& s = get_stats();
         spdlog::info("stream: {} | frames: {} | fps: {} | perdidos: {}", 
                      stream_type, s.frames, int(s.fps), s.lost);
     }
@@ -90,20 +90,18 @@ void StreamViewer::run() {
 
         frames++;
         cv::resize(frame, display, display_size);
+        update_fps();
 
         int w = display.cols;
         int h = display.rows;
         
-        // Dibujar rectángulo en esquina superior izquierda
         cv::Rect roi(0, 0, w/4, h/4);
         cv::Scalar color_text(255, 0, 0);
-        cv::rectangle(display, roi, cv::Scalar(0, 255, 0), 0.5);
+        cv::rectangle(display, roi, cv::Scalar(0, 255, 0), 2);
         
-        // Obtener estadísticas
-        auto s = stats();
+        const auto& s = get_stats();
         
-        // Mostrar texto con estadísticas
-        std::string text_channel = "chanel: " + std::to_string(stream_type);
+        std::string text_channel = "channel: " + stream_type;
         std::string text_frame = "frames: " + std::to_string(s.frames);
         std::string text_fps = "fps: " + std::to_string(int(s.fps));
         std::string text_perdidos = "perdidos: " + std::to_string(s.lost);

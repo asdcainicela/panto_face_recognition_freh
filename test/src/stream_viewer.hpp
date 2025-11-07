@@ -20,14 +20,18 @@ private:
     cv::Mat frame, display;
 
     int frames, lost;
+    double current_fps;
     std::chrono::steady_clock::time_point start_main, start_fps;
     std::string window_name;
     std::string pipeline;
 
     bool reconnect();
-    StreamStats stats(); 
+    void update_fps();
+    const StreamStats& get_stats();
     void print_stats();
     void print_final_stats();
+    
+    StreamStats cached_stats;
 
 public:
     StreamViewer(const std::string& user, const std::string& pass, 
