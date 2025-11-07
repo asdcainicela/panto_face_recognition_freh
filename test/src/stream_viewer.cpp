@@ -1,7 +1,6 @@
-
 #include "stream_viewer.hpp"
 #include "utils.hpp"
-#include <iostream>
+#include <spdlog/spdlog.h>
 #include <thread>
 
 StreamViewer::StreamViewer(const std::string& user, const std::string& pass, 
@@ -24,7 +23,7 @@ bool StreamViewer::reconnect() {
         cap = open_cap(pipeline);
         return true;
     } catch (...) {
-        std::cerr << "reconexion fallida\n";
+        spdlog::error("reconexion fallida para stream {}", stream_type);
         return false;
     }
 }
@@ -34,10 +33,8 @@ void StreamViewer::print_stats() {
         auto now = std::chrono::steady_clock::now();
         double fps = fps_interval / std::chrono::duration<double>(now - start_fps).count();
         start_fps = now;
-        std::cout << "stream_type: " << stream_type
-                  << " | frames: " << frames
-                  << " | fps: " << int(fps)
-                  << " | perdidos: " << lost << "\n";
+        spdlog::info("stream: {} | frames: {} | fps: {} | perdidos: {}", 
+                     stream_type, frames, int(fps), lost);
     }
 }
 
@@ -45,23 +42,23 @@ void StreamViewer::print_final_stats() {
     auto end_main = std::chrono::steady_clock::now();
     double duration = std::chrono::duration<double>(end_main - start_main).count();
     
-    std::cout << "\n=== estadisticas finales ===\n";
-    std::cout << "duracion total: " << duration << " s\n";
-    std::cout << "frames totales: " << frames << " | frames perdidos: " << lost << "\n";
-    std::cout << "fps promedio: " << (frames / duration) << "\n";
+    spdlog::info("=== estadisticas finales {} ===", stream_type);
+    spdlog::info("duracion total: {:.2f} s", duration);
+    spdlog::info("frames totales: {} | frames perdidos: {}", frames, lost);
+    spdlog::info("fps promedio: {:.2f}", frames / duration);
 }
+
 void StreamViewer::run() {
     try {
         cap = open_cap(pipeline);
     } catch (const std::exception& e) {
-        std::cerr << "error: " << e.what() << "\n";
+        spdlog::error("error al abrir stream {}: {}", stream_type, e.what());
         return;
     }
 
     cv::namedWindow(window_name, cv::WINDOW_NORMAL);
-    cv::resizeWindow(window_name, display_size.width, display_size.height);  // forzar 
+    cv::resizeWindow(window_name, display_size.width, display_size.height);
     
-    // separar las ventanas en la pantalla
     if (stream_type == "main") {
         cv::moveWindow(window_name, 0, 0);
     } else {
@@ -71,7 +68,7 @@ void StreamViewer::run() {
     while (true) {
         if (!cap.read(frame)) {
             lost++;
-            std::cerr << "frame perdido. reconectando...\n";
+            spdlog::warn("frame perdido en {}. reconectando...", stream_type);
             if (!reconnect()) break;
             continue;
         }

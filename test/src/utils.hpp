@@ -1,6 +1,7 @@
 #pragma once
 #include <opencv2/opencv.hpp>
 #include <string>
+#include <spdlog/spdlog.h>
 
 std::string gst_pipeline(const std::string& user, const std::string& pass, 
                         const std::string& ip, int port, const std::string& stream_type);

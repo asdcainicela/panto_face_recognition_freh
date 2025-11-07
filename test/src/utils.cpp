@@ -1,5 +1,5 @@
 #include "utils.hpp"
-#include <iostream>
+#include <spdlog/spdlog.h>
 #include <thread>
 #include <chrono>
 
@@ -18,11 +18,12 @@ cv::VideoCapture open_cap(const std::string& pipeline, int retries) {
     for (int i = 0; i < retries; ++i) {
         cap.open(pipeline, cv::CAP_GSTREAMER);
         if (cap.isOpened()) {
-            std::cout << "conectado exitosamente\n";
+            spdlog::info("conectado exitosamente");
             return cap;
         }
-        std::cerr << "intento " << (i+1) << "/" << retries << " fallido. reintentando en 2s...\n";
+        spdlog::warn("intento {}/{} fallido. reintentando en 2s...", i+1, retries);
         std::this_thread::sleep_for(std::chrono::seconds(2));
     }
+    spdlog::error("no se pudo conectar al pipeline");
     throw std::runtime_error("no se pudo conectar a: " + pipeline);
 }
