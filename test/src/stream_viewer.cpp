@@ -39,7 +39,7 @@ StreamStats StreamViewer::stats() {
         s.fps = fps_interval / std::chrono::duration<double>(now - start_fps).count();
         start_fps = now;
     } else {
-        s.fps = 0.0; // o mantener el último FPS conocido
+        s.fps = 0.0;
     }
     
     return s;
@@ -95,28 +95,22 @@ void StreamViewer::run() {
         int h = display.rows;
         
         // Dibujar rectángulo en esquina superior izquierda
-        cv::Rect roi(0, 0, w / 4, h / 4);
+        cv::Rect roi(0, 0, w/4, h/4);
+        cv::Scalar color_text(255, 0, 0);
         cv::rectangle(display, roi, cv::Scalar(0, 255, 0), 2);
         
         // Obtener estadísticas
         auto s = stats();
         
         // Mostrar texto con estadísticas
-        std::string text = "frames: " + std::to_string(s.frames);
-        cv::putText(display, text, cv::Point(10, 30), 
-                   cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 0), 2);
-        
-        if (s.fps > 0) {
-            text = "fps: " + std::to_string(int(s.fps));
-            cv::putText(display, text, cv::Point(10, 60), 
-                       cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 0), 2);
-        }
-        
-        if (s.lost > 0) {
-            text = "perdidos: " + std::to_string(s.lost);
-            cv::putText(display, text, cv::Point(10, 90), 
-                       cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 0, 255), 2);
-        }
+        std::string text_frame = "frames: " + std::to_string(s.frames);
+        std::string text_fps = "fps: " + std::to_string(int(s.fps));
+        std::string text_perdidos = "perdidos: " + std::to_string(s.lost);
+
+        cv::putText(display, stream_type, cv::Point(10, 30), cv::FONT_HERSHEY_SIMPLEX, 0.5, color_text, 2);
+        cv::putText(display, text_frame, cv::Point(10, 60), cv::FONT_HERSHEY_SIMPLEX, 0.5, color_text, 2);
+        cv::putText(display, text_fps, cv::Point(10, 90), cv::FONT_HERSHEY_SIMPLEX, 0.5, color_text, 2);
+        cv::putText(display, text_perdidos, cv::Point(10, 120), cv::FONT_HERSHEY_SIMPLEX, 0.5, color_text, 2);
 
         cv::imshow(window_name, display);
 
