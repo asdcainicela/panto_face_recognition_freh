@@ -3,6 +3,12 @@
 #include <string>
 #include <chrono>
 
+struct StreamStats {
+    double fps;
+    int frames;
+    int lost;
+};
+
 class StreamViewer {
 private:
     std::string user, pass, ip, stream_type;
@@ -19,6 +25,7 @@ private:
     std::string pipeline;
 
     bool reconnect();
+    StreamStats stats(); 
     void print_stats();
     void print_final_stats();
 

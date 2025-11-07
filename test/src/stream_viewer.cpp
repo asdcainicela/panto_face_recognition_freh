@@ -28,13 +28,28 @@ bool StreamViewer::reconnect() {
     }
 }
 
+StreamStats StreamViewer::stats() {
+    StreamStats s{};
+    s.frames = frames;
+    s.lost = lost;
+    
+    // Calcular FPS solo cada fps_interval frames
+    if (frames % fps_interval == 0 && frames > 0) {
+        auto now = std::chrono::steady_clock::now();
+        s.fps = fps_interval / std::chrono::duration<double>(now - start_fps).count();
+        start_fps = now;
+    } else {
+        s.fps = 0.0; // o mantener el último FPS conocido
+    }
+    
+    return s;
+}
+
 void StreamViewer::print_stats() {
     if (frames % fps_interval == 0) {
-        auto now = std::chrono::steady_clock::now();
-        double fps = fps_interval / std::chrono::duration<double>(now - start_fps).count();
-        start_fps = now;
+        auto s = stats();
         spdlog::info("stream: {} | frames: {} | fps: {} | perdidos: {}", 
-                     stream_type, frames, int(fps), lost);
+                     stream_type, s.frames, int(s.fps), s.lost);
     }
 }
 
@@ -79,8 +94,29 @@ void StreamViewer::run() {
         int w = display.cols;
         int h = display.rows;
         
-        cv::Rect roi(w * 3 / 4, h * 3 / 4, w / 4, h / 4); //dibujamos rectangulo 
+        // Dibujar rectángulo en esquina superior izquierda
+        cv::Rect roi(0, 0, w / 4, h / 4);
         cv::rectangle(display, roi, cv::Scalar(0, 255, 0), 2);
+        
+        // Obtener estadísticas
+        auto s = stats();
+        
+        // Mostrar texto con estadísticas
+        std::string text = "frames: " + std::to_string(s.frames);
+        cv::putText(display, text, cv::Point(10, 30), 
+                   cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 0), 2);
+        
+        if (s.fps > 0) {
+            text = "fps: " + std::to_string(int(s.fps));
+            cv::putText(display, text, cv::Point(10, 60), 
+                       cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 255, 0), 2);
+        }
+        
+        if (s.lost > 0) {
+            text = "perdidos: " + std::to_string(s.lost);
+            cv::putText(display, text, cv::Point(10, 90), 
+                       cv::FONT_HERSHEY_SIMPLEX, 0.7, cv::Scalar(0, 0, 255), 2);
+        }
 
         cv::imshow(window_name, display);
 
