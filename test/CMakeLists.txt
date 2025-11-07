@@ -13,10 +13,10 @@ set(SHARED_SOURCES
     src/stream_viewer.cpp
 )
 
-add_executable(rtsp_main src/rtsp_main.cpp)
+add_executable(rtsp_main src/rtsp_main.cpp ${SHARED_SOURCES})
 target_link_libraries(rtsp_main ${OpenCV_LIBS} pthread)
 
-add_executable(rtsp_sub src/rtsp_sub.cpp)
+add_executable(rtsp_sub src/rtsp_sub.cpp ${SHARED_SOURCES})
 target_link_libraries(rtsp_sub ${OpenCV_LIBS} pthread)
 
 #add_executable(rtsp_main_sub src/rtsp_main_sub.cpp ${SHARED_SOURCES})
