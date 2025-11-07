@@ -77,7 +77,7 @@ void StreamViewer::run() {
     if (stream_type == "main") {
         cv::moveWindow(window_name, 0, 0);
     } else {
-        cv::moveWindow(window_name, 650, 0);
+        cv::moveWindow(window_name, 800, 0);
     }
 
     while (true) {
@@ -89,6 +89,10 @@ void StreamViewer::run() {
         }
 
         frames++;
+
+        auto w_frame = frames.cols;
+        auto h_frame =  frames.rows;
+
         cv::resize(frame, display, display_size);
         update_fps();
 
@@ -104,12 +108,14 @@ void StreamViewer::run() {
         std::string text_channel = "channel: " + stream_type;
         std::string text_frame = "frames: " + std::to_string(s.frames);
         std::string text_fps = "fps: " + std::to_string(int(s.fps));
-        std::string text_perdidos = "perdidos: " + std::to_string(s.lost);
+        std::string text_perdidos = "lost: " + std::to_string(s.lost);
+        std::string text_resolution = "resolution: " + std::to_string(w_frame) + "*" + std::to_string(h_frame)
 
         cv::putText(display, text_channel, cv::Point(10, 20), cv::FONT_HERSHEY_SIMPLEX, 0.5, color_text, 1);
         cv::putText(display, text_frame, cv::Point(10, 40), cv::FONT_HERSHEY_SIMPLEX, 0.5, color_text, 1);
         cv::putText(display, text_fps, cv::Point(10, 60), cv::FONT_HERSHEY_SIMPLEX, 0.5, color_text, 1);
         cv::putText(display, text_perdidos, cv::Point(10, 80), cv::FONT_HERSHEY_SIMPLEX, 0.5, color_text, 1);
+        cv::putText(display, text_resolution, cv::Point(10, 100), cv::FONT_HERSHEY_SIMPLEX, 0.5, color_text, 1);
 
         cv::imshow(window_name, display);
 
