@@ -9,9 +9,8 @@
 ./record_video --preview
 
 # Grabar stream "sub" por 30 segundos
-./record_video --stream sub --duration 30
-*/
-#include "utils.hpp"
+./record_video --stream main --duration 30
+*/#include "utils.hpp"
 #include <spdlog/spdlog.h>
 #include <opencv2/opencv.hpp>
 #include <chrono>
@@ -19,6 +18,7 @@
 #include <sstream>
 #include <csignal>
 #include <atomic>
+#include <thread>
 
 // Variable global para manejar la señal
 std::atomic<bool> stop_recording(false);
