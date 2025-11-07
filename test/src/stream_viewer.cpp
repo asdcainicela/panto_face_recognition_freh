@@ -34,7 +34,8 @@ void StreamViewer::print_stats() {
         auto now = std::chrono::steady_clock::now();
         double fps = fps_interval / std::chrono::duration<double>(now - start_fps).count();
         start_fps = now;
-        std::cout << "frames: " << frames
+        std::cout << stream_type <<
+                  << " | frames: " << frames
                   << " | fps: " << int(fps)
                   << " | perdidos: " << lost << "\n";
     }
