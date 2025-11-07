@@ -61,7 +61,7 @@ int main() {
         }
 
         frames++;
-        cv::resize(frame, display, cv::Size(640, 360));
+        cv::resize(frame, display, cv::Size(640, 480));
         cv::imshow(window_name, display);
 
         char c = (char)cv::waitKey(1);
