@@ -75,6 +75,10 @@ void StreamViewer::run() {
 
         frames++;
         cv::resize(frame, display, display_size);
+       
+        cv::Rect roi(w * 3 / 4, h * 3 / 4, w / 4, h / 4);
+        cv::rectangle(display, roi, cv::Scalar(0, 255, 0), 2);
+
         cv::imshow(window_name, display);
 
         char c = (char)cv::waitKey(1);
