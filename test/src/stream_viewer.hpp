@@ -13,9 +13,6 @@ private:
     cv::VideoCapture cap;
     cv::Mat frame, display;
 
-    int w = display.cols;
-    int h = display.rows;
-
     int frames, lost;
     std::chrono::steady_clock::time_point start_main, start_fps;
     std::string window_name;

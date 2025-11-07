@@ -75,8 +75,11 @@ void StreamViewer::run() {
 
         frames++;
         cv::resize(frame, display, display_size);
-       
-        cv::Rect roi(w * 3 / 4, h * 3 / 4, w / 4, h / 4);
+
+        int w = display.cols;
+        int h = display.rows;
+        
+        cv::Rect roi(w * 3 / 4, h * 3 / 4, w / 4, h / 4); //dibujamos rectangulo 
         cv::rectangle(display, roi, cv::Scalar(0, 255, 0), 2);
 
         cv::imshow(window_name, display);
