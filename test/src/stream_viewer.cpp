@@ -99,9 +99,10 @@ void StreamViewer::run() {
         int w = display.cols;
         int h = display.rows;
         
-        cv::Rect roi(0, 0, w/4, h/4);
+        cv::Rect roi(0, 0, w/4 + w/16, h/4);
         cv::Scalar color_text(255, 0, 0);
-        cv::rectangle(display, roi, cv::Scalar(0, 255, 0), 2);
+        
+        cv::rectangle(display, roi, color_text, 0.5);
         
         const auto& s = get_stats();
         
