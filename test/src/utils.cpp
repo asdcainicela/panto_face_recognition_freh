@@ -2,6 +2,7 @@
 #include <iostream>
 #include <chrono>
 #include <thread>
+#include "utils.hpp"
 
 std::string gst_pipeline(const std::string& user, const std::string& pass, const std::string& ip, int port) {
     return "rtspsrc location=rtsp://" + user + ":" + pass + "@" + ip + ":" + std::to_string(port) +
