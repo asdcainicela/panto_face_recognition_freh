@@ -90,8 +90,8 @@ void StreamViewer::run() {
 
         frames++;
 
-        auto w_frame = frames.cols;
-        auto h_frame =  frames.rows;
+        auto w_frame = frame.cols;
+        auto h_frame = frame.rows;
 
         cv::resize(frame, display, display_size);
         update_fps();
