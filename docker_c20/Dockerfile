@@ -278,7 +278,6 @@ RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/ope
         -D CMAKE_INSTALL_PREFIX=/usr/local \
         -D CMAKE_CXX_STANDARD=20 \
         -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib/modules \
-        # CUDA optimizations
         -D WITH_CUDA=ON \
         -D CUDA_TOOLKIT_ROOT_DIR=${CUDA_HOME} \
         -D CUDA_ARCH_BIN="8.7" \
@@ -288,36 +287,28 @@ RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/ope
         -D WITH_CUBLAS=ON \
         -D WITH_CUDNN=ON \
         -D OPENCV_DNN_CUDA=ON \
-        # Video support
         -D WITH_LIBV4L=ON \
         -D WITH_V4L=ON \
         -D WITH_GSTREAMER=ON \
         -D WITH_GSTREAMER_0_10=OFF \
         -D WITH_FFMPEG=ON \
-        # GUI and display
         -D WITH_GTK=ON \
         -D WITH_GTK_2_X=OFF \
         -D WITH_QT=OFF \
         -D WITH_OPENGL=ON \
-        # Performance
         -D WITH_TBB=ON \
         -D WITH_EIGEN=ON \
         -D WITH_LAPACK=ON \
-        # Python (deshabilitado para reducir tamaño)
         -D BUILD_opencv_python2=OFF \
         -D BUILD_opencv_python3=OFF \
-        # Testing (deshabilitado)
         -D BUILD_TESTS=OFF \
         -D BUILD_PERF_TESTS=OFF \
         -D BUILD_EXAMPLES=OFF \
-        # Extra features
         -D OPENCV_ENABLE_NONFREE=ON \
         -D OPENCV_GENERATE_PKGCONFIG=ON \
         -D BUILD_opencv_cudacodec=ON \
-        # Compiler flags
-        #-D CMAKE_CXX_FLAGS="-O3 -march=native -mtune=native" \
         -D CMAKE_CXX_FLAGS="-O3 -mcpu=cortex-a78ae+crypto+fp+dotprod" \
-        .. && \
+        .. \
     && make -j$(nproc) \
     && make install \
     && ldconfig \
