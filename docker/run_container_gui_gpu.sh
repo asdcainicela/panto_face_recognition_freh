@@ -95,16 +95,10 @@ else
         
         ldconfig
         
-        groupadd -g $GROUP_ID $USER_NAME 2>/dev/null || true
-        useradd -m -u $USER_ID -g $GROUP_ID -s /bin/bash $USER_NAME 2>/dev/null || true
-        usermod -aG sudo $USER_NAME 2>/dev/null || true
-        echo '$USER_NAME ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
+        git config --global user.email 'asdcainicela@gmail.com'
+        git config --global user.name 'asdcainicela'
         
-        chown -R $USER_ID:$GROUP_ID /home/$USER_NAME
         chown -R $USER_ID:$GROUP_ID /workspace
-        
-        sudo -u $USER_NAME git config --global user.email 'asdcainicela@gmail.com'
-        sudo -u $USER_NAME git config --global user.name 'asdcainicela'
         
         cat > /etc/profile.d/jetson-env.sh << 'ENVEOF'
 export DISPLAY=\${DISPLAY:-:0}
@@ -116,28 +110,29 @@ ENVEOF
     " 2>&1 | grep -v "^Get:\|^Fetched\|^Reading" || true
     
     echo -e "${YELLOW}Clonando repositorios...${NC}"
-    docker exec -u $USER_ID:$GROUP_ID ${CONTAINER_NAME} bash -c "
+    docker exec ${CONTAINER_NAME} bash -c "
         cd /workspace
         git clone https://asdcainicela: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@github.com/asdcainicela/lab-c-cpp.git 2>/dev/null || echo 'lab-c-cpp ya existe'
         git clone https://asdcainicela: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@github.com/asdcainicela/panto_face_recognition_freh.git 2>/dev/null || echo 'panto_face_recognition_freh ya existe'
+        chown -R $USER_ID:$GROUP_ID /workspace
     "
 fi
 
 echo ""
 echo -e "${GREEN}Contenedor listo${NC}"
-echo -e "${BLUE}Workspace:${NC} $WORKSPACE_DIR -> /workspace"
-echo -e "${BLUE}Usuario:${NC} $USER_NAME (sin problemas de permisos)"
+echo -e "${BLUE}Workspace:${NC} $WORKSPACE_DIR -> /workspace (accesible desde host)"
+echo -e "${BLUE}Modo:${NC} root (para acceso completo a hardware)"
 echo ""
-echo -e "${BLUE}Entrar:${NC} ${YELLOW}docker exec -it -u $USER_NAME ${CONTAINER_NAME} bash${NC}"
+echo -e "${BLUE}Entrar:${NC} ${YELLOW}docker exec -it ${CONTAINER_NAME} bash${NC}"
 echo ""
 
 read -p "¿Entrar al contenedor ahora? [s/N]: " enter_now
 
 if [[ "$enter_now" =~ ^[Ss]$ ]]; then
-    docker exec -it -u $USER_NAME ${CONTAINER_NAME} bash -c "
+    docker exec -it ${CONTAINER_NAME} bash -c "
         source /etc/profile.d/jetson-env.sh 2>/dev/null || true
         cd /workspace
-        echo 'Jetson Container - /workspace'
+        echo 'Jetson Container (root) - /workspace'
         exec bash
     "
 else
