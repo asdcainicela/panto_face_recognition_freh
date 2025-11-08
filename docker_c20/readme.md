@@ -4,7 +4,7 @@
 
 ```bash
 cd docker_c20
-docker build -t l4t-base-cpp .
+docker build -t l4t-cpp20 .
 ./run_container_gui_gpu.sh
 ```
 
