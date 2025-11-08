@@ -73,7 +73,6 @@ ls -lt ../videos_rtsp/ | head -n 2
 # Desde tu host (fuera del Docker)
 ls ~/jetson_workspace/panto_face_recognition_freh/videos_rtsp/
 */
-
 #include "utils.hpp"
 #include <spdlog/spdlog.h>
 #include <opencv2/opencv.hpp>
@@ -83,6 +82,7 @@ ls ~/jetson_workspace/panto_face_recognition_freh/videos_rtsp/
 #include <csignal>
 #include <atomic>
 #include <thread>
+#include <fstream>
 
 // Variable global para manejar la señal
 std::atomic<bool> stop_recording(false);
