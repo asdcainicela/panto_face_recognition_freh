@@ -1,16 +1,80 @@
 /*
-# Grabar hasta Ctrl+C
+# Ir al directorio build
+cd /workspace/panto_face_recognition_freh/test/build
+
+# ==========================================
+# COMANDOS BÁSICOS
+# ==========================================
+
+# Grabar stream "main" hasta presionar Ctrl+C
 ./record_video
 
-# Grabar 60 segundos
+# Grabar por 60 segundos
 ./record_video 60
 
-# Grabar con preview
+# Grabar por 120 segundos
+./record_video 120
+
+# ==========================================
+# CON PREVIEW (ventana visual)
+# ==========================================
+
+# Grabar con preview hasta Ctrl+C
 ./record_video --preview
 
-# Grabar stream "sub" por 30 segundos
-./record_video --stream main --duration 30
-*/#include "utils.hpp"
+# Grabar con preview por 30 segundos
+./record_video --preview 30
+
+# También puedes usar -p
+./record_video -p
+
+# ==========================================
+# CAMBIAR STREAM (main o sub)
+# ==========================================
+
+# Grabar stream "sub"
+./record_video --stream sub
+
+# Grabar stream "sub" por 60 segundos
+./record_video --stream sub 60
+
+# Grabar stream "sub" con preview
+./record_video --stream sub --preview
+
+# También puedes usar -s
+./record_video -s sub
+
+# ==========================================
+# COMBINACIONES AVANZADAS
+# ==========================================
+
+# Stream "sub" con preview por 30 segundos
+./record_video --stream sub --preview --duration 30
+
+# Forma corta (equivalente)
+./record_video -s sub -p -d 30
+
+# Stream "main" por 120 segundos sin preview
+./record_video --stream main --duration 120
+
+# Forma corta
+./record_video -s main -d 120
+
+# ==========================================
+# VER VIDEOS GRABADOS
+# ==========================================
+
+# Listar videos grabados
+ls -lh ../videos_rtsp/
+
+# Ver el último video grabado
+ls -lt ../videos_rtsp/ | head -n 2
+
+# Desde tu host (fuera del Docker)
+ls ~/jetson_workspace/panto_face_recognition_freh/videos_rtsp/
+*/
+
+#include "utils.hpp"
 #include <spdlog/spdlog.h>
 #include <opencv2/opencv.hpp>
 #include <chrono>
@@ -102,8 +166,16 @@ int main(int argc, char* argv[]) {
     
     spdlog::info("resolución: {}x{} @ {} fps", frame_width, frame_height, fps);
     
-    // Crear archivo de salida
-    std::string filename = "recording_" + stream_type + "_" + get_timestamp() + ".mp4";
+    // Crear archivo de salida (en /workspace si existe, sino en directorio actual)
+    std::string output_dir = "/workspace/videos";
+    if (std::ifstream("/workspace").good()) {
+        // Crear carpeta videos si no existe
+        system("mkdir -p /workspace/videos");
+    } else {
+        output_dir = ".";
+    }
+    
+    std::string filename = output_dir + "/recording_" + stream_type + "_" + get_timestamp() + ".mp4";
     cv::VideoWriter writer;
     
     // Codec H.264
