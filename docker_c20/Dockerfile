@@ -269,13 +269,13 @@ RUN git clone --depth 1 --branch v3.3.0 https://github.com/catchorg/Catch2.git &
 # FASE 6: Compilar OpenCV 4.10 con CUDA optimizado
 # ============================================================================
 
-WORKDIR /tmp
-RUN git clone --depth 1 https://github.com/oneapi-src/oneTBB.git \
-    && cd oneTBB \
-    && mkdir build && cd build \
-    && cmake -DCMAKE_BUILD_TYPE=Release .. \
-    && make -j$(nproc) && make install \
-    && cd /tmp && rm -rf oneTBB
+#WORKDIR /tmp
+#RUN git clone --depth 1 https://github.com/oneapi-src/oneTBB.git \
+#    && cd oneTBB \
+#    && mkdir build && cd build \
+#    && cmake -DCMAKE_BUILD_TYPE=Release .. \
+#    && make -j$(nproc) && make install \
+#    && cd /tmp && rm -rf oneTBB
 
 WORKDIR /tmp
 RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/opencv.git \
@@ -304,7 +304,7 @@ RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/ope
         -D WITH_GTK_2_X=OFF \
         -D WITH_QT=OFF \
         -D WITH_OPENGL=ON \
-        -D WITH_TBB=ON \
+        -D WITH_TBB=OFF \
         -D WITH_EIGEN=ON \
         -D WITH_LAPACK=ON \
         -D BUILD_opencv_python2=OFF \
