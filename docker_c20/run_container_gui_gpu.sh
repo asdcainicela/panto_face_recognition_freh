@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-CONTAINER_NAME="l4t-cpp"
-IMAGE_NAME="l4t-base-cpp"
+CONTAINER_NAME="l4t-cpp-20"
+IMAGE_NAME="l4t-cpp20"
 WORKSPACE_DIR="${HOME}/jetson_workspace"
 
 USER_ID=$(id -u)
