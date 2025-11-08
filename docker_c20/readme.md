@@ -3,8 +3,8 @@
 ## Setup
 
 ```bash
-cd docker_c20
-docker build -t l4t-cpp20 .
+cd ~/jetson_workspace/panto_face_recognition_freh/docker_c20
+docker build -t l4t-base-cpp .
 ./run_container_gui_gpu.sh
 ```
 
