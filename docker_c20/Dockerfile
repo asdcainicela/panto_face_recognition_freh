@@ -316,8 +316,8 @@ RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/ope
         -D BUILD_opencv_cudacodec=ON \
         # Compiler flags
         #-D CMAKE_CXX_FLAGS="-O3 -march=native -mtune=native" \
-        -D CMAKE_CXX_FLAGS="-O3 -mcpu=cortex-a78ae+crypto+fp+dotprod"
-        .. \
+        -D CMAKE_CXX_FLAGS="-O3 -mcpu=cortex-a78ae+crypto+fp+dotprod" \
+        .. && \
     && make -j$(nproc) \
     && make install \
     && ldconfig \
