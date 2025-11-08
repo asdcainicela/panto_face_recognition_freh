@@ -270,57 +270,41 @@ RUN git clone --depth 1 --branch v3.3.0 https://github.com/catchorg/Catch2.git &
 # ============================================================================
 
 WORKDIR /tmp
-RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/opencv.git \
-    && git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/opencv_contrib.git \
-    && cd opencv && mkdir build && cd build \
-    && cmake \
-        -D CMAKE_BUILD_TYPE=RELEASE \
-        -D CMAKE_INSTALL_PREFIX=/usr/local \
-        -D CMAKE_CXX_STANDARD=20 \
-        -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib/modules \
-        # CUDA optimizations
-        -D WITH_CUDA=ON \
-        -D CUDA_TOOLKIT_ROOT_DIR=${CUDA_HOME} \
-        -D CUDA_ARCH_BIN="8.7" \
-        -D CUDA_ARCH_PTX="" \
-        -D ENABLE_FAST_MATH=ON \
-        -D CUDA_FAST_MATH=ON \
-        -D WITH_CUBLAS=ON \
-        -D WITH_CUDNN=ON \
-        -D OPENCV_DNN_CUDA=ON \
-        # Video support
-        -D WITH_LIBV4L=ON \
-        -D WITH_V4L=ON \
-        -D WITH_GSTREAMER=ON \
-        -D WITH_GSTREAMER_0_10=OFF \
-        -D WITH_FFMPEG=ON \
-        # GUI and display
-        -D WITH_GTK=ON \
-        -D WITH_GTK_2_X=OFF \
-        -D WITH_QT=OFF \
-        -D WITH_OPENGL=ON \
-        # Performance
-        -D WITH_TBB=ON \
-        -D WITH_EIGEN=ON \
-        -D WITH_LAPACK=ON \
-        # Python (deshabilitado para reducir tamaño)
-        -D BUILD_opencv_python2=OFF \
-        -D BUILD_opencv_python3=OFF \
-        # Testing (deshabilitado)
-        -D BUILD_TESTS=OFF \
-        -D BUILD_PERF_TESTS=OFF \
-        -D BUILD_EXAMPLES=OFF \
-        # Extra features
-        -D OPENCV_ENABLE_NONFREE=ON \
-        -D OPENCV_GENERATE_PKGCONFIG=ON \
-        -D BUILD_opencv_cudacodec=ON \
-        # Compiler flags
-        -D CMAKE_CXX_FLAGS="-O3 -march=native -mtune=native" \
-        .. \
-    && make -j$(nproc) \
-    && make install \
-    && ldconfig \
-    && cd / && rm -rf /tmp/opencv /tmp/opencv_contrib
+RUN git clone --depth 1 --branch 4.8.0 https://github.com/opencv/opencv.git && \
+    git clone --depth 1 --branch 4.8.0 https://github.com/opencv/opencv_contrib.git && \
+    cd opencv && mkdir build && cd build && \
+    cmake -D CMAKE_BUILD_TYPE=RELEASE \
+          -D CMAKE_INSTALL_PREFIX=/usr/local \
+          -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib/modules \
+          -D WITH_CUDA=ON \
+          -D CUDA_TOOLKIT_ROOT_DIR=/usr/local/cuda-11.4 \
+          -D CUDA_ARCH_BIN="8.7" \
+          -D CUDA_ARCH_PTX="" \
+          -D ENABLE_FAST_MATH=ON \
+          -D CUDA_FAST_MATH=ON \
+          -D WITH_CUBLAS=ON \
+          -D WITH_LIBV4L=ON \
+          -D WITH_GSTREAMER=ON \
+          -D WITH_GSTREAMER_0_10=OFF \
+          -D WITH_GTK=ON \
+          -D WITH_QT=OFF \
+          -D WITH_OPENGL=ON \
+          -D WITH_TBB=ON \
+          -D WITH_FFMPEG=ON \
+          -D BUILD_opencv_python2=OFF \
+          -D BUILD_opencv_python3=OFF \
+          -D BUILD_TESTS=OFF \
+          -D BUILD_PERF_TESTS=OFF \
+          -D BUILD_EXAMPLES=OFF \
+          -D OPENCV_ENABLE_NONFREE=ON \
+          -D OPENCV_GENERATE_PKGCONFIG=ON \
+          -D BUILD_opencv_cudacodec=OFF \
+          -D CMAKE_CXX_FLAGS="-march=native -mtune=native" \
+          .. && \
+    make -j4 && \
+    make install && \
+    ldconfig && \
+    cd / && rm -rf /tmp/opencv /tmp/opencv_contrib
 
 # Verificar OpenCV
 RUN pkg-config --modversion opencv4 \
