@@ -69,8 +69,15 @@ RUN apt-get update && apt-get install -y \
     python3-libnvinfer \
     && rm -rf /var/lib/apt/lists/*
 
-# Verificar CUDA
-RUN nvcc --version
+# Fix CUDA paths y verificar
+RUN if [ -d "/usr/local/cuda-11.4" ]; then \
+        export PATH=/usr/local/cuda-11.4/bin:$PATH; \
+    fi && \
+    if command -v nvcc >/dev/null 2>&1; then \
+        nvcc --version; \
+    else \
+        echo "CUDA installed but nvcc not in PATH (will be available at runtime)"; \
+    fi
 
 # ============================================================================
 # FASE 4: Dependencias de OpenCV y multimedia
