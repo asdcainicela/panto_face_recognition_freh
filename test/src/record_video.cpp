@@ -167,10 +167,10 @@ int main(int argc, char* argv[]) {
     spdlog::info("resolución: {}x{} @ {} fps", frame_width, frame_height, fps);
     
     // Crear archivo de salida (en /workspace si existe, sino en directorio actual)
-    std::string output_dir = "/workspace/videos";
+    std::string output_dir = "/workspace/panto_face_recognition_freh/test/videos_rtsp"; 
     if (std::ifstream("/workspace").good()) {
         // Crear carpeta videos si no existe
-        system("mkdir -p /workspace/videos");
+        system("mkdir -p /workspace/panto_face_recognition_freh/test/videos_rtsp");
     } else {
         output_dir = ".";
     }
