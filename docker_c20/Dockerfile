@@ -277,11 +277,13 @@ RUN git clone --depth 1 --branch v3.3.0 https://github.com/catchorg/Catch2.git &
 #    && make -j$(nproc) && make install \
 #    && cd /tmp && rm -rf oneTBB
 
-# For OpenCV build, use GCC 9 for CUDA compatibility
+RUN apt-get update && apt-get install -y gcc-9 g++-9 && rm -rf /var/lib/apt/lists/*
 RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 90 \
     --slave /usr/bin/g++ g++ /usr/bin/g++-9 \
     --slave /usr/bin/gcov gcov /usr/bin/gcov-9
 
+ENV CC=/usr/bin/gcc-9
+ENV CXX=/usr/bin/g++-9
 
 WORKDIR /tmp
 RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/opencv.git \
@@ -295,7 +297,6 @@ RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/ope
         -D WITH_CUDA=ON \
         -D CUDA_TOOLKIT_ROOT_DIR=${CUDA_HOME} \
         -D CUDA_ARCH_BIN="8.7" \
-        -D CUDA_ARCH_PTX="" \
         -D ENABLE_FAST_MATH=ON \
         -D CUDA_FAST_MATH=ON \
         -D WITH_CUBLAS=ON \
@@ -304,10 +305,8 @@ RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/ope
         -D WITH_LIBV4L=ON \
         -D WITH_V4L=ON \
         -D WITH_GSTREAMER=ON \
-        -D WITH_GSTREAMER_0_10=OFF \
         -D WITH_FFMPEG=ON \
         -D WITH_GTK=ON \
-        -D WITH_GTK_2_X=OFF \
         -D WITH_QT=OFF \
         -D WITH_OPENGL=ON \
         -D WITH_TBB=OFF \
