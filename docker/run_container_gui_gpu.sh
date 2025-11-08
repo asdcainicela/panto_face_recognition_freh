@@ -97,6 +97,7 @@ else
         
         git config --global user.email 'asdcainicela@gmail.com'
         git config --global user.name 'asdcainicela'
+        git config --global --add safe.directory '*'
         
         chown -R $USER_ID:$GROUP_ID /workspace
         
