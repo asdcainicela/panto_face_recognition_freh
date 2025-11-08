@@ -100,7 +100,11 @@ else
         usermod -aG sudo $USER_NAME 2>/dev/null || true
         echo '$USER_NAME ALL=(ALL) NOPASSWD:ALL' >> /etc/sudoers
         
+        chown -R $USER_ID:$GROUP_ID /home/$USER_NAME
         chown -R $USER_ID:$GROUP_ID /workspace
+        
+        sudo -u $USER_NAME git config --global user.email 'asdcainicela@gmail.com'
+        sudo -u $USER_NAME git config --global user.name 'asdcainicela'
         
         cat > /etc/profile.d/jetson-env.sh << 'ENVEOF'
 export DISPLAY=\${DISPLAY:-:0}
