@@ -119,7 +119,7 @@ RUN apt-get update && apt-get install -y \
     libtbb-dev \
     libtbb2 \
     # Otros
-    libdc1394-dev \
+    libdc1394-22-dev \
     # X11 y OpenGL
     libgl1-mesa-dev \
     libglu1-mesa-dev \
@@ -142,7 +142,7 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # ============================================================================ 
-# FASE 5: Librerías C++ modernas y utilidades (corregido para Ubuntu 20.04) 
+# FASE 5: Librerías C++ modernas disponibles en Ubuntu 20.04 ARM64
 # ============================================================================
 
 RUN apt-get update && apt-get install -y \
@@ -180,7 +180,7 @@ RUN apt-get update && apt-get install -y \
     libopenblas-dev \
     liblapack-dev \
     libgsl-dev \
-    # Computer Vision extras
+    # Computer Vision extras (PCL con VTK7, disponible en Focal)
     libpcl-dev \
     libvtk7-dev \
     # Testing
@@ -203,13 +203,16 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # ============================================================================ 
-# Compilar Google Test (si no viene precompilado)
+# Compilar Google Test (Ubuntu 20.04 solo trae headers)
 # ============================================================================
 
-RUN cd /usr/src/gtest && cmake . && make && cp lib/*.a /usr/lib || true
+RUN cd /usr/src/gtest && \
+    cmake . && \
+    make && \
+    cp lib/*.a /usr/lib || cp *.a /usr/lib || true
 
 # ============================================================================ 
-# Librerías header-only modernas desde GitHub
+# Librerías header-only y modernas desde GitHub
 # ============================================================================
 
 WORKDIR /tmp
@@ -227,33 +230,40 @@ RUN git clone --depth 1 https://github.com/bombela/backward-cpp.git && \
 
 # magic_enum - Enum to string
 RUN git clone --depth 1 https://github.com/Neargye/magic_enum.git && \
-    cd magic_enum && mkdir build && cd build && cmake .. && make install && \
+    cd magic_enum && mkdir build && cd build && \
+    cmake .. && make install && \
     cd /tmp && rm -rf magic_enum
 
 # cpptrace - Better stack traces
 RUN git clone --depth 1 https://github.com/jeremy-rifkin/cpptrace.git && \
-    cd cpptrace && mkdir build && cd build && cmake .. && make install && \
+    cd cpptrace && mkdir build && cd build && \
+    cmake .. && make install && \
     cd /tmp && rm -rf cpptrace
 
 # toml++ - TOML parser
 RUN git clone --depth 1 https://github.com/marzer/tomlplusplus.git && \
-    cd tomlplusplus && mkdir build && cd build && cmake .. && make install && \
+    cd tomlplusplus && mkdir build && cd build && \
+    cmake .. && make install && \
     cd /tmp && rm -rf tomlplusplus
 
 # Expected - std::expected backport
 RUN git clone --depth 1 https://github.com/TartanLlama/expected.git && \
-    cd expected && mkdir build && cd build && cmake .. && make install && \
+    cd expected && mkdir build && cd build && \
+    cmake .. && make install && \
     cd /tmp && rm -rf expected
 
-# catch2 - para testing (compilar desde fuente)
+# catch2 - Testing framework
 RUN git clone --depth 1 --branch v3.3.0 https://github.com/catchorg/Catch2.git && \
-    cd Catch2 && mkdir build && cd build && cmake .. && make install && \
+    cd Catch2 && mkdir build && cd build && \
+    cmake .. && make install && \
     cd /tmp && rm -rf Catch2
 
 # pistache - HTTP server C++ (compilar desde fuente)
 RUN git clone --depth 1 https://github.com/pistacheio/pistache.git && \
-    cd pistache && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && \
+    cd pistache && mkdir build && cd build && \
+    cmake -DCMAKE_BUILD_TYPE=Release .. && \
     make -j$(nproc) && make install && \
+    ldconfig && \
     cd /tmp && rm -rf pistache
 
 # ============================================================================
