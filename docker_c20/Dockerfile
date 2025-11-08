@@ -276,6 +276,7 @@ RUN git clone --depth 1 --branch v3.3.0 https://github.com/catchorg/Catch2.git &
 #    && cmake -DCMAKE_BUILD_TYPE=Release .. \
 #    && make -j$(nproc) && make install \
 #    && cd /tmp && rm -rf oneTBB
+RUN apt-get update && apt-get install -y libopenjp2-7-dev
 
 RUN apt-get update && apt-get install -y gcc-9 g++-9 && rm -rf /var/lib/apt/lists/*
 RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 90 \
