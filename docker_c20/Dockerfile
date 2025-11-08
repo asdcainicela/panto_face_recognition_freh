@@ -277,6 +277,12 @@ RUN git clone --depth 1 --branch v3.3.0 https://github.com/catchorg/Catch2.git &
 #    && make -j$(nproc) && make install \
 #    && cd /tmp && rm -rf oneTBB
 
+# For OpenCV build, use GCC 9 for CUDA compatibility
+RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 90 \
+    --slave /usr/bin/g++ g++ /usr/bin/g++-9 \
+    --slave /usr/bin/gcov gcov /usr/bin/gcov-9
+
+
 WORKDIR /tmp
 RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/opencv.git \
     && git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/opencv_contrib.git \
@@ -325,6 +331,11 @@ RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/ope
 # Verificar OpenCV
 RUN pkg-config --modversion opencv4 \
     && echo "OpenCV instalado con éxito"
+
+# Switch back to GCC 11 for other builds
+RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 110 \
+    --slave /usr/bin/g++ g++ /usr/bin/g++-11 \
+    --slave /usr/bin/gcov gcov /usr/bin/gcov-11
 
 # ============================================================================
 # FASE 7: Python y herramientas de ML (opcional pero útil)
