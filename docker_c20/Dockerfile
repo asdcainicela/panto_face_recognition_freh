@@ -258,10 +258,14 @@ RUN git clone --depth 1 --branch v3.3.0 https://github.com/catchorg/Catch2.git &
     cmake .. && make install && \
     cd /tmp && rm -rf Catch2
 
-# pistache - HTTP server C++ (compilar desde fuente)
+# pistache - HTTP server C++ (compilar desde fuente, sin tests)
 RUN git clone --depth 1 https://github.com/pistacheio/pistache.git && \
     cd pistache && mkdir build && cd build && \
-    cmake -DCMAKE_BUILD_TYPE=Release .. && \
+    cmake -DCMAKE_BUILD_TYPE=Release \
+          -DPISTACHE_BUILD_TESTS=OFF \
+          -DPISTACHE_BUILD_EXAMPLES=OFF \
+          -DPISTACHE_BUILD_DOCS=OFF \
+          .. && \
     make -j$(nproc) && make install && \
     ldconfig && \
     cd /tmp && rm -rf pistache
