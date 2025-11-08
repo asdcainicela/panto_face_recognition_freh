@@ -323,7 +323,7 @@ RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/ope
         -D CMAKE_CXX_FLAGS="-O3 -march=native -mtune=native" \
         .. \
     #&& make -j$(nproc) \
-    && make -j2
+    && make -j2 \
     && make install \
     && ldconfig \
     && cd / && rm -rf /tmp/opencv /tmp/opencv_contrib
