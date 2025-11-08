@@ -270,6 +270,14 @@ RUN git clone --depth 1 --branch v3.3.0 https://github.com/catchorg/Catch2.git &
 # ============================================================================
 
 WORKDIR /tmp
+RUN git clone --depth 1 https://github.com/oneapi-src/oneTBB.git \
+    && cd oneTBB \
+    && mkdir build && cd build \
+    && cmake -DCMAKE_BUILD_TYPE=Release .. \
+    && make -j$(nproc) && make install \
+    && cd /tmp && rm -rf oneTBB
+
+WORKDIR /tmp
 RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/opencv.git \
     && git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/opencv_contrib.git \
     && cd opencv && mkdir build && cd build \
