@@ -258,17 +258,12 @@ RUN git clone --depth 1 --branch v3.3.0 https://github.com/catchorg/Catch2.git &
     cmake .. && make install && \
     cd /tmp && rm -rf Catch2
 
-# pistache - HTTP server C++ (compilar desde fuente, sin tests)
-RUN git clone --depth 1 https://github.com/pistacheio/pistache.git && \
-    cd pistache && mkdir build && cd build && \
-    cmake -DCMAKE_BUILD_TYPE=Release \
-          -DPISTACHE_BUILD_TESTS=OFF \
-          -DPISTACHE_BUILD_EXAMPLES=OFF \
-          -DPISTACHE_BUILD_DOCS=OFF \
-          .. && \
-    make -j$(nproc) && make install && \
-    ldconfig && \
-    cd /tmp && rm -rf pistache
+# pistache - HTTP server C++ (DESHABILITADO - requiere Meson, no crítico para CV)
+# Si necesitas REST API más adelante, usa cpp-httplib (header-only, más simple)
+# RUN git clone --depth 1 https://github.com/pistacheio/pistache.git && \
+#     cd pistache && meson setup build && cd build && \
+#     ninja && ninja install && ldconfig && \
+#     cd /tmp && rm -rf pistache
 
 # ============================================================================
 # FASE 6: Compilar OpenCV 4.10 con CUDA optimizado
