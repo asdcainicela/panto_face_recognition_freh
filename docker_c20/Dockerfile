@@ -141,16 +141,16 @@ RUN apt-get update && apt-get install -y \
     iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
-# ============================================================================
-# FASE 5: Librerías C++ modernas y utilidades
+# ============================================================================ 
+# FASE 5: Librerías C++ modernas y utilidades (corregido para Ubuntu 20.04) 
 # ============================================================================
 
 RUN apt-get update && apt-get install -y \
-    # === Logging y debugging ===
+    # Logging y debugging
     libspdlog-dev \
     libgoogle-glog-dev \
     libgflags-dev \
-    # === Serialización y formato ===
+    # Serialización y formato
     libfmt-dev \
     libjsoncpp-dev \
     nlohmann-json3-dev \
@@ -158,37 +158,35 @@ RUN apt-get update && apt-get install -y \
     libprotobuf-dev \
     protobuf-compiler \
     libmsgpack-dev \
-    # === Bases de datos ===
+    # Bases de datos
     libsqlite3-dev \
     libpq-dev \
     libmysqlclient-dev \
     libhiredis-dev \
     libmongoc-dev \
-    # === Networking y comunicación ===
+    # Networking y comunicación
     libzmq3-dev \
     libcurl4-openssl-dev \
     libssl-dev \
     libwebsocketpp-dev \
     libmicrohttpd-dev \
     libgrpc++-dev \
-    # === HTTP y REST ===
+    # HTTP y REST
     libcpprest-dev \
-    libpistache-dev \
-    # === Boost (colección extensa) ===
+    # Boost
     libboost-all-dev \
-    # === Álgebra lineal y matemáticas ===
+    # Álgebra lineal y matemáticas
     libarmadillo-dev \
     libopenblas-dev \
     liblapack-dev \
     libgsl-dev \
-    # === Computer Vision extras ===
+    # Computer Vision extras
     libpcl-dev \
-    libvtk9-dev \
-    # === Testing ===
+    libvtk7-dev \
+    # Testing
     libgtest-dev \
     libgmock-dev \
-    catch2 \
-    # === Utilidades generales ===
+    # Utilidades generales
     libtool \
     autoconf \
     automake \
@@ -204,12 +202,15 @@ RUN apt-get update && apt-get install -y \
     tree \
     && rm -rf /var/lib/apt/lists/*
 
+# ============================================================================ 
 # Compilar Google Test (si no viene precompilado)
-RUN cd /usr/src/gtest && \
-    cmake . && make && \
-    cp lib/*.a /usr/lib || true
+# ============================================================================
 
-# === Instalar bibliotecas header-only modernas desde GitHub ===
+RUN cd /usr/src/gtest && cmake . && make && cp lib/*.a /usr/lib || true
+
+# ============================================================================ 
+# Librerías header-only modernas desde GitHub
+# ============================================================================
 
 WORKDIR /tmp
 
@@ -219,41 +220,41 @@ RUN git clone --depth 1 https://github.com/CLIUtils/CLI11.git && \
     cmake .. && make install && \
     cd /tmp && rm -rf CLI11
 
-# spdlog (latest version desde source si apt es vieja)
-RUN git clone --depth 1 --branch v1.12.0 https://github.com/gabime/spdlog.git && \
-    cd spdlog && mkdir build && cd build && \
-    cmake .. && make -j$(nproc) && make install && \
-    cd /tmp && rm -rf spdlog
-
 # backward-cpp - Stack trace bonito
 RUN git clone --depth 1 https://github.com/bombela/backward-cpp.git && \
-    cd backward-cpp && \
-    cp backward.hpp /usr/local/include/ && \
+    cd backward-cpp && cp backward.hpp /usr/local/include/ && \
     cd /tmp && rm -rf backward-cpp
 
 # magic_enum - Enum to string
 RUN git clone --depth 1 https://github.com/Neargye/magic_enum.git && \
-    cd magic_enum && mkdir build && cd build && \
-    cmake .. && make install && \
+    cd magic_enum && mkdir build && cd build && cmake .. && make install && \
     cd /tmp && rm -rf magic_enum
 
 # cpptrace - Better stack traces
 RUN git clone --depth 1 https://github.com/jeremy-rifkin/cpptrace.git && \
-    cd cpptrace && mkdir build && cd build && \
-    cmake .. && make -j$(nproc) && make install && \
+    cd cpptrace && mkdir build && cd build && cmake .. && make install && \
     cd /tmp && rm -rf cpptrace
 
 # toml++ - TOML parser
 RUN git clone --depth 1 https://github.com/marzer/tomlplusplus.git && \
-    cd tomlplusplus && mkdir build && cd build && \
-    cmake .. && make install && \
+    cd tomlplusplus && mkdir build && cd build && cmake .. && make install && \
     cd /tmp && rm -rf tomlplusplus
 
 # Expected - std::expected backport
 RUN git clone --depth 1 https://github.com/TartanLlama/expected.git && \
-    cd expected && mkdir build && cd build && \
-    cmake .. && make install && \
+    cd expected && mkdir build && cd build && cmake .. && make install && \
     cd /tmp && rm -rf expected
+
+# catch2 - para testing (compilar desde fuente)
+RUN git clone --depth 1 --branch v3.3.0 https://github.com/catchorg/Catch2.git && \
+    cd Catch2 && mkdir build && cd build && cmake .. && make install && \
+    cd /tmp && rm -rf Catch2
+
+# pistache - HTTP server C++ (compilar desde fuente)
+RUN git clone --depth 1 https://github.com/pistacheio/pistache.git && \
+    cd pistache && mkdir build && cd build && cmake -DCMAKE_BUILD_TYPE=Release .. && \
+    make -j$(nproc) && make install && \
+    cd /tmp && rm -rf pistache
 
 # ============================================================================
 # FASE 6: Compilar OpenCV 4.10 con CUDA optimizado
