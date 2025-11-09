@@ -319,16 +319,22 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
+RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel
+
+RUN pip3 install --no-cache-dir \
+    "numpy<2.0" \
+    "Cython<3.0"
+
 RUN pip3 install --no-cache-dir \
     jupyter \
     jupyterlab \
     notebook \
-    numpy \
     matplotlib \
     pandas \
     scipy \
-    scikit-learn \
-    opencv-python
+    scikit-learn
+
+RUN pip3 install --no-cache-dir opencv-python || true
 
 RUN jupyter notebook --generate-config && \
     python3 -c "from notebook.auth import passwd; print(passwd('nvidia'))" > /tmp/jupyter_pass.txt && \
