@@ -23,7 +23,6 @@ StreamViewer::StreamViewer(const std::string& user, const std::string& pass,
 
 void StreamViewer::enable_recording(const std::string& output_dir) {
     recording_enabled = true;
-    
     std::filesystem::create_directories(output_dir);
     
     auto now = std::chrono::system_clock::now();
@@ -75,25 +74,16 @@ void StreamViewer::stop_recording() {
     }
 }
 
-void StreamViewer::stop() {
-    stop_signal = nullptr;
-    cap.release();
-}
-
 bool StreamViewer::reconnect() {
     bool was_recording = writer.isOpened();
-    if (was_recording) {
-        writer.release();
-    }
+    if (was_recording) writer.release();
     
     cap.release();
     std::this_thread::sleep_for(std::chrono::seconds(1));
     
     try {
         cap = open_cap(pipeline);
-        if (was_recording) {
-            init_recording();
-        }
+        if (was_recording) init_recording();
         return true;
     } catch (...) {
         spdlog::error("reconexion fallida para stream {}", stream_type);
@@ -149,7 +139,6 @@ void StreamViewer::run() {
     }
 
     if (recording_enabled && !init_recording()) {
-        spdlog::error("no se pudo iniciar grabación para {}", stream_type);
         cap.release();
         return;
     }
@@ -168,60 +157,40 @@ void StreamViewer::run() {
         
         if (max_duration > 0) {
             auto elapsed = std::chrono::steady_clock::now() - start_main;
-            auto seconds = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
-            if (seconds >= max_duration) break;
+            if (std::chrono::duration_cast<std::chrono::seconds>(elapsed).count() >= max_duration) break;
         }
         
         if (!cap.read(frame)) {
             lost++;
-            spdlog::warn("frame perdido en {}. reconectando...", stream_type);
             if (!reconnect()) break;
             continue;
         }
 
         frames++;
         
-        if (is_recording()) {
-            writer.write(frame);
-        }
-
-        auto w_frame = frame.cols;
-        auto h_frame = frame.rows;
+        if (is_recording()) writer.write(frame);
 
         cv::resize(frame, display, display_size);
         update_fps();
 
-        int w = display.cols;
-        int h = display.rows;
-        
-        cv::Rect roi(0, 0, w/4 + w/16, h/4 + 20);
-        cv::Scalar color_text = is_recording() ? cv::Scalar(0, 0, 255) : cv::Scalar(255, 0, 0);
-        
-        cv::rectangle(display, roi, color_text, 0.5);
-        
         const auto& s = get_stats();
+        cv::Scalar color = is_recording() ? cv::Scalar(0, 0, 255) : cv::Scalar(255, 0, 0);
         
-        std::string text_channel = "channel: " + stream_type;
-        std::string text_frame = "frames: " + std::to_string(s.frames);
-        std::string text_fps = "fps: " + std::to_string(int(s.fps));
-        std::string text_perdidos = "lost: " + std::to_string(s.lost);
-        std::string text_resolution = "resolution: " + std::to_string(w_frame) + "*" + std::to_string(h_frame);
-
-        cv::putText(display, text_channel, cv::Point(10, 20), cv::FONT_HERSHEY_SIMPLEX, 0.5, color_text, 1);
-        cv::putText(display, text_frame, cv::Point(10, 40), cv::FONT_HERSHEY_SIMPLEX, 0.5, color_text, 1);
-        cv::putText(display, text_fps, cv::Point(10, 60), cv::FONT_HERSHEY_SIMPLEX, 0.5, color_text, 1);
-        cv::putText(display, text_perdidos, cv::Point(10, 80), cv::FONT_HERSHEY_SIMPLEX, 0.5, color_text, 1);
-        cv::putText(display, text_resolution, cv::Point(10, 100), cv::FONT_HERSHEY_SIMPLEX, 0.5, color_text, 1);
+        cv::rectangle(display, cv::Rect(0, 0, display.cols/4 + display.cols/16, display.rows/4 + 20), color, 0.5);
+        
+        cv::putText(display, "channel: " + stream_type, cv::Point(10, 20), cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 1);
+        cv::putText(display, "frames: " + std::to_string(s.frames), cv::Point(10, 40), cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 1);
+        cv::putText(display, "fps: " + std::to_string(int(s.fps)), cv::Point(10, 60), cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 1);
+        cv::putText(display, "lost: " + std::to_string(s.lost), cv::Point(10, 80), cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 1);
+        cv::putText(display, "resolution: " + std::to_string(frame.cols) + "*" + std::to_string(frame.rows), cv::Point(10, 100), cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 1);
         
         if (is_recording()) {
-            cv::putText(display, "REC", cv::Point(10, 120), 
-                       cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 255), 2);
+            cv::putText(display, "REC", cv::Point(10, 120), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 255), 2);
         }
 
         cv::imshow(window_name, display);
 
-        char c = (char)cv::waitKey(1);
-        if (c == 27 || c == 'q') break;
+        if (cv::waitKey(1) == 27) break;
 
         print_stats();
     }
