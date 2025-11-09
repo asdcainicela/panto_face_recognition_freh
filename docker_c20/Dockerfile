@@ -1,11 +1,10 @@
 # ============================================================================
 # Dockerfile optimizado para NVIDIA Jetson Orin Nano
-# JetPack 5.1.2 (L4T R35.4.1) + C++20 + OpenCV 4.10 + TensorRT
+# JetPack 5.1.2 (L4T R35.4.1) + C++20 + OpenCV 4.10 + TensorRT + Jupyter
 # ============================================================================
 
 FROM nvcr.io/nvidia/l4t-base:35.4.1
 
-# Variables de entorno
 ENV DEBIAN_FRONTEND=noninteractive \
     CUDA_HOME=/usr/local/cuda-11.4 \
     PATH=${CUDA_HOME}/bin:${PATH} \
@@ -40,7 +39,6 @@ RUN apt-get update && apt-get install -y \
         --slave /usr/bin/gcov gcov /usr/bin/gcov-9 \
     && rm -rf /var/lib/apt/lists/*
 
-# Verificar versión GCC
 RUN gcc --version && g++ --version
 
 # ============================================================================
@@ -55,7 +53,6 @@ RUN wget -q https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}
     && ln -sf /opt/cmake-${CMAKE_VERSION}-linux-aarch64/bin/cpack /usr/local/bin/cpack \
     && rm -f cmake-${CMAKE_VERSION}-linux-aarch64.tar.gz
 
-# Verificar CMake
 RUN cmake --version
 
 # ============================================================================
@@ -74,7 +71,6 @@ RUN apt-get update && apt-get install -y \
     python3-libnvinfer \
     && rm -rf /var/lib/apt/lists/*
 
-# Verificar CUDA
 RUN if [ -d "/usr/local/cuda-11.4" ]; then \
         export PATH=/usr/local/cuda-11.4/bin:$PATH; \
     fi && \
@@ -89,7 +85,6 @@ RUN if [ -d "/usr/local/cuda-11.4" ]; then \
 # ============================================================================
 
 RUN apt-get update && apt-get install -y \
-    # Desarrollo de imágenes
     libjpeg-dev \
     libpng-dev \
     libtiff-dev \
@@ -97,7 +92,6 @@ RUN apt-get update && apt-get install -y \
     libopenexr-dev \
     libopenjp2-7-dev \
     libopenjp2-tools \
-    # Video codecs
     libavcodec-dev \
     libavformat-dev \
     libswscale-dev \
@@ -107,7 +101,6 @@ RUN apt-get update && apt-get install -y \
     libx264-dev \
     libx265-dev \
     libvpx-dev \
-    # GStreamer (crítico para RTSP en Jetson)
     libgstreamer1.0-dev \
     libgstreamer-plugins-base1.0-dev \
     libgstreamer-plugins-good1.0-dev \
@@ -115,19 +108,14 @@ RUN apt-get update && apt-get install -y \
     gstreamer1.0-plugins-ugly \
     gstreamer1.0-libav \
     gstreamer1.0-tools \
-    # GUI (GTK3 para imshow)
     libgtk-3-dev \
     libgtk2.0-dev \
-    # Álgebra lineal
     libatlas-base-dev \
     gfortran \
     libeigen3-dev \
-    # Threading
     libtbb-dev \
     libtbb2 \
-    # Otros
     libdc1394-22-dev \
-    # X11 y OpenGL
     libgl1-mesa-dev \
     libglu1-mesa-dev \
     libglew-dev \
@@ -141,7 +129,6 @@ RUN apt-get update && apt-get install -y \
     libice6 \
     x11-apps \
     mesa-utils \
-    # Networking
     ffmpeg \
     v4l-utils \
     net-tools \
@@ -153,11 +140,9 @@ RUN apt-get update && apt-get install -y \
 # ============================================================================
 
 RUN apt-get update && apt-get install -y \
-    # Logging y debugging
     libspdlog-dev \
     libgoogle-glog-dev \
     libgflags-dev \
-    # Serialización y formato
     libfmt-dev \
     libjsoncpp-dev \
     nlohmann-json3-dev \
@@ -165,35 +150,27 @@ RUN apt-get update && apt-get install -y \
     libprotobuf-dev \
     protobuf-compiler \
     libmsgpack-dev \
-    # Bases de datos
     libsqlite3-dev \
     libpq-dev \
     libmysqlclient-dev \
     libhiredis-dev \
     libmongoc-dev \
-    # Networking y comunicación
     libzmq3-dev \
     libcurl4-openssl-dev \
     libssl-dev \
     libwebsocketpp-dev \
     libmicrohttpd-dev \
     libgrpc++-dev \
-    # HTTP y REST
     libcpprest-dev \
-    # Boost
     libboost-all-dev \
-    # Álgebra lineal y matemáticas
     libarmadillo-dev \
     libopenblas-dev \
     liblapack-dev \
     libgsl-dev \
-    # Computer Vision extras
     libpcl-dev \
     libvtk7-dev \
-    # Testing
     libgtest-dev \
     libgmock-dev \
-    # Utilidades generales
     libtool \
     autoconf \
     automake \
@@ -209,10 +186,6 @@ RUN apt-get update && apt-get install -y \
     tree \
     && rm -rf /var/lib/apt/lists/*
 
-# ============================================================================ 
-# Compilar Google Test (Ubuntu 20.04 solo trae headers)
-# ============================================================================
-
 RUN cd /usr/src/gtest && \
     cmake . && \
     make && \
@@ -224,42 +197,35 @@ RUN cd /usr/src/gtest && \
 
 WORKDIR /tmp
 
-# CLI11 - Command line parser
 RUN git clone --depth 1 https://github.com/CLIUtils/CLI11.git && \
     cd CLI11 && mkdir build && cd build && \
     cmake .. && make install && \
     cd /tmp && rm -rf CLI11
 
-# backward-cpp - Stack trace bonito
 RUN git clone --depth 1 https://github.com/bombela/backward-cpp.git && \
     cd backward-cpp && cp backward.hpp /usr/local/include/ && \
     cd /tmp && rm -rf backward-cpp
 
-# magic_enum - Enum to string
 RUN git clone --depth 1 https://github.com/Neargye/magic_enum.git && \
     cd magic_enum && mkdir build && cd build && \
     cmake .. && make install && \
     cd /tmp && rm -rf magic_enum
 
-# cpptrace - Better stack traces
 RUN git clone --depth 1 https://github.com/jeremy-rifkin/cpptrace.git && \
     cd cpptrace && mkdir build && cd build && \
     cmake .. && make install && \
     cd /tmp && rm -rf cpptrace
 
-# toml++ - TOML parser
 RUN git clone --depth 1 https://github.com/marzer/tomlplusplus.git && \
     cd tomlplusplus && mkdir build && cd build && \
     cmake .. && make install && \
     cd /tmp && rm -rf tomlplusplus
 
-# Expected - std::expected backport
 RUN git clone --depth 1 https://github.com/TartanLlama/expected.git && \
     cd expected && mkdir build && cd build && \
     cmake .. && make install && \
     cd /tmp && rm -rf expected
 
-# catch2 - Testing framework
 RUN git clone --depth 1 --branch v3.3.0 https://github.com/catchorg/Catch2.git && \
     cd Catch2 && mkdir build && cd build && \
     cmake .. && make install && \
@@ -269,7 +235,6 @@ RUN git clone --depth 1 --branch v3.3.0 https://github.com/catchorg/Catch2.git &
 # FASE 6: Compilar OpenCV 4.10 con CUDA optimizado
 # ============================================================================
 
-# Install GCC-9 for OpenCV compilation (better compatibility)
 RUN apt-get update && apt-get install -y gcc-9 g++-9 && rm -rf /var/lib/apt/lists/*
 RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 90 \
     --slave /usr/bin/g++ g++ /usr/bin/g++-9 \
@@ -322,11 +287,9 @@ RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/ope
     && ldconfig \
     && cd / && rm -rf /tmp/opencv /tmp/opencv_contrib
 
-# Verificar OpenCV
 RUN pkg-config --modversion opencv4 \
     && echo "OpenCV instalado con éxito"
 
-# Switch back to GCC 11 for other builds
 RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 110 \
     --slave /usr/bin/g++ g++ /usr/bin/g++-11 \
     --slave /usr/bin/gcov gcov /usr/bin/gcov-11
@@ -347,24 +310,43 @@ RUN wget -q https://github.com/microsoft/onnxruntime/releases/download/v1.16.3/o
 ENV ONNXRUNTIME_DIR=/opt/onnxruntime
 
 # ============================================================================
-# FASE 8: Configurar workspace del proyecto
+# FASE 8: Instalar Python y Jupyter
+# ============================================================================
+
+RUN apt-get update && apt-get install -y \
+    python3 \
+    python3-pip \
+    python3-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN pip3 install --no-cache-dir \
+    jupyter \
+    jupyterlab \
+    notebook \
+    numpy \
+    matplotlib \
+    pandas \
+    scipy \
+    scikit-learn \
+    opencv-python
+
+RUN jupyter notebook --generate-config && \
+    python3 -c "from notebook.auth import passwd; print(passwd('nvidia'))" > /tmp/jupyter_pass.txt && \
+    echo "c.NotebookApp.ip = '0.0.0.0'" >> ~/.jupyter/jupyter_notebook_config.py && \
+    echo "c.NotebookApp.port = 8888" >> ~/.jupyter/jupyter_notebook_config.py && \
+    echo "c.NotebookApp.allow_root = True" >> ~/.jupyter/jupyter_notebook_config.py && \
+    echo "c.NotebookApp.open_browser = False" >> ~/.jupyter/jupyter_notebook_config.py && \
+    echo "c.NotebookApp.password = '$(cat /tmp/jupyter_pass.txt)'" >> ~/.jupyter/jupyter_notebook_config.py && \
+    rm /tmp/jupyter_pass.txt
+
+EXPOSE 8888
+
+# ============================================================================
+# FASE 9: Configurar workspace y zona horaria
 # ============================================================================
 
 WORKDIR /workspace
 
-# Crear estructura de directorios
-RUN mkdir -p \
-    /workspace/src \
-    /workspace/include \
-    /workspace/models \
-    /workspace/videos \
-    /workspace/build \
-    /workspace/data/faces_db \
-    /workspace/data/embeddings \
-    /workspace/logs \
-    /workspace/config
-
-# Configurar zona horaria (Lima, Perú)
 RUN ln -sf /usr/share/zoneinfo/America/Lima /etc/localtime \
     && echo "America/Lima" > /etc/timezone \
     && dpkg-reconfigure -fnoninteractive tzdata
@@ -375,39 +357,4 @@ RUN ln -sf /usr/share/zoneinfo/America/Lima /etc/localtime \
 
 WORKDIR /workspace
 
-# Script de bienvenida
-RUN cat > /workspace/welcome.sh <<'EOF'
-#!/bin/bash
-echo "=========================================="
-echo "  Jetson Orin Nano - C++20 Dev Env"
-echo "=========================================="
-echo ""
-echo "⚙️  COMPILER:"
-gcc --version | head -1
-g++ --version | head -1
-echo ""
-echo "🔧 BUILD TOOLS:"
-cmake --version | head -1
-echo ""
-echo "📚 LIBRARIES:"
-echo "  - OpenCV: $(pkg-config --modversion opencv4 2>/dev/null || echo 'checking...')"
-echo "  - CUDA: $(nvcc --version 2>/dev/null | grep release | awk '{print $5}' || echo 'runtime')"
-echo "  - TensorRT: installed"
-echo "  - ONNXRuntime: ${ONNXRUNTIME_DIR}"
-echo ""
-echo "📂 WORKSPACE:"
-echo "  - Source:  /workspace/src"
-echo "  - Headers: /workspace/include"
-echo "  - Build:   /workspace/build"
-echo "  - Models:  /workspace/models"
-echo ""
-echo "🚀 QUICK START:"
-echo "  cd /workspace/build"
-echo "  cmake ../src -DCMAKE_CXX_STANDARD=20"
-echo "  make -j4"
-echo "=========================================="
-EOF
-
-RUN chmod +x /workspace/welcome.sh
-
-CMD ["/bin/bash", "-c", "/workspace/welcome.sh && /bin/bash"]
+CMD ["/bin/bash"]
