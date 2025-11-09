@@ -300,7 +300,8 @@ RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/ope
         -D WITH_TBB=OFF \
         -D WITH_EIGEN=ON \
         -D WITH_LAPACK=ON \
-        -D WITH_OPENJPEG=ON \
+        -D WITH_OPENJPEG=OFF \
+        -D WITH_JASPER=OFF \
         -D BUILD_opencv_python2=OFF \
         -D BUILD_opencv_python3=OFF \
         -D BUILD_TESTS=OFF \
@@ -311,7 +312,6 @@ RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/ope
         -D BUILD_opencv_cudacodec=ON \
         -D CMAKE_CXX_FLAGS="-O3 -march=native -mtune=native" \
         .. \
-    #&& make -j$(nproc) \
     && make -j2 \
     && make install \
     && ldconfig \
