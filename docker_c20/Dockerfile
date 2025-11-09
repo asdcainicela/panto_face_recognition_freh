@@ -28,11 +28,16 @@ RUN apt-get update && apt-get install -y \
     && apt-get install -y \
         gcc-11 \
         g++-11 \
+        gcc-9 \
+        g++-9 \
         build-essential \
         pkg-config \
     && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 110 \
         --slave /usr/bin/g++ g++ /usr/bin/g++-11 \
         --slave /usr/bin/gcov gcov /usr/bin/gcov-11 \
+    && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 90 \
+        --slave /usr/bin/g++ g++ /usr/bin/g++-9 \
+        --slave /usr/bin/gcov gcov /usr/bin/gcov-9 \
     && rm -rf /var/lib/apt/lists/*
 
 # Verificar versión GCC
@@ -69,7 +74,7 @@ RUN apt-get update && apt-get install -y \
     python3-libnvinfer \
     && rm -rf /var/lib/apt/lists/*
 
-# Fix CUDA paths y verificar
+# Verificar CUDA
 RUN if [ -d "/usr/local/cuda-11.4" ]; then \
         export PATH=/usr/local/cuda-11.4/bin:$PATH; \
     fi && \
@@ -182,7 +187,7 @@ RUN apt-get update && apt-get install -y \
     libopenblas-dev \
     liblapack-dev \
     libgsl-dev \
-    # Computer Vision extras (PCL con VTK7, disponible en Focal)
+    # Computer Vision extras
     libpcl-dev \
     libvtk7-dev \
     # Testing
@@ -330,36 +335,7 @@ ENV CC=/usr/bin/gcc-11
 ENV CXX=/usr/bin/g++-11
 
 # ============================================================================
-# FASE 7: Python y herramientas de ML (opcional pero útil)
-# ============================================================================
-
-RUN apt-get update && apt-get install -y \
-    python3-dev \
-    python3-pip \
-    python3-setuptools \
-    python3-wheel \
-    && rm -rf /var/lib/apt/lists/*
-
-# Actualizar pip
-RUN pip3 install --upgrade pip
-
-# Instalar librerías Python útiles para prototipado
-RUN pip3 install --no-cache-dir \
-    numpy \
-    opencv-python \
-    onnx \
-    onnxruntime-gpu \
-    pillow \
-    matplotlib \
-    pyyaml \
-    tqdm \
-    requests \
-    Flask \
-    fastapi \
-    uvicorn
-
-# ============================================================================
-# FASE 8: Descargar ONNXRuntime (opcional, para modelos ONNX)
+# FASE 7: Descargar ONNXRuntime C++ (para modelos ONNX)
 # ============================================================================
 
 WORKDIR /tmp
@@ -371,7 +347,7 @@ RUN wget -q https://github.com/microsoft/onnxruntime/releases/download/v1.16.3/o
 ENV ONNXRUNTIME_DIR=/opt/onnxruntime
 
 # ============================================================================
-# FASE 9: Configurar workspace del proyecto
+# FASE 8: Configurar workspace del proyecto
 # ============================================================================
 
 WORKDIR /workspace
@@ -388,26 +364,47 @@ RUN mkdir -p \
     /workspace/logs \
     /workspace/config
 
+# Configurar zona horaria (Lima, Perú)
+RUN ln -sf /usr/share/zoneinfo/America/Lima /etc/localtime \
+    && echo "America/Lima" > /etc/timezone \
+    && dpkg-reconfigure -fnoninteractive tzdata
+
 # ============================================================================
 # FINALIZACION
 # ============================================================================
 
 WORKDIR /workspace
 
-# Script de bienvenida simple
+# Script de bienvenida
 RUN cat > /workspace/welcome.sh <<'EOF'
 #!/bin/bash
 echo "=========================================="
-echo "  Jetson Orin Nano - Development Env"
-echo "  C++17/20 | OpenCV 4.10 | CUDA 11.4"
+echo "  Jetson Orin Nano - C++20 Dev Env"
 echo "=========================================="
 echo ""
+echo "⚙️  COMPILER:"
 gcc --version | head -1
-cmake --version | head -1
-pkg-config --modversion opencv4 2>/dev/null || echo "OpenCV: checking..."
-nvcc --version 2>/dev/null | grep release || echo "CUDA: checking..."
+g++ --version | head -1
 echo ""
-echo "Workspace: /workspace"
+echo "🔧 BUILD TOOLS:"
+cmake --version | head -1
+echo ""
+echo "📚 LIBRARIES:"
+echo "  - OpenCV: $(pkg-config --modversion opencv4 2>/dev/null || echo 'checking...')"
+echo "  - CUDA: $(nvcc --version 2>/dev/null | grep release | awk '{print $5}' || echo 'runtime')"
+echo "  - TensorRT: installed"
+echo "  - ONNXRuntime: ${ONNXRUNTIME_DIR}"
+echo ""
+echo "📂 WORKSPACE:"
+echo "  - Source:  /workspace/src"
+echo "  - Headers: /workspace/include"
+echo "  - Build:   /workspace/build"
+echo "  - Models:  /workspace/models"
+echo ""
+echo "🚀 QUICK START:"
+echo "  cd /workspace/build"
+echo "  cmake ../src -DCMAKE_CXX_STANDARD=20"
+echo "  make -j4"
 echo "=========================================="
 EOF
 
