@@ -310,7 +310,7 @@ RUN wget -q https://github.com/microsoft/onnxruntime/releases/download/v1.16.3/o
 ENV ONNXRUNTIME_DIR=/opt/onnxruntime
 
 # ============================================================================
-# FASE 8: Instalar Python 3 + pip + Jupyter (compatible con Jetson Orin)
+# FASE 8: Instalar Python 3 + pip + Jupyter (Jetson Orin Nano compatible)
 # ============================================================================
 
 RUN apt-get update && apt-get install -y \
@@ -325,7 +325,10 @@ RUN pip3 install --no-cache-dir "packaging<22.0"
 COPY requirements.txt /tmp/requirements.txt
 RUN pip3 install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
-RUN pip3 install --no-cache-dir platformdirs && \
+# Forzar instalación correcta de platformdirs fuera de setuptools vendored
+RUN pip3 uninstall -y platformdirs || true && \
+    pip3 install --no-cache-dir platformdirs==3.10.0 && \
+    python3 -m pip show platformdirs && \
     jupyter notebook --generate-config && \
     python3 -c "from notebook.auth import passwd; print(passwd('nvidia'))" > /tmp/jupyter_pass.txt && \
     echo "c.NotebookApp.ip = '0.0.0.0'" >> ~/.jupyter/jupyter_notebook_config.py && \
@@ -337,6 +340,7 @@ RUN pip3 install --no-cache-dir platformdirs && \
     echo "=== Jupyter configurado correctamente ==="
 
 EXPOSE 8888
+
 
 # ============================================================================
 # FASE 9: Configurar workspace y zona horaria
