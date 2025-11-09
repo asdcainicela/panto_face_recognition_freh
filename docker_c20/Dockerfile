@@ -90,6 +90,8 @@ RUN apt-get update && apt-get install -y \
     libtiff-dev \
     libwebp-dev \
     libopenexr-dev \
+    libopenjp2-7-dev \
+    libopenjp2-tools \
     # Video codecs
     libavcodec-dev \
     libavformat-dev \
@@ -258,26 +260,11 @@ RUN git clone --depth 1 --branch v3.3.0 https://github.com/catchorg/Catch2.git &
     cmake .. && make install && \
     cd /tmp && rm -rf Catch2
 
-# pistache - HTTP server C++ (DESHABILITADO - requiere Meson, no crítico para CV)
-# Si necesitas REST API más adelante, usa cpp-httplib (header-only, más simple)
-# RUN git clone --depth 1 https://github.com/pistacheio/pistache.git && \
-#     cd pistache && meson setup build && cd build && \
-#     ninja && ninja install && ldconfig && \
-#     cd /tmp && rm -rf pistache
-
 # ============================================================================
 # FASE 6: Compilar OpenCV 4.10 con CUDA optimizado
 # ============================================================================
 
-#WORKDIR /tmp
-#RUN git clone --depth 1 https://github.com/oneapi-src/oneTBB.git \
-#    && cd oneTBB \
-#    && mkdir build && cd build \
-#    && cmake -DCMAKE_BUILD_TYPE=Release .. \
-#    && make -j$(nproc) && make install \
-#    && cd /tmp && rm -rf oneTBB
-RUN apt-get update && apt-get install -y libopenjp2-7-dev
-
+# Install GCC-9 for OpenCV compilation (better compatibility)
 RUN apt-get update && apt-get install -y gcc-9 g++-9 && rm -rf /var/lib/apt/lists/*
 RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-9 90 \
     --slave /usr/bin/g++ g++ /usr/bin/g++-9 \
@@ -293,7 +280,7 @@ RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/ope
     && cmake \
         -D CMAKE_BUILD_TYPE=RELEASE \
         -D CMAKE_INSTALL_PREFIX=/usr/local \
-        -D CMAKE_CXX_STANDARD=20 \
+        -D CMAKE_CXX_STANDARD=17 \
         -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib/modules \
         -D WITH_CUDA=ON \
         -D CUDA_TOOLKIT_ROOT_DIR=${CUDA_HOME} \
@@ -313,6 +300,7 @@ RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/ope
         -D WITH_TBB=OFF \
         -D WITH_EIGEN=ON \
         -D WITH_LAPACK=ON \
+        -D WITH_OPENJPEG=ON \
         -D BUILD_opencv_python2=OFF \
         -D BUILD_opencv_python3=OFF \
         -D BUILD_TESTS=OFF \
@@ -337,6 +325,9 @@ RUN pkg-config --modversion opencv4 \
 RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 110 \
     --slave /usr/bin/g++ g++ /usr/bin/g++-11 \
     --slave /usr/bin/gcov gcov /usr/bin/gcov-11
+
+ENV CC=/usr/bin/gcc-11
+ENV CXX=/usr/bin/g++-11
 
 # ============================================================================
 # FASE 7: Python y herramientas de ML (opcional pero útil)
@@ -408,7 +399,7 @@ RUN cat > /workspace/welcome.sh <<'EOF'
 #!/bin/bash
 echo "=========================================="
 echo "  Jetson Orin Nano - Development Env"
-echo "  C++20 | OpenCV 4.10 | CUDA 11.4"
+echo "  C++17/20 | OpenCV 4.10 | CUDA 11.4"
 echo "=========================================="
 echo ""
 gcc --version | head -1
