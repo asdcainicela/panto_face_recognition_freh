@@ -326,8 +326,8 @@ COPY requirements.txt /tmp/requirements.txt
 RUN pip3 install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
 # Forzar instalación correcta de platformdirs fuera de setuptools vendored
-RUN pip3 uninstall -y platformdirs || true && \
-    pip3 install --no-cache-dir platformdirs==3.10.0 && \
+# --- Configurar Jupyter Notebook ---
+RUN pip3 install --force-reinstall --no-cache-dir platformdirs==3.10.0 && \
     python3 -m pip show platformdirs && \
     jupyter notebook --generate-config && \
     python3 -c "from notebook.auth import passwd; print(passwd('nvidia'))" > /tmp/jupyter_pass.txt && \
@@ -340,7 +340,6 @@ RUN pip3 uninstall -y platformdirs || true && \
     echo "=== Jupyter configurado correctamente ==="
 
 EXPOSE 8888
-
 
 # ============================================================================
 # FASE 9: Configurar workspace y zona horaria
