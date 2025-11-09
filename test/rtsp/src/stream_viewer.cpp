@@ -162,18 +162,12 @@ void StreamViewer::run() {
     }
 
     while (true) {
-        if (stop_signal && *stop_signal) {
-            spdlog::info("señal de parada recibida en stream {}", stream_type);
-            break;
-        }
+        if (stop_signal && *stop_signal) break;
         
         if (max_duration > 0) {
             auto elapsed = std::chrono::steady_clock::now() - start_main;
             auto seconds = std::chrono::duration_cast<std::chrono::seconds>(elapsed).count();
-            if (seconds >= max_duration) {
-                spdlog::info("duración máxima alcanzada en stream {}", stream_type);
-                break;
-            }
+            if (seconds >= max_duration) break;
         }
         
         if (!cap.read(frame)) {
