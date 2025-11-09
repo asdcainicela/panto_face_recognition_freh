@@ -18,11 +18,11 @@ set(SHARED_SOURCES
 add_executable(rtsp_main src/rtsp.cpp ${SHARED_SOURCES})
 target_link_libraries(rtsp_main ${OpenCV_LIBS} pthread spdlog::spdlog)
 
-add_executable(record_video src/record_video.cpp src/utils.cpp)
-target_link_libraries(record_video ${OpenCV_LIBS} pthread spdlog::spdlog)
+#add_executable(record_video src/record_video.cpp src/utils.cpp)
+#target_link_libraries(record_video ${OpenCV_LIBS} pthread spdlog::spdlog)
 
 #  permisos de ejecución
-install(TARGETS rtsp_main record_video
+install(TARGETS rtsp_main 
     PERMISSIONS OWNER_EXECUTE OWNER_WRITE OWNER_READ GROUP_EXECUTE GROUP_READ WORLD_EXECUTE WORLD_READ
     RUNTIME DESTINATION ${CMAKE_BINARY_DIR}
 )
