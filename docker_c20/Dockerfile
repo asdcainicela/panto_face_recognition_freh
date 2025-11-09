@@ -325,18 +325,16 @@ RUN pip3 install --no-cache-dir "packaging<22.0"
 COPY requirements.txt /tmp/requirements.txt
 RUN pip3 install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
-# Dependencia faltante + instalación robusta de Jupyter
-RUN pip3 install --no-cache-dir platformdirs jupyterlab notebook
-
-# Configuración segura de Jupyter Notebook
-RUN jupyter notebook --generate-config && \
+RUN pip3 install --no-cache-dir platformdirs && \
+    jupyter notebook --generate-config && \
     python3 -c "from notebook.auth import passwd; print(passwd('nvidia'))" > /tmp/jupyter_pass.txt && \
     echo "c.NotebookApp.ip = '0.0.0.0'" >> ~/.jupyter/jupyter_notebook_config.py && \
     echo "c.NotebookApp.port = 8888" >> ~/.jupyter/jupyter_notebook_config.py && \
     echo "c.NotebookApp.allow_root = True" >> ~/.jupyter/jupyter_notebook_config.py && \
     echo "c.NotebookApp.open_browser = False" >> ~/.jupyter/jupyter_notebook_config.py && \
     echo "c.NotebookApp.password = '$(cat /tmp/jupyter_pass.txt)'" >> ~/.jupyter/jupyter_notebook_config.py && \
-    rm /tmp/jupyter_pass.txt
+    rm /tmp/jupyter_pass.txt && \
+    echo "=== Jupyter configurado correctamente ==="
 
 EXPOSE 8888
 
