@@ -310,7 +310,7 @@ RUN wget -q https://github.com/microsoft/onnxruntime/releases/download/v1.16.3/o
 ENV ONNXRUNTIME_DIR=/opt/onnxruntime
 
 # ============================================================================
-# FASE 8: Instalar Python y Jupyter
+# FASE 8: Instalar Python 3 + pip + Jupyter (compatible con Jetson Orin)
 # ============================================================================
 
 RUN apt-get update && apt-get install -y \
@@ -319,23 +319,15 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
+# Actualizar herramientas base de Python y fijar una versión estable de "packaging"
 RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel
+RUN pip3 install --no-cache-dir "packaging<22.0"
 
-RUN pip3 install --no-cache-dir \
-    "numpy<2.0" \
-    "Cython<3.0"
+# Copiar e instalar dependencias de Python
+COPY requirements.txt /tmp/requirements.txt
+RUN pip3 install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
 
-RUN pip3 install --no-cache-dir \
-    jupyter \
-    jupyterlab \
-    notebook \
-    matplotlib \
-    pandas \
-    scipy \
-    scikit-learn
-
-RUN pip3 install --no-cache-dir opencv-python || true
-
+# Configuración segura de Jupyter Notebook
 RUN jupyter notebook --generate-config && \
     python3 -c "from notebook.auth import passwd; print(passwd('nvidia'))" > /tmp/jupyter_pass.txt && \
     echo "c.NotebookApp.ip = '0.0.0.0'" >> ~/.jupyter/jupyter_notebook_config.py && \
