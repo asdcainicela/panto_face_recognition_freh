@@ -310,33 +310,38 @@ RUN wget -q https://github.com/microsoft/onnxruntime/releases/download/v1.16.3/o
 ENV ONNXRUNTIME_DIR=/opt/onnxruntime
 
 # ============================================================================
-# FASE 8: Instalar Python 3 + pip + Jupyter (Jetson Orin Nano compatible)
+# FASE 8: Instalar Python 3.8 + pip + Jupyter (compatible con Jetson Orin Nano)
 # ============================================================================
 
 RUN apt-get update && apt-get install -y \
-    python3 \
+    python3.8 \
+    python3.8-dev \
     python3-pip \
-    python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
+RUN ln -sf /usr/bin/python3.8 /usr/bin/python3
+
 RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel
-RUN pip3 install --no-cache-dir "packaging<22.0"
 
-COPY requirements.txt /tmp/requirements.txt
-RUN pip3 install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
+# Librerías base necesarias para compatibilidad con Python 3.8
+RUN pip3 install --no-cache-dir \
+    importlib_resources==5.12.0 \
+    importlib_metadata==6.7.0 \
+    platformdirs==3.10.0 \
+    packaging==23.2 \
+    pygments==2.16.1
 
-# Forzar instalación correcta de platformdirs fuera de setuptools vendored
-# --- Configurar Jupyter Notebook ---
-# --- Configurar Jupyter Notebook de forma estable ---
-RUN pip3 install --no-cache-dir --force-reinstall \
-        platformdirs==3.10.0 \
-        importlib_metadata==6.7.0 \
-        packaging==23.2 \
-        pygments==2.16.1 && \
-    pip3 install --no-cache-dir \
-        jupyterlab==4.0.9 \
-        notebook==7.0.6 && \
-    python3 -m jupyter --version && \
+# Jupyter estable para 3.8 (no usar versiones más nuevas)
+RUN pip3 install --no-cache-dir \
+    notebook==6.5.5 \
+    jupyterlab==3.6.7 \
+    jupyter_server==1.24.0 \
+    nbconvert==7.8.0 \
+    traitlets==5.9.0 \
+    ipykernel==6.25.2
+
+# Configuración básica
+RUN python3 -m jupyter --version && \
     jupyter notebook --generate-config && \
     python3 -c "from notebook.auth import passwd; print(passwd('nvidia'))" > /tmp/jupyter_pass.txt && \
     echo "c.NotebookApp.ip = '0.0.0.0'" >> ~/.jupyter/jupyter_notebook_config.py && \
