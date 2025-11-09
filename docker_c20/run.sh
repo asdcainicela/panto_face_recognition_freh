@@ -29,16 +29,11 @@ xauth nlist $DISPLAY 2>/dev/null | sed -e 's/^..../ffff/' | xauth -f "$XAUTH" nm
 xhost +local:docker 2>/dev/null || true
 
 if [ "$(docker ps -aq -f name=${CONTAINER_NAME})" ]; then
-    if [ "$(docker ps -q -f name=${CONTAINER_NAME})" ]; then
-        echo -e "${GREEN}Contenedor ya corriendo${NC}"
-    else
-        echo -e "${YELLOW}Iniciando contenedor...${NC}"
-        docker start ${CONTAINER_NAME}
+    if [ ! "$(docker ps -q -f name=${CONTAINER_NAME})" ]; then
+        docker start ${CONTAINER_NAME} >/dev/null
         sleep 2
     fi
 else
-    echo -e "${YELLOW}Creando contenedor...${NC}"
-    
     docker run -d \
       --runtime nvidia \
       --gpus all \
@@ -76,80 +71,35 @@ else
       --device=/dev/nvhost-as-gpu \
       --device=/dev/nvhost-vic \
       ${IMAGE_NAME} \
-      /bin/bash -c "tail -f /dev/null"
-    
-    sleep 3
-    
-    echo -e "${YELLOW}Configurando contenedor...${NC}"
+      /bin/bash -c "sleep infinity"
+
     docker exec ${CONTAINER_NAME} bash -c "
         export DEBIAN_FRONTEND=noninteractive
-        
         apt-get update -qq
-        
         apt-get install -y -qq \
             libgtk2.0-dev libgtk-3-dev libglib2.0-0 libsm6 libxext6 \
             libxrender1 libgomp1 libgl1-mesa-glx libgles2-mesa libegl1-mesa \
-            sudo libspdlog-dev
-        
-        apt-get install -y -qq \
-            git nano vim cmake build-essential wget curl htop tree x11-apps
-        
+            sudo libspdlog-dev git nano vim cmake build-essential wget curl htop tree x11-apps
         ldconfig
-        
         git config --global user.email 'asdcainicela@gmail.com'
         git config --global user.name 'asdcainicela'
         git config --global --add safe.directory '*'
-        
         chown -R $USER_ID:$GROUP_ID /workspace
-        
-        cat > /etc/profile.d/jetson-env.sh << 'ENVEOF'
+        cat > /etc/profile.d/jetson-env.sh << 'EOF'
 export DISPLAY=\${DISPLAY:-:0}
 export XAUTHORITY=\${XAUTHORITY:-/tmp/.docker.xauth}
 export LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/tegra:/usr/lib/aarch64-linux-gnu/tegra-egl:\$LD_LIBRARY_PATH
 export GST_PLUGIN_PATH=/usr/lib/aarch64-linux-gnu/gstreamer-1.0
-ENVEOF
+EOF
         chmod +x /etc/profile.d/jetson-env.sh
-    " 2>&1 | grep -v "^Get:\|^Fetched\|^Reading" || true
-    
-    echo -e "${YELLOW}Clonando repositorios...${NC}"
+    " >/dev/null 2>&1
+
     docker exec ${CONTAINER_NAME} bash -c "
         cd /workspace
-        git clone https://asdcainicela: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@github.com/asdcainicela/lab-c-cpp.git 2>/dev/null || echo 'lab-c-cpp ya existe'
-        git clone https://asdcainicela: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@github.com/asdcainicela/panto_face_recognition_freh.git 2>/dev/null || echo 'panto_face_recognition_freh ya existe'
+        git clone https://asdcainicela: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@github.com/asdcainicela/lab-c-cpp.git  2>/dev/null || true
+        git clone https://asdcainicela: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@github.com/asdcainicela/panto_face_recognition_freh.git 2>/dev/null || true
         chown -R $USER_ID:$GROUP_ID /workspace
-    "
+    " >/dev/null 2>&1
 fi
 
-echo ""
-echo -e "${GREEN}Contenedor listo${NC}"
-echo -e "${BLUE}Workspace:${NC} $WORKSPACE_DIR -> /workspace"
-echo -e "${BLUE}Jupyter:${NC} http://localhost:8888 (password: nvidia)"
-echo ""
-echo -e "${BLUE}Comandos útiles:${NC}"
-echo -e "  ${YELLOW}docker exec -it ${CONTAINER_NAME} bash${NC}          # Entrar al contenedor"
-echo -e "  ${YELLOW}docker exec -d ${CONTAINER_NAME} jupyter lab --allow-root${NC}  # Iniciar Jupyter"
-echo ""
-
-read -p "¿Qué deseas hacer? [1=Bash, 2=Jupyter, Enter=Salir]: " choice
-
-case "$choice" in
-    1)
-        docker exec -it ${CONTAINER_NAME} bash -c "
-            source /etc/profile.d/jetson-env.sh 2>/dev/null || true
-            cd /workspace
-            echo 'Jetson Container - /workspace'
-            exec bash
-        "
-        ;;
-    2)
-        echo -e "${YELLOW}Iniciando Jupyter Lab...${NC}"
-        docker exec -d ${CONTAINER_NAME} jupyter lab --allow-root
-        sleep 2
-        echo -e "${GREEN}Jupyter Lab corriendo en:${NC} ${BLUE}http://localhost:8888${NC}"
-        echo -e "${YELLOW}Password:${NC} nvidia"
-        echo -e "${YELLOW}Para entrar al bash:${NC} docker exec -it ${CONTAINER_NAME} bash"
-        ;;
-    *)
-        echo -e "${GREEN}Contenedor corriendo en background${NC}"
-        ;;
-esac
+echo "Contenedor Jetson listo y corriendo."
