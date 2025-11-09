@@ -319,13 +319,14 @@ RUN apt-get update && apt-get install -y \
     python3-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Actualizar herramientas base de Python y fijar una versión estable de "packaging"
 RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel
 RUN pip3 install --no-cache-dir "packaging<22.0"
 
-# Copiar e instalar dependencias de Python
 COPY requirements.txt /tmp/requirements.txt
 RUN pip3 install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements.txt
+
+# Dependencia faltante + instalación robusta de Jupyter
+RUN pip3 install --no-cache-dir platformdirs jupyterlab notebook
 
 # Configuración segura de Jupyter Notebook
 RUN jupyter notebook --generate-config && \
