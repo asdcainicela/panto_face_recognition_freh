@@ -64,6 +64,7 @@ else
       -v /usr/lib/aarch64-linux-gnu/tegra-egl:/usr/lib/aarch64-linux-gnu/tegra-egl:rw \
       -v "${WORKSPACE_DIR}":/workspace:rw \
       -v /dev:/dev:rw \
+      -p 8888:8888 \
       --privileged \
       --device=/dev/video0 \
       --device=/dev/video1 \
@@ -121,21 +122,34 @@ fi
 
 echo ""
 echo -e "${GREEN}Contenedor listo${NC}"
-echo -e "${BLUE}Workspace:${NC} $WORKSPACE_DIR -> /workspace (accesible desde host)"
-echo -e "${BLUE}Modo:${NC} root (para acceso completo a hardware)"
+echo -e "${BLUE}Workspace:${NC} $WORKSPACE_DIR -> /workspace"
+echo -e "${BLUE}Jupyter:${NC} http://localhost:8888 (password: nvidia)"
 echo ""
-echo -e "${BLUE}Entrar:${NC} ${YELLOW}docker exec -it ${CONTAINER_NAME} bash${NC}"
+echo -e "${BLUE}Comandos útiles:${NC}"
+echo -e "  ${YELLOW}docker exec -it ${CONTAINER_NAME} bash${NC}          # Entrar al contenedor"
+echo -e "  ${YELLOW}docker exec -d ${CONTAINER_NAME} jupyter lab --allow-root${NC}  # Iniciar Jupyter"
 echo ""
 
-read -p "¿Entrar al contenedor ahora? [s/N]: " enter_now
+read -p "¿Qué deseas hacer? [1=Bash, 2=Jupyter, Enter=Salir]: " choice
 
-if [[ "$enter_now" =~ ^[Ss]$ ]]; then
-    docker exec -it ${CONTAINER_NAME} bash -c "
-        source /etc/profile.d/jetson-env.sh 2>/dev/null || true
-        cd /workspace
-        echo 'Jetson Container (root) - /workspace'
-        exec bash
-    "
-else
-    echo -e "${GREEN}Contenedor corriendo en background${NC}"
-fi
+case "$choice" in
+    1)
+        docker exec -it ${CONTAINER_NAME} bash -c "
+            source /etc/profile.d/jetson-env.sh 2>/dev/null || true
+            cd /workspace
+            echo 'Jetson Container - /workspace'
+            exec bash
+        "
+        ;;
+    2)
+        echo -e "${YELLOW}Iniciando Jupyter Lab...${NC}"
+        docker exec -d ${CONTAINER_NAME} jupyter lab --allow-root
+        sleep 2
+        echo -e "${GREEN}Jupyter Lab corriendo en:${NC} ${BLUE}http://localhost:8888${NC}"
+        echo -e "${YELLOW}Password:${NC} nvidia"
+        echo -e "${YELLOW}Para entrar al bash:${NC} docker exec -it ${CONTAINER_NAME} bash"
+        ;;
+    *)
+        echo -e "${GREEN}Contenedor corriendo en background${NC}"
+        ;;
+esac
