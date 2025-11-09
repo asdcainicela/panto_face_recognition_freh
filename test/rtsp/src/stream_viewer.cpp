@@ -4,7 +4,7 @@
 #include <thread>
 #include <iomanip>
 #include <sstream>
-#include <sys/stat.h>
+#include <filesystem>
 
 StreamViewer::StreamViewer(const std::string& user, const std::string& pass, 
                            const std::string& ip, int port, const std::string& stream_type,
@@ -24,10 +24,7 @@ StreamViewer::StreamViewer(const std::string& user, const std::string& pass,
 void StreamViewer::enable_recording(const std::string& output_dir) {
     recording_enabled = true;
     
-    struct stat info;
-    if (stat(output_dir.c_str(), &info) != 0) {
-        system(("mkdir -p " + output_dir).c_str());
-    }
+    std::filesystem::create_directories(output_dir);
     
     auto now = std::chrono::system_clock::now();
     auto time_t = std::chrono::system_clock::to_time_t(now);
@@ -76,6 +73,11 @@ void StreamViewer::stop_recording() {
         writer.release();
         spdlog::info("grabación finalizada: {}", output_filename);
     }
+}
+
+void StreamViewer::stop() {
+    stop_signal = nullptr;
+    cap.release();
 }
 
 bool StreamViewer::reconnect() {

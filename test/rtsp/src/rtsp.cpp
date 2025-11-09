@@ -7,11 +7,15 @@
 #include <iostream>
 
 std::atomic<bool> stop_signal(false);
+StreamViewer* viewer_main = nullptr;
+StreamViewer* viewer_sub = nullptr;
 
 void signal_handler(int signal) {
     if (signal == SIGINT || signal == SIGTERM) {
         spdlog::info("señal recibida (Ctrl+C), deteniendo streams...");
         stop_signal = true;
+        if (viewer_main) viewer_main->stop();
+        if (viewer_sub) viewer_sub->stop();
     }
 }
 
@@ -102,9 +106,6 @@ int main(int argc, char* argv[]) {
         }
     }
     
-    StreamViewer* viewer_main = nullptr;
-    StreamViewer* viewer_sub = nullptr;
-    
     if (stream_type == "main" || stream_type == "both") {
         viewer_main = new StreamViewer(user, pass, ip, port, "main", cv::Size(640, 480));
         viewer_main->set_stop_signal(&stop_signal);
@@ -136,18 +137,21 @@ int main(int argc, char* argv[]) {
     
     if (viewer_main) {
         thread_main = new std::thread([&]() { viewer_main->run(); });
+        thread_main->detach();
         std::this_thread::sleep_for(std::chrono::milliseconds(500));
     }
     
     if (viewer_sub) {
         thread_sub = new std::thread([&]() { viewer_sub->run(); });
+        thread_sub->detach();
     }
     
-    if (thread_main) thread_main->join();
-    if (thread_sub) thread_sub->join();
+    while (!stop_signal) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+    }
     
-    delete thread_main;
-    delete thread_sub;
+    std::this_thread::sleep_for(std::chrono::milliseconds(200));
+    
     delete viewer_main;
     delete viewer_sub;
 

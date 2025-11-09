@@ -51,6 +51,7 @@ public:
     void set_max_duration(int seconds);
     void set_stop_signal(std::atomic<bool>* signal);
     void run();
+    void stop();
     
     bool is_recording() const { return recording_enabled && writer.isOpened(); }
 };
