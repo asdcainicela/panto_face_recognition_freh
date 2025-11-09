@@ -327,8 +327,16 @@ RUN pip3 install --no-cache-dir -r /tmp/requirements.txt && rm /tmp/requirements
 
 # Forzar instalación correcta de platformdirs fuera de setuptools vendored
 # --- Configurar Jupyter Notebook ---
-RUN pip3 install --force-reinstall --no-cache-dir platformdirs==3.10.0 && \
-    python3 -m pip show platformdirs && \
+# --- Configurar Jupyter Notebook de forma estable ---
+RUN pip3 install --no-cache-dir --force-reinstall \
+        platformdirs==3.10.0 \
+        importlib_metadata==6.7.0 \
+        packaging==23.2 \
+        pygments==2.16.1 && \
+    pip3 install --no-cache-dir \
+        jupyterlab==4.0.9 \
+        notebook==7.0.6 && \
+    python3 -m jupyter --version && \
     jupyter notebook --generate-config && \
     python3 -c "from notebook.auth import passwd; print(passwd('nvidia'))" > /tmp/jupyter_pass.txt && \
     echo "c.NotebookApp.ip = '0.0.0.0'" >> ~/.jupyter/jupyter_notebook_config.py && \
