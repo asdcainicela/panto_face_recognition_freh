@@ -328,13 +328,17 @@ RUN pip3 install --no-cache-dir \
     setuptools \
     wheel
 
+RUN pip3 install --no-cache-dir "numpy<2.0"
+
 # Ahora instalar las dependencias base
 RUN pip3 install --no-cache-dir \
     importlib_resources \
     importlib_metadata \
     platformdirs \
-    pygments
+    pygments \
+    "Cython<3.0"
 
+# Instalar Jupyter (ahora pyzmq puede construirse correctamente)
 RUN pip3 install --no-cache-dir \
     "notebook<7.0" \
     "jupyterlab<4.0" \
@@ -342,8 +346,6 @@ RUN pip3 install --no-cache-dir \
 
 # Librerías científicas para Jupyter
 RUN pip3 install --no-cache-dir \
-    "numpy<2.0" \
-    "Cython<3.0" \
     matplotlib \
     pandas \
     scipy \
