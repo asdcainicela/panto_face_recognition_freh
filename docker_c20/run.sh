@@ -16,7 +16,7 @@ echo "=== Jetson Container Setup ==="
 export DISPLAY=${DISPLAY:-:0}
 XAUTH="${HOME}/.docker.xauth"
 
-# Configurar X11 (para OpenCV GUI)
+# Configurar X11
 rm -f "$XAUTH" 2>/dev/null || true
 touch "$XAUTH" && chmod 600 "$XAUTH"
 xauth nlist $DISPLAY 2>/dev/null | sed -e 's/^..../ffff/' | xauth -f "$XAUTH" nmerge - 2>/dev/null || true
@@ -39,9 +39,6 @@ else
       --network host \
       --ipc=host \
       --pid=host \
-      -e USER_ID=$USER_ID \
-      -e GROUP_ID=$GROUP_ID \
-      -e USER_NAME=$USER_NAME \
       -e DISPLAY=$DISPLAY \
       -e XAUTHORITY=$XAUTH \
       -e QT_X11_NO_MITSHM=1 \
@@ -55,34 +52,55 @@ else
       -v "${WORKSPACE_DIR}":/workspace:rw \
       -v /dev:/dev:rw \
       --privileged \
-      --device=/dev/video0 \
-      --device=/dev/video1 \
-      --device=/dev/nvhost-ctrl \
-      --device=/dev/nvhost-ctrl-gpu \
-      --device=/dev/nvhost-prof-gpu \
-      --device=/dev/nvmap \
-      --device=/dev/nvhost-gpu \
-      --device=/dev/nvhost-as-gpu \
-      --device=/dev/nvhost-vic \
       ${IMAGE_NAME} \
       /bin/bash -c "sleep infinity"
 fi
 
-# Instalar dependencias si no están
-echo "Instalando dependencias dentro del contenedor..."
+# Setup completo del contenedor
+echo "Configurando contenedor..."
 docker exec -u root ${CONTAINER_NAME} bash -c "
     export DEBIAN_FRONTEND=noninteractive
+    
+    # Instalar paquetes básicos
     apt-get update -qq
     apt-get install -y -qq sudo git nano vim cmake build-essential wget curl htop tree \
         libgtk2.0-dev libgtk-3-dev libglib2.0-0 libsm6 libxext6 libxrender1 \
         libgomp1 libgl1-mesa-glx libgles2-mesa libegl1-mesa python3-pip x11-apps
     ldconfig
-    pip3 install --quiet jupyterlab
-    git config --global user.email 'userasd@gmail.com'
-    git config --global user.name 'userasd'
-    git config --global --add safe.directory '*'
+    
+    # Jupyter
+    pip3 install --quiet jupyterlab 2>/dev/null || true
+    
+    # Crear usuario con el mismo UID/GID del host
+    if ! getent group $GROUP_ID >/dev/null 2>&1; then
+        groupadd -g $GROUP_ID $USER_NAME 2>/dev/null || true
+    fi
+    
+    if ! id -u $USER_ID >/dev/null 2>&1; then
+        useradd -u $USER_ID -g $GROUP_ID -G video,sudo -m -s /bin/bash $USER_NAME
+        mkdir -p /home/$USER_NAME
+        chown -R $USER_ID:$GROUP_ID /home/$USER_NAME
+    fi
+    
+    # Configurar sudo sin password
+    echo '$USER_NAME ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$USER_NAME
+    chmod 440 /etc/sudoers.d/$USER_NAME
+    
+    # Permisos en dispositivos
+    chmod 666 /dev/video* 2>/dev/null || true
+    chmod 666 /dev/nvhost-* 2>/dev/null || true
+    chmod 666 /dev/nvmap 2>/dev/null || true
+    
+    # Git config
+    sudo -u $USER_NAME git config --global user.email 'userasd@gmail.com'
+    sudo -u $USER_NAME git config --global user.name 'userasd'
+    sudo -u $USER_NAME git config --global --add safe.directory '*'
+    
+    # Workspace
     mkdir -p /workspace
     chown -R $USER_ID:$GROUP_ID /workspace
+    
+    # Variables de entorno
     cat > /etc/profile.d/jetson-env.sh << 'ENVEOF'
 export DISPLAY=\${DISPLAY:-:0}
 export XAUTHORITY=\${XAUTHORITY:-/tmp/.docker.xauth}
@@ -90,20 +108,22 @@ export LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/tegra:/usr/lib/aarch64-linux-g
 export GST_PLUGIN_PATH=/usr/lib/aarch64-linux-gnu/gstreamer-1.0
 ENVEOF
     chmod +x /etc/profile.d/jetson-env.sh
+    
+    echo 'Setup completado'
 "
 
-# Lanzar Jupyter Lab en background
-echo "Iniciando Jupyter Lab en background..."
+# Jupyter en background
+echo "Iniciando Jupyter Lab..."
 docker exec -u root -w /workspace ${CONTAINER_NAME} bash -c "
     mkdir -p /var/log
-    jupyter lab --ip=0.0.0.0 --port=8888 --allow-root --no-browser --NotebookApp.token='nvidia' > /var/log/jupyter.log 2>&1 &
-"
+    nohup jupyter lab --ip=0.0.0.0 --port=8888 --allow-root --no-browser --NotebookApp.token='nvidia' > /var/log/jupyter.log 2>&1 &
+" 2>/dev/null || true
 
 echo ""
-echo "Contenedor Jetson listo"
+echo "✓ Contenedor listo"
 echo ""
-echo "Servicios activos:"
-echo "  Jupyter Lab: http://localhost:8888/?token=nvidia"
+echo "Servicios:"
+echo "  → Jupyter Lab: http://localhost:8888/?token=nvidia"
 echo ""
-echo "Abriendo shell dentro del contenedor en /workspace..."
-docker exec -it -u $USER_ID:$GROUP_ID -w /workspace ${CONTAINER_NAME} bash
+echo "Entrando al contenedor..."
+docker exec -it -u $USER_NAME -w /workspace ${CONTAINER_NAME} bash
