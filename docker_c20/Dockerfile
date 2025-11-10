@@ -317,17 +317,23 @@ RUN apt-get update && apt-get install -y \
     python3.8 \
     python3.8-dev \
     python3-pip \
+    python3-numpy \
+    python3-zmq \
+    libzmq3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN ln -sf /usr/bin/python3.8 /usr/bin/python3
 
+# CRÍTICO: Actualizar pip a la última versión para resolver el bug de versiones
 RUN python3 -m pip install --no-cache-dir --upgrade pip==24.0
 
+# Instalar packaging moderno primero (soluciona el error de InvalidVersion)
 RUN pip3 install --no-cache-dir \
     "packaging>=21.0" \
     setuptools \
     wheel
 
+# Instalar NumPy PRIMERO (requerido por pyzmq y otros paquetes)
 RUN pip3 install --no-cache-dir "numpy<2.0"
 
 # Ahora instalar las dependencias base
@@ -338,7 +344,10 @@ RUN pip3 install --no-cache-dir \
     pygments \
     "Cython<3.0"
 
-# Instalar Jupyter (ahora pyzmq puede construirse correctamente)
+# Instalar pyzmq con configuración especial (evitar compilación con scikit-build-core)
+RUN pip3 install --no-cache-dir --no-build-isolation "pyzmq<26.0"
+
+# Instalar Jupyter (ahora sin problemas de pyzmq)
 RUN pip3 install --no-cache-dir \
     "notebook<7.0" \
     "jupyterlab<4.0" \
