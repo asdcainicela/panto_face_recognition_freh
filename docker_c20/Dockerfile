@@ -310,7 +310,7 @@ RUN wget -q https://github.com/microsoft/onnxruntime/releases/download/v1.16.3/o
 ENV ONNXRUNTIME_DIR=/opt/onnxruntime
 
 # ============================================================================
-# FASE 8: Instalar Python 3.8 + pip + Jupyter (compatible con Jetson Orin Nano)
+# FASE 8: Instalar Python 3.8 + pip + Jupyter (FIX APLICADO)
 # ============================================================================
 
 RUN apt-get update && apt-get install -y \
@@ -321,28 +321,39 @@ RUN apt-get update && apt-get install -y \
 
 RUN ln -sf /usr/bin/python3.8 /usr/bin/python3
 
-RUN pip3 install --no-cache-dir --upgrade pip setuptools wheel
+RUN python3 -m pip install --no-cache-dir --upgrade pip==24.0
 
-# Librerías base necesarias para compatibilidad con Python 3.8
 RUN pip3 install --no-cache-dir \
-    importlib_resources==5.12.0 \
-    importlib_metadata==6.7.0 \
-    platformdirs==3.10.0 \
-    packaging==23.2 \
-    pygments==2.16.1
+    "packaging>=21.0" \
+    setuptools \
+    wheel
 
-# Jupyter estable para 3.8 (no usar versiones más nuevas)
+# Ahora instalar las dependencias base
 RUN pip3 install --no-cache-dir \
-    notebook==6.5.5 \
-    jupyterlab==3.6.7 \
-    jupyter_server==1.24.0 \
-    nbconvert==7.8.0 \
-    traitlets==5.9.0 \
-    ipykernel==6.25.2
+    importlib_resources \
+    importlib_metadata \
+    platformdirs \
+    pygments
 
-# Configuración básica
-RUN python3 -m jupyter --version && \
-    jupyter notebook --generate-config && \
+RUN pip3 install --no-cache-dir \
+    "notebook<7.0" \
+    "jupyterlab<4.0" \
+    ipykernel
+
+# Librerías científicas para Jupyter
+RUN pip3 install --no-cache-dir \
+    "numpy<2.0" \
+    "Cython<3.0" \
+    matplotlib \
+    pandas \
+    scipy \
+    scikit-learn \
+    seaborn \
+    pillow \
+    tqdm
+
+# Configuración de Jupyter
+RUN jupyter notebook --generate-config && \
     python3 -c "from notebook.auth import passwd; print(passwd('nvidia'))" > /tmp/jupyter_pass.txt && \
     echo "c.NotebookApp.ip = '0.0.0.0'" >> ~/.jupyter/jupyter_notebook_config.py && \
     echo "c.NotebookApp.port = 8888" >> ~/.jupyter/jupyter_notebook_config.py && \
@@ -350,7 +361,8 @@ RUN python3 -m jupyter --version && \
     echo "c.NotebookApp.open_browser = False" >> ~/.jupyter/jupyter_notebook_config.py && \
     echo "c.NotebookApp.password = '$(cat /tmp/jupyter_pass.txt)'" >> ~/.jupyter/jupyter_notebook_config.py && \
     rm /tmp/jupyter_pass.txt && \
-    echo "=== Jupyter configurado correctamente ==="
+    echo "=== Jupyter configurado correctamente ===" && \
+    jupyter --version
 
 EXPOSE 8888
 
