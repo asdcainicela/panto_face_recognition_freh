@@ -95,9 +95,22 @@ EOF
     " >/dev/null 2>&1
 fi
 
+# Iniciar Jupyter Lab si no está corriendo
+if ! docker exec ${CONTAINER_NAME} pgrep -f "jupyter-lab" >/dev/null 2>&1; then
+    echo "Iniciando Jupyter Lab..."
+    docker exec -d ${CONTAINER_NAME} jupyter lab --ip=0.0.0.0 --port=8888 --allow-root --no-browser
+    sleep 3
+else
+    echo "Jupyter Lab ya está corriendo"
+fi
+
+echo ""
 echo "Contenedor Jetson listo"
+echo ""
+echo "Servicios activos:"
+echo "  Jupyter Lab: http://localhost:8888"
+echo "  Password: nvidia"
 echo ""
 echo "Comandos útiles:"
 echo "  docker exec -it ${CONTAINER_NAME} bash"
 echo "  docker logs -f ${CONTAINER_NAME}"
-echo "  Jupyter: http://localhost:8888 (password: nvidia)"
