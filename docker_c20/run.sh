@@ -98,7 +98,7 @@ fi
 # Iniciar Jupyter Lab si no está corriendo
 if ! docker exec ${CONTAINER_NAME} pgrep -f "jupyter-lab" >/dev/null 2>&1; then
     echo "Iniciando Jupyter Lab..."
-    docker exec -d ${CONTAINER_NAME} jupyter lab --ip=0.0.0.0 --port=8888 --allow-root --no-browser
+    docker exec -d ${CONTAINER_NAME} bash -lc "mkdir -p /var/log && jupyter lab --ip=0.0.0.0 --port=8888 --allow-root --no-browser >> /var/log/jupyter.log 2>&1 &"
     sleep 3
 else
     echo "Jupyter Lab ya está corriendo"
@@ -114,3 +114,4 @@ echo ""
 echo "Comandos útiles:"
 echo "  docker exec -it ${CONTAINER_NAME} bash"
 echo "  docker logs -f ${CONTAINER_NAME}"
+echo "  docker exec -it ${CONTAINER_NAME} tail -f /var/log/jupyter.log"
