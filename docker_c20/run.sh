@@ -70,18 +70,19 @@ fi
 
 # Instalar dependencias si no están
 echo "Instalando dependencias dentro del contenedor..."
-docker exec ${CONTAINER_NAME} bash -c "
-    export DEBIAN_FRONTEND=noninteractive
-    apt-get update -qq
+docker exec -it ${CONTAINER_NAME} bash -c "
+    cd /workspace && \
+    export DEBIAN_FRONTEND=noninteractive && \
+    apt-get update -qq && \
     apt-get install -y -qq sudo git nano vim cmake build-essential wget curl htop tree \
         libgtk2.0-dev libgtk-3-dev libglib2.0-0 libsm6 libxext6 libxrender1 \
-        libgomp1 libgl1-mesa-glx libgles2-mesa libegl1-mesa python3-pip x11-apps
-    ldconfig
-    pip3 install --quiet jupyterlab
-    git config --global user.email 'asdcainicela@gmail.com'
-    git config --global user.name 'asdcainicela'
-    git config --global --add safe.directory '*'
-    chown -R $USER_ID:$GROUP_ID /workspace
+        libgomp1 libgl1-mesa-glx libgles2-mesa libegl1-mesa python3-pip x11-apps && \
+    ldconfig && \
+    pip3 install --quiet jupyterlab && \
+    git config --global user.email 'userasd@gmail.com' && \
+    git config --global user.name 'userasd' && \
+    git config --global --add safe.directory '*' && \
+    chown -R $USER_ID:$GROUP_ID /workspace && \
     cat > /etc/profile.d/jetson-env.sh << 'EOF'
 export DISPLAY=\${DISPLAY:-:0}
 export XAUTHORITY=\${XAUTHORITY:-/tmp/.docker.xauth}
@@ -94,7 +95,6 @@ EOF
 # Lanzar Jupyter Lab en background
 echo "Iniciando Jupyter Lab en background..."
 docker exec -d ${CONTAINER_NAME} bash -c "
-    export PATH=\$PATH:/usr/local/bin:/usr/bin
     cd /workspace
     mkdir -p /var/log
     jupyter lab --ip=0.0.0.0 --port=8888 --allow-root --no-browser --NotebookApp.token='nvidia' > /var/log/jupyter.log 2>&1 &
