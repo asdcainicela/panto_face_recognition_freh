@@ -9,16 +9,9 @@ USER_ID=$(id -u)
 GROUP_ID=$(id -g)
 USER_NAME=$(id -un)
 
-GREEN='\033[0;32m'
-YELLOW='\033[1;33m'
-BLUE='\033[0;34m'
-NC='\033[0m'
+echo "=== Jetson Container Setup ==="
 
-echo -e "${GREEN}=== Jetson Container Setup ===${NC}"
-
-if [ ! -d "$WORKSPACE_DIR" ]; then
-    mkdir -p "$WORKSPACE_DIR"
-fi
+[ ! -d "$WORKSPACE_DIR" ] && mkdir -p "$WORKSPACE_DIR"
 
 export DISPLAY=${DISPLAY:-:0}
 XAUTH="${HOME}/.docker.xauth"
@@ -96,10 +89,15 @@ EOF
 
     docker exec ${CONTAINER_NAME} bash -c "
         cd /workspace
-        git clone https://asdcainicela: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@github.com/asdcainicela/lab-c-cpp.git  2>/dev/null || true
+        git clone https://asdcainicela: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@github.com/asdcainicela/lab-c-cpp.git 2>/dev/null || true
         git clone https://asdcainicela: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@github.com/asdcainicela/panto_face_recognition_freh.git 2>/dev/null || true
         chown -R $USER_ID:$GROUP_ID /workspace
     " >/dev/null 2>&1
 fi
 
-echo "Contenedor Jetson listo y corriendo."
+echo "Contenedor Jetson listo"
+echo ""
+echo "Comandos útiles:"
+echo "  docker exec -it ${CONTAINER_NAME} bash"
+echo "  docker logs -f ${CONTAINER_NAME}"
+echo "  Jupyter: http://localhost:8888 (password: nvidia)"
