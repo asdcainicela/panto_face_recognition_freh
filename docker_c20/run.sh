@@ -70,8 +70,7 @@ fi
 
 # Instalar dependencias si no están
 echo "Instalando dependencias dentro del contenedor..."
-docker exec -u root -i ${CONTAINER_NAME} bash -c "
-    cd /workspace
+docker exec -u root ${CONTAINER_NAME} bash -c "
     export DEBIAN_FRONTEND=noninteractive
     apt-get update -qq
     apt-get install -y -qq sudo git nano vim cmake build-essential wget curl htop tree \
@@ -82,20 +81,20 @@ docker exec -u root -i ${CONTAINER_NAME} bash -c "
     git config --global user.email 'userasd@gmail.com'
     git config --global user.name 'userasd'
     git config --global --add safe.directory '*'
+    mkdir -p /workspace
     chown -R $USER_ID:$GROUP_ID /workspace
-    cat > /etc/profile.d/jetson-env.sh << 'EOF'
+    cat > /etc/profile.d/jetson-env.sh << 'ENVEOF'
 export DISPLAY=\${DISPLAY:-:0}
 export XAUTHORITY=\${XAUTHORITY:-/tmp/.docker.xauth}
 export LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/tegra:/usr/lib/aarch64-linux-gnu/tegra-egl:\$LD_LIBRARY_PATH
 export GST_PLUGIN_PATH=/usr/lib/aarch64-linux-gnu/gstreamer-1.0
-EOF
+ENVEOF
     chmod +x /etc/profile.d/jetson-env.sh
 "
 
 # Lanzar Jupyter Lab en background
 echo "Iniciando Jupyter Lab en background..."
-docker exec -u root -d ${CONTAINER_NAME} bash -c "
-    cd /workspace
+docker exec -u root -w /workspace ${CONTAINER_NAME} bash -c "
     mkdir -p /var/log
     jupyter lab --ip=0.0.0.0 --port=8888 --allow-root --no-browser --NotebookApp.token='nvidia' > /var/log/jupyter.log 2>&1 &
 "
@@ -107,4 +106,4 @@ echo "Servicios activos:"
 echo "  Jupyter Lab: http://localhost:8888/?token=nvidia"
 echo ""
 echo "Abriendo shell dentro del contenedor en /workspace..."
-docker exec -it -u $USER_ID:$GROUP_ID ${CONTAINER_NAME} bash -c "cd /workspace && exec bash"
+docker exec -it -u $USER_ID:$GROUP_ID -w /workspace ${CONTAINER_NAME} bash

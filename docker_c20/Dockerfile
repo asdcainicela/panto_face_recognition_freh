@@ -346,19 +346,12 @@ RUN jupyter notebook --generate-config && \
 
 EXPOSE 8888
 
-# Workspace y zona horaria
-WORKDIR /workspace
+# Crear directorio de trabajo
+RUN mkdir -p /workspace
 
-# Limpieza final
-#RUN apt-get autoremove -y && apt-get clean && \
-#    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/* ~/.cache/pip /root/.cache || true
-
+# Zona horaria
 RUN ln -sf /usr/share/zoneinfo/America/Lima /etc/localtime && \
     echo "America/Lima" > /etc/timezone && \
     dpkg-reconfigure -fnoninteractive tzdata
 
-# Copiar y ejecutar run.sh al iniciar
-COPY run.sh /usr/local/bin/run.sh
-RUN chmod +x /usr/local/bin/run.sh
-
-CMD ["/usr/local/bin/run.sh"]
+WORKDIR /Workspace
