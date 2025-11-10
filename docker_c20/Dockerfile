@@ -15,10 +15,19 @@ ENV DEBIAN_FRONTEND=noninteractive \
 
 # Sistema base + compiladores GCC 11
 RUN apt-get update && apt-get install -y \
-    software-properties-common wget curl git \
+    software-properties-common \
+    wget \
+    curl \
+    git \
     && add-apt-repository ppa:ubuntu-toolchain-r/test \
-    && apt-get update && apt-get install -y \
-        gcc-11 g++-11 gcc-9 g++-9 build-essential pkg-config \
+    && apt-get update \
+    && apt-get install -y \
+        gcc-11 \
+        g++-11 \
+        gcc-9 \
+        g++-9 \
+        build-essential \
+        pkg-config \
     && update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 110 \
         --slave /usr/bin/g++ g++ /usr/bin/g++-11 \
         --slave /usr/bin/gcov gcov /usr/bin/gcov-11 \
@@ -29,7 +38,10 @@ RUN apt-get update && apt-get install -y \
 
 RUN gcc --version && g++ --version
 
-# CMake 3.28
+# ============================================================================
+# FASE 2: Instalar CMake moderno (3.28+)
+# ============================================================================
+
 WORKDIR /tmp
 RUN wget -q https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-aarch64.tar.gz \
     && tar -xzf cmake-${CMAKE_VERSION}-linux-aarch64.tar.gz -C /opt \
@@ -42,9 +54,15 @@ RUN cmake --version
 
 # CUDA Toolkit + cuDNN + TensorRT
 RUN apt-get update && apt-get install -y \
-    cuda-toolkit-11-4 libcudnn8 libcudnn8-dev \
-    libnvinfer8 libnvinfer-plugin8 libnvparsers8 libnvonnxparsers8 \
-    libnvinfer-dev python3-libnvinfer \
+    cuda-toolkit-11-4 \
+    libcudnn8 \
+    libcudnn8-dev \
+    libnvinfer8 \
+    libnvinfer-plugin8 \
+    libnvparsers8 \
+    libnvonnxparsers8 \
+    libnvinfer-dev \
+    python3-libnvinfer \
     && rm -rf /var/lib/apt/lists/*
 
 RUN if [ -d "/usr/local/cuda-11.4" ]; then \
@@ -58,40 +76,115 @@ RUN if [ -d "/usr/local/cuda-11.4" ]; then \
 
 # Dependencias OpenCV y multimedia
 RUN apt-get update && apt-get install -y \
-    libjpeg-dev libpng-dev libtiff-dev libwebp-dev libopenexr-dev \
-    libopenjp2-7-dev libopenjp2-tools libavcodec-dev libavformat-dev \
-    libswscale-dev libavresample-dev libv4l-dev libxvidcore-dev \
-    libx264-dev libx265-dev libvpx-dev libgstreamer1.0-dev \
-    libgstreamer-plugins-base1.0-dev libgstreamer-plugins-good1.0-dev \
-    libgstreamer-plugins-bad1.0-dev gstreamer1.0-plugins-ugly \
-    gstreamer1.0-libav gstreamer1.0-tools libgtk-3-dev libgtk2.0-dev \
-    libatlas-base-dev gfortran libeigen3-dev libtbb-dev libtbb2 \
-    libdc1394-22-dev libgl1-mesa-dev libglu1-mesa-dev libglew-dev \
-    libxrender-dev libxrandr-dev libxcursor-dev libxinerama-dev libxi-dev \
-    libxext6 libsm6 libice6 x11-apps mesa-utils ffmpeg v4l-utils \
-    net-tools iputils-ping \
+    libjpeg-dev \
+    libpng-dev \
+    libtiff-dev \
+    libwebp-dev \
+    libopenexr-dev \
+    libopenjp2-7-dev \
+    libopenjp2-tools \
+    libavcodec-dev \
+    libavformat-dev \
+    libswscale-dev \
+    libavresample-dev \
+    libv4l-dev \
+    libxvidcore-dev \
+    libx264-dev \
+    libx265-dev \
+    libvpx-dev \
+    libgstreamer1.0-dev \
+    libgstreamer-plugins-base1.0-dev \
+    libgstreamer-plugins-good1.0-dev \
+    libgstreamer-plugins-bad1.0-dev \
+    gstreamer1.0-plugins-ugly \
+    gstreamer1.0-libav \
+    gstreamer1.0-tools \
+    libgtk-3-dev \
+    libgtk2.0-dev \
+    libatlas-base-dev \
+    gfortran \
+    libeigen3-dev \
+    libtbb-dev \
+    libtbb2 \
+    libdc1394-22-dev \
+    libgl1-mesa-dev \
+    libglu1-mesa-dev \
+    libglew-dev \
+    libxrender-dev \
+    libxrandr-dev \
+    libxcursor-dev \
+    libxinerama-dev \
+    libxi-dev \
+    libxext6 \
+    libsm6 \
+    libice6 \
+    x11-apps \
+    mesa-utils \
+    ffmpeg \
+    v4l-utils \
+    net-tools \
+    iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
 # Librerías C++ modernas
 RUN apt-get update && apt-get install -y \
-    libspdlog-dev libgoogle-glog-dev libgflags-dev libfmt-dev \
-    libjsoncpp-dev nlohmann-json3-dev libyaml-cpp-dev libprotobuf-dev \
-    protobuf-compiler libmsgpack-dev libsqlite3-dev libpq-dev \
-    libmysqlclient-dev libhiredis-dev libmongoc-dev libzmq3-dev \
-    libcurl4-openssl-dev libssl-dev libwebsocketpp-dev libmicrohttpd-dev \
-    libgrpc++-dev libcpprest-dev libboost-all-dev libarmadillo-dev \
-    libopenblas-dev liblapack-dev libgsl-dev libpcl-dev libvtk7-dev \
-    libgtest-dev libgmock-dev libtool autoconf automake ccache \
-    clang-format cppcheck valgrind gdb htop tmux vim nano tree \
+    libspdlog-dev \
+    libgoogle-glog-dev \
+    libgflags-dev \
+    libfmt-dev \
+    libjsoncpp-dev \
+    nlohmann-json3-dev \
+    libyaml-cpp-dev \
+    libprotobuf-dev \
+    protobuf-compiler \
+    libmsgpack-dev \
+    libsqlite3-dev \
+    libpq-dev \
+    libmysqlclient-dev \
+    libhiredis-dev \
+    libmongoc-dev \
+    libzmq3-dev \
+    libcurl4-openssl-dev \
+    libssl-dev \
+    libwebsocketpp-dev \
+    libmicrohttpd-dev \
+    libgrpc++-dev \
+    libcpprest-dev \
+    libboost-all-dev \
+    libarmadillo-dev \
+    libopenblas-dev \
+    liblapack-dev \
+    libgsl-dev \
+    libpcl-dev \
+    libvtk7-dev \
+    libgtest-dev \
+    libgmock-dev \
+    libtool \
+    autoconf \
+    automake \
+    ccache \
+    clang-format \
+    cppcheck \
+    valgrind \
+    gdb \
+    htop \
+    tmux \
+    vim \
+    nano \
+    tree \
     && rm -rf /var/lib/apt/lists/*
 
-RUN cd /usr/src/gtest && cmake . && make && \
+RUN cd /usr/src/gtest && \
+    cmake . && \
+    make && \
     cp lib/*.a /usr/lib || cp *.a /usr/lib || true
 
 # Librerías header-only desde GitHub
 WORKDIR /tmp
+
 RUN git clone --depth 1 https://github.com/CLIUtils/CLI11.git && \
-    cd CLI11 && mkdir build && cd build && cmake .. && make install && \
+    cd CLI11 && mkdir build && cd build && \
+    cmake .. && make install && \
     cd /tmp && rm -rf CLI11
 
 RUN git clone --depth 1 https://github.com/bombela/backward-cpp.git && \
@@ -99,23 +192,28 @@ RUN git clone --depth 1 https://github.com/bombela/backward-cpp.git && \
     cd /tmp && rm -rf backward-cpp
 
 RUN git clone --depth 1 https://github.com/Neargye/magic_enum.git && \
-    cd magic_enum && mkdir build && cd build && cmake .. && make install && \
+    cd magic_enum && mkdir build && cd build && \
+    cmake .. && make install && \
     cd /tmp && rm -rf magic_enum
 
 RUN git clone --depth 1 https://github.com/jeremy-rifkin/cpptrace.git && \
-    cd cpptrace && mkdir build && cd build && cmake .. && make install && \
+    cd cpptrace && mkdir build && cd build && \
+    cmake .. && make install && \
     cd /tmp && rm -rf cpptrace
 
 RUN git clone --depth 1 https://github.com/marzer/tomlplusplus.git && \
-    cd tomlplusplus && mkdir build && cd build && cmake .. && make install && \
+    cd tomlplusplus && mkdir build && cd build && \
+    cmake .. && make install && \
     cd /tmp && rm -rf tomlplusplus
 
 RUN git clone --depth 1 https://github.com/TartanLlama/expected.git && \
-    cd expected && mkdir build && cd build && cmake .. && make install && \
+    cd expected && mkdir build && cd build && \
+    cmake .. && make install && \
     cd /tmp && rm -rf expected
 
 RUN git clone --depth 1 --branch v3.3.0 https://github.com/catchorg/Catch2.git && \
-    cd Catch2 && mkdir build && cd build && cmake .. && make install && \
+    cd Catch2 && mkdir build && cd build && \
+    cmake .. && make install && \
     cd /tmp && rm -rf Catch2
 
 # Compilar OpenCV 4.10 con CUDA (usar GCC-9)
@@ -171,7 +269,8 @@ RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/ope
     && ldconfig \
     && cd / && rm -rf /tmp/opencv /tmp/opencv_contrib
 
-RUN pkg-config --modversion opencv4 && echo "OpenCV instalado correctamente"
+RUN pkg-config --modversion opencv4 \
+    && echo "OpenCV instalado con éxito"
 
 # Volver a GCC-11
 RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 110 \
@@ -192,7 +291,12 @@ ENV ONNXRUNTIME_DIR=/opt/onnxruntime
 
 # Python 3.8 + Jupyter
 RUN apt-get update && apt-get install -y \
-    python3.8 python3.8-dev python3-pip python3-numpy python3-zmq libzmq3-dev \
+    python3.8 \
+    python3.8-dev \
+    python3-pip \
+    python3-numpy \
+    python3-zmq \
+    libzmq3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN ln -sf /usr/bin/python3.8 /usr/bin/python3
@@ -200,21 +304,34 @@ RUN ln -sf /usr/bin/python3.8 /usr/bin/python3
 RUN python3 -m pip install --no-cache-dir --upgrade pip==24.0
 
 RUN pip3 install --no-cache-dir \
-    "packaging>=21.0" setuptools wheel
+    "packaging>=21.0" \
+    setuptools \
+    wheel
 
 RUN pip3 install --no-cache-dir "numpy<2.0"
 
 RUN pip3 install --no-cache-dir \
-    importlib_resources importlib_metadata platformdirs pygments "Cython<3.0"
+    importlib_resources \
+    importlib_metadata \
+    platformdirs \
+    pygments \
+    "Cython<3.0"
 
 RUN pip3 install --no-cache-dir --no-build-isolation "pyzmq<26.0"
 
 RUN pip3 install --no-cache-dir \
-    "notebook<7.0" "jupyterlab<4.0" ipykernel
+    "notebook<7.0" \
+    "jupyterlab<4.0" \
+    ipykernel
 
 RUN pip3 install --no-cache-dir \
-    matplotlib pandas scipy scikit-learn seaborn pillow tqdm \
-    opencv-python-headless plotly fastapi uvicorn grpcio grpcio-tools
+    matplotlib \
+    pandas \
+    scipy \
+    scikit-learn \
+    seaborn \
+    pillow \
+    tqdm
 
 RUN jupyter notebook --generate-config && \
     python3 -c "from notebook.auth import passwd; print(passwd('nvidia'))" > /tmp/jupyter_pass.txt && \
@@ -223,7 +340,9 @@ RUN jupyter notebook --generate-config && \
     echo "c.NotebookApp.allow_root = True" >> ~/.jupyter/jupyter_notebook_config.py && \
     echo "c.NotebookApp.open_browser = False" >> ~/.jupyter/jupyter_notebook_config.py && \
     echo "c.NotebookApp.password = '$(cat /tmp/jupyter_pass.txt)'" >> ~/.jupyter/jupyter_notebook_config.py && \
-    rm /tmp/jupyter_pass.txt && jupyter --version
+    rm /tmp/jupyter_pass.txt && \
+    echo "=== Jupyter configurado correctamente ===" && \
+    jupyter --version
 
 EXPOSE 8888
 
