@@ -5,10 +5,6 @@ CONTAINER_NAME="l4t-cpp-20"
 IMAGE_NAME="l4t-cpp20"
 WORKSPACE_DIR="${HOME}/jetson_workspace"
 
-USER_ID=$(id -u)
-GROUP_ID=$(id -g)
-USER_NAME=$(id -un)
-
 echo "=== Jetson Container Setup ==="
 
 [ ! -d "$WORKSPACE_DIR" ] && mkdir -p "$WORKSPACE_DIR"
@@ -56,51 +52,23 @@ else
       /bin/bash -c "sleep infinity"
 fi
 
-# Setup completo del contenedor
-echo "Configurando contenedor..."
+# Instalar dependencias básicas
+echo "Instalando dependencias dentro del contenedor..."
 docker exec -u root ${CONTAINER_NAME} bash -c "
     export DEBIAN_FRONTEND=noninteractive
-    
-    # Instalar paquetes básicos
     apt-get update -qq
     apt-get install -y -qq sudo git nano vim cmake build-essential wget curl htop tree \
         libgtk2.0-dev libgtk-3-dev libglib2.0-0 libsm6 libxext6 libxrender1 \
         libgomp1 libgl1-mesa-glx libgles2-mesa libegl1-mesa python3-pip x11-apps
     ldconfig
-    
-    # Jupyter
     pip3 install --quiet jupyterlab 2>/dev/null || true
     
-    # Crear usuario con el mismo UID/GID del host
-    if ! getent group $GROUP_ID >/dev/null 2>&1; then
-        groupadd -g $GROUP_ID $USER_NAME 2>/dev/null || true
-    fi
+    git config --global user.email 'userasd@gmail.com'
+    git config --global user.name 'userasd'
+    git config --global --add safe.directory '*'
     
-    if ! id -u $USER_ID >/dev/null 2>&1; then
-        useradd -u $USER_ID -g $GROUP_ID -G video,sudo -m -s /bin/bash $USER_NAME
-        mkdir -p /home/$USER_NAME
-        chown -R $USER_ID:$GROUP_ID /home/$USER_NAME
-    fi
-    
-    # Configurar sudo sin password
-    echo '$USER_NAME ALL=(ALL) NOPASSWD:ALL' > /etc/sudoers.d/$USER_NAME
-    chmod 440 /etc/sudoers.d/$USER_NAME
-    
-    # Permisos en dispositivos
-    chmod 666 /dev/video* 2>/dev/null || true
-    chmod 666 /dev/nvhost-* 2>/dev/null || true
-    chmod 666 /dev/nvmap 2>/dev/null || true
-    
-    # Git config
-    sudo -u $USER_NAME git config --global user.email 'userasd@gmail.com'
-    sudo -u $USER_NAME git config --global user.name 'userasd'
-    sudo -u $USER_NAME git config --global --add safe.directory '*'
-    
-    # Workspace
     mkdir -p /workspace
-    chown -R $USER_ID:$GROUP_ID /workspace
     
-    # Variables de entorno
     cat > /etc/profile.d/jetson-env.sh << 'ENVEOF'
 export DISPLAY=\${DISPLAY:-:0}
 export XAUTHORITY=\${XAUTHORITY:-/tmp/.docker.xauth}
@@ -108,8 +76,6 @@ export LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/tegra:/usr/lib/aarch64-linux-g
 export GST_PLUGIN_PATH=/usr/lib/aarch64-linux-gnu/gstreamer-1.0
 ENVEOF
     chmod +x /etc/profile.d/jetson-env.sh
-    
-    echo 'Setup completado'
 "
 
 # Jupyter en background
@@ -120,10 +86,10 @@ docker exec -u root -w /workspace ${CONTAINER_NAME} bash -c "
 " 2>/dev/null || true
 
 echo ""
-echo "✓ Contenedor listo"
+echo "Contenedor listo"
 echo ""
 echo "Servicios:"
-echo "  → Jupyter Lab: http://localhost:8888/?token=nvidia"
+echo "Jupyter Lab: http://localhost:8888/?token=nvidia"
 echo ""
-echo "Entrando al contenedor..."
-docker exec -it -u $USER_NAME -w /workspace ${CONTAINER_NAME} bash
+echo "Entrando al contenedor como root..."
+docker exec -it -u root -w /workspace ${CONTAINER_NAME} bash

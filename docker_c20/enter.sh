@@ -6,4 +6,4 @@ if [ ! "$(docker ps -q -f name=${CONTAINER_NAME})" ]; then
     exit 1
 fi
 
-docker exec -it -u $(id -u):$(id -g) -w /workspace ${CONTAINER_NAME} bash
+docker exec -it -u root -w /workspace ${CONTAINER_NAME} bash
