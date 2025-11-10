@@ -91,14 +91,6 @@ EOF
     chmod +x /etc/profile.d/jetson-env.sh
 "
 
-# Clonar repositorios
-echo "Clonando repositorios..."
-docker exec ${CONTAINER_NAME} bash -c "
-    cd /workspace
-    git clone https://github.com/asdcainicela/panto_face_recognition_freh.git 2>/dev/null || true
-    chown -R $USER_ID:$GROUP_ID /workspace
-"
-
 # Lanzar Jupyter Lab en background
 echo "Iniciando Jupyter Lab en background..."
 docker exec -d ${CONTAINER_NAME} bash -c "
