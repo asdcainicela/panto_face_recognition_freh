@@ -1,0 +1,241 @@
+# ============================================================================
+# PANTO FACE RECOGNITION - 720p (1280x720)
+# Hardware modesto - Balance velocidad/calidad
+# ============================================================================
+# 
+# Escenario: Cámara 720p en puerta con hardware limitado
+# Resolución: 1280x720 (720p) + ROI recomendado
+# Performance esperado: 18-22 FPS, precisión 86-90%
+# GPU mínima: GTX 1050 / MX450
+#
+# ============================================================================
+
+[project]
+name = "panto_door_access_720p"
+version = "1.0.0"
+scenario = "entrance_door_720p"
+
+[camera]
+resolution = [1280, 720]
+fps_target = 20
+device_id = 0
+backend = "gstreamer"
+buffer_size = 1
+drop_old_frames = true
+
+# ROI recomendado para 720p
+[camera.roi]
+enabled = true
+x = 320
+y = 180
+width = 640   # 50% del ancho
+height = 360  # 50% del alto
+
+[detection]
+model = "retinaface"
+model_path = "models/retinaface_mobilenet.onnx"
+backend = "onnx"
+use_gpu = true
+num_threads = 4
+min_face_size = 40  # Más bajo por resolución limitada
+confidence_threshold = 0.70
+nms_threshold = 0.4
+
+[tracking]
+algorithm = "bytetrack"
+use_gpu = false
+max_tracks = 5
+max_age = 30
+min_hits = 3
+direction_filter = "approaching"
+ignore_leaving = true
+min_movement = 4
+
+[superresolution]
+enabled = true
+conditional_threshold = 70  # SR casi siempre necesario en 720p
+model = "realesr_x4"
+model_path = "models/realesr_x4.onnx"
+target_size = 200
+use_gpu = true
+skip_if_sharp = true
+sharpness_threshold = 0.65
+max_sr_per_second = 12
+batch_size = 1
+
+[recognition]
+model = "arcface_r100"
+model_path = "models/arcface_r100.onnx"
+backend = "onnx"
+use_gpu = true
+embedding_size = 512
+strategy = "multi_frame_voting"
+voting_method = "weighted_average"
+min_frames = 8  # Menos frames por velocidad
+alignment_method = "similarity"
+normalize_embeddings = true
+min_face_size_for_match = 60
+confidence_threshold = 0.45  # Más permisivo en 720p
+min_face_quality = 0.4
+max_face_angle = 50
+
+# ============================================================================
+# ZONAS - Adaptadas para 720p con ROI
+# ============================================================================
+# Con ROI (640x360): 10 dedos = 640px
+# Cabeza más cerca: 1 dedo = 64px → rostro ~45px (con ROI = 90px efectivo)
+# Cabeza más lejos: 1/3 dedo = 21px → rostro ~15px (con ROI = 30px efectivo)
+
+[zones]
+enabled = true
+draw_zones = false
+
+# ZONA 1: Lejos (40-70px) - Tracking con SR
+[zones.far]
+min_face_size = 40
+max_face_size = 70
+action = "track_with_sr"
+apply_sr = true
+priority = "low"
+confidence_threshold = 0.60
+frame_weight = 0.25
+
+# ZONA 2: Óptima (70-130px) - DECIDIR ⭐
+[zones.optimal]
+min_face_size = 70
+max_face_size = 130
+action = "definitive_match"
+apply_sr = true  # En 720p casi siempre necesario
+priority = "high"
+confidence_threshold = 0.45
+frame_weight = 1.0
+trigger_decision = true
+
+# ZONA 3: Muy cerca (>130px) - Verificación
+[zones.close]
+min_face_size = 130
+action = "verify_and_log"
+apply_sr = false
+priority = "critical"
+confidence_threshold = 0.40
+frame_weight = 1.0
+
+[matching]
+database_path = "data/known_faces.db"
+database_type = "sqlite"
+distance_metric = "cosine"
+adaptive_threshold = true
+unknown_person_threshold = 0.68  # Más permisivo por menor calidad
+frame_weight_by_size = true
+frame_weight_by_quality = true
+
+[actions]
+log_access_events = true
+access_log_path = "logs/access_events.db"
+save_best_frame = true
+save_all_frames = false
+frames_path = "data/captures/{date}/{person_id}"
+image_format = "jpg"
+image_quality = 85
+
+[actions.webhook]
+enabled = false
+url = "http://192.168.1.10:5000/access"
+method = "POST"
+timeout = 5
+on_match = true
+on_unknown = false
+
+[actions.mqtt]
+enabled = false
+broker = "192.168.1.10"
+port = 1883
+topic_prefix = "panto/access"
+qos = 1
+
+[output]
+display_output = true
+output_resolution = "input"
+window_name = "Panto Access Control 720p"
+draw_detections = true
+draw_tracks = true
+draw_zones = false
+draw_roi = true
+draw_ids = true
+draw_confidence = true
+draw_fps = true
+
+colors = {
+    known = [0, 255, 0],
+    unknown = [0, 0, 255],
+    tracking = [255, 255, 0],
+    roi = [255, 0, 255]
+}
+
+[output.video]
+enabled = false
+output_path = "recordings/{date}.mp4"
+codec = "mp4v"
+fps = 20
+
+[database]
+path = "data/panto.db"
+auto_vacuum = true
+journal_mode = "WAL"
+auto_backup = true
+backup_interval = 86400
+backup_path = "backups/panto_{date}.db"
+retention_days = 90
+cleanup_on_startup = true
+
+[performance]
+use_tensorrt = false
+use_openvino = false
+use_coreml = false
+detector_threads = 2
+recognition_threads = 2
+sr_threads = 2
+io_threads = 1
+max_queue_size = 30
+clear_queue_on_full = true
+embedding_cache_size = 800
+enable_motion_detection = false
+motion_threshold = 0.05
+sleep_after_seconds = 60
+
+[logging]
+level = "INFO"
+log_to_file = true
+log_to_console = true
+log_path = "logs/panto_{date}.log"
+rotate_logs = true
+max_log_size_mb = 8
+backup_count = 5
+log_detections = false
+log_trackings = false
+log_recognitions = true
+log_performance = true
+
+[debug]
+enabled = false
+save_debug_images = false
+debug_path = "debug/{date}"
+profile_performance = false
+verbose_logging = false
+
+# ============================================================================
+# NOTAS 720p
+# ============================================================================
+#
+# IMPORTANTE:
+# - ROI es CRÍTICO en 720p para compensar baja resolución
+# - SR se usará frecuentemente (impacto en FPS)
+# - Thresholds más permisivos para evitar falsos negativos
+# - Precisión menor pero aceptable para la mayoría de casos
+#
+# RECOMENDACIONES:
+# - Si FPS < 15: Desactivar SR (perderás precisión)
+# - Si muchos falsos negativos: Subir confidence_threshold a 0.50
+# - Considera subir a 1080p si es posible
+#
+# ============================================================================
