@@ -1,44 +1,66 @@
-#others
-*.mp4
-
-# Prerequisites
-*.d
-
-# Compiled Object files
-*.slo
-*.lo
+# Archivos objeto y compilados
 *.o
 *.obj
-
-# Precompiled Headers
-*.gch
-*.pch
-
-# Linker files
-*.ilk
-
-# Debugger Files
-*.pdb
-
-# Compiled Dynamic libraries
-*.so
-*.dylib
-*.dll
-
-# Fortran module files
-*.mod
-*.smod
-
-# Compiled Static libraries
-*.lai
-*.la
-*.a
-*.lib
-
-# Executables
-*.exe
+*.ko
+*.elf
 *.out
-*.app
+*.a
+*.so
+*.so.*
+*.dylib
 
-# debug information files
-*.dwo
+# Archivos CUDA compilados
+*.cubin
+*.fatbin
+*.ptx
+*.i
+*.ii
+
+# Directorios de build
+build/
+Build/
+BUILD/
+cmake-build-*/
+out/
+bin/
+obj/
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+*.cmake
+!CMakeLists.txt
+
+# Ignorar todos los ejecutables (archivos sin extensión)
+*
+!*/
+!*.*
+!Makefile
+!README
+!LICENSE
+!Dockerfile
+!*.sh
+
+# Pero permitir estos archivos específicos
+!*.c
+!*.cpp
+!*.cu
+!*.h
+!*.hpp
+!*.cuh
+!*.txt
+!*.md
+!*.json
+!*.yaml
+!*.yml
+!.gitignore
+
+# Temporales
+*.tmp
+*.swp
+*.swo
+*~
+.DS_Store
+*.log
