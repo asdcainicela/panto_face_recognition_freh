@@ -1,10 +1,18 @@
 #!/bin/bash
 set -e
 
-CONTAINER_NAME="l4t-cpp-20"
-IMAGE_NAME="l4t-cpp20"
-WORKSPACE_DIR="${HOME}/jetson_workspace"
+CONTAINER_NAME="${CONTAINER_NAME:-l4t-cpp-20}"
+IMAGE_NAME="${IMAGE_NAME:-l4t-cpp20}"
+WORKSPACE_DIR="${WORKSPACE_DIR:-${HOME}/jetson_workspace}"
+JUPYTER_PORT="${JUPYTER_PORT:-8888}"
+JUPYTER_TOKEN="${JUPYTER_TOKEN:-nvidia}"
+GIT_USER_EMAIL="${GIT_USER_EMAIL:-gerald.cainicela.a@gmail.com}"
+GIT_USER_NAME="${GIT_USER_NAME:-user-asd}"
+CUDA_VERSION="${CUDA_VERSION:-11.4}"
 
+# =============================================================================
+# SETUP
+# =============================================================================
 [ ! -d "$WORKSPACE_DIR" ] && mkdir -p "$WORKSPACE_DIR"
 
 export DISPLAY=${DISPLAY:-:0}
@@ -16,17 +24,17 @@ xauth nlist $DISPLAY 2>/dev/null | sed -e 's/^..../ffff/' | xauth -f "$XAUTH" nm
 xhost +local:docker 2>/dev/null || true
 
 ENTRYPOINT_SCRIPT="${WORKSPACE_DIR}/container_startup.sh"
-cat > "$ENTRYPOINT_SCRIPT" << 'EOF'
+cat > "$ENTRYPOINT_SCRIPT" << EOF
 #!/bin/bash
-export CUDA_HOME=/usr/local/cuda-11.4
-export PATH=/usr/local/cuda-11.4/bin:${PATH}
-export LD_LIBRARY_PATH=/usr/local/cuda-11.4/lib64:${LD_LIBRARY_PATH}
-export DISPLAY=${DISPLAY:-:0}
-export XAUTHORITY=${XAUTHORITY:-/tmp/.docker.xauth}
-export LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/tegra:/usr/lib/aarch64-linux-gnu/tegra-egl:$LD_LIBRARY_PATH
+export CUDA_HOME=/usr/local/cuda-${CUDA_VERSION}
+export PATH=/usr/local/cuda-${CUDA_VERSION}/bin:\${PATH}
+export LD_LIBRARY_PATH=/usr/local/cuda-${CUDA_VERSION}/lib64:\${LD_LIBRARY_PATH}
+export DISPLAY=\${DISPLAY:-:0}
+export XAUTHORITY=\${XAUTHORITY:-/tmp/.docker.xauth}
+export LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/tegra:/usr/lib/aarch64-linux-gnu/tegra-egl:\$LD_LIBRARY_PATH
 export GST_PLUGIN_PATH=/usr/lib/aarch64-linux-gnu/gstreamer-1.0
 mkdir -p /var/log
-nohup jupyter lab --ip=0.0.0.0 --port=8888 --allow-root --no-browser --NotebookApp.token='nvidia' > /var/log/jupyter.log 2>&1 &
+nohup jupyter lab --ip=0.0.0.0 --port=${JUPYTER_PORT} --allow-root --no-browser --NotebookApp.token='${JUPYTER_TOKEN}' > /var/log/jupyter.log 2>&1 &
 sleep infinity
 EOF
 chmod +x "$ENTRYPOINT_SCRIPT"
@@ -65,19 +73,19 @@ if [ ! "$(docker ps -aq -f name=${CONTAINER_NAME})" ]; then
             libgomp1 libgl1-mesa-glx libgles2-mesa libegl1-mesa python3-pip x11-apps
         ldconfig
         pip3 install --quiet jupyterlab 2>/dev/null || true
-        git config --global user.email 'userasd@gmail.com'
-        git config --global user.name 'userasd'
+        git config --global user.email '${GIT_USER_EMAIL}'
+        git config --global user.name '${GIT_USER_NAME}'
         git config --global --add safe.directory '*'
         cat > /etc/profile.d/cuda-env.sh << 'CUDAEOF'
-export CUDA_HOME=/usr/local/cuda-11.4
-export PATH=/usr/local/cuda-11.4/bin:\$PATH
-export LD_LIBRARY_PATH=/usr/local/cuda-11.4/lib64:\$LD_LIBRARY_PATH
+export CUDA_HOME=/usr/local/cuda-${CUDA_VERSION}
+export PATH=/usr/local/cuda-${CUDA_VERSION}/bin:\\\$PATH
+export LD_LIBRARY_PATH=/usr/local/cuda-${CUDA_VERSION}/lib64:\\\$LD_LIBRARY_PATH
 CUDAEOF
         chmod +x /etc/profile.d/cuda-env.sh
         cat >> /root/.bashrc << 'BASHEOF'
-export CUDA_HOME=/usr/local/cuda-11.4
-export PATH=/usr/local/cuda-11.4/bin:\$PATH
-export LD_LIBRARY_PATH=/usr/local/cuda-11.4/lib64:\$LD_LIBRARY_PATH
+export CUDA_HOME=/usr/local/cuda-${CUDA_VERSION}
+export PATH=/usr/local/cuda-${CUDA_VERSION}/bin:\\\$PATH
+export LD_LIBRARY_PATH=/usr/local/cuda-${CUDA_VERSION}/lib64:\\\$LD_LIBRARY_PATH
 BASHEOF
     " >/dev/null 2>&1
 fi

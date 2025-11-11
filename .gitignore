@@ -1,22 +1,43 @@
-# Archivos objeto y compilados
+# Multimedia
+*.mp4
+*.avi
+*.mov
+*recording
+
+# C/C++ compiled
 *.o
 *.obj
 *.ko
 *.elf
-*.out
-*.a
+*.slo
+*.lo
+*.gch
+*.pch
 *.so
 *.so.*
+*.a
+*.la
+*.lai
+*.lib
 *.dylib
+*.dll
+*.exe
+*.out
+*.app
+*.ilk
+*.pdb
+*.dwo
+*.mod
+*.smod
 
-# Archivos CUDA compilados
+# CUDA
 *.cubin
 *.fatbin
 *.ptx
 *.i
 *.ii
 
-# Directorios de build
+# Build directories
 build/
 Build/
 BUILD/
@@ -24,38 +45,19 @@ cmake-build-*/
 out/
 bin/
 obj/
+dist/
+target/
 
 # CMake
 CMakeCache.txt
 CMakeFiles/
 cmake_install.cmake
-Makefile
+install_manifest.txt
+compile_commands.json
+CTestTestfile.cmake
+_deps/
 *.cmake
 !CMakeLists.txt
-
-# Ignorar todos los ejecutables (archivos sin extensión)
-*
-!*/
-!*.*
-!Makefile
-!README
-!LICENSE
-!Dockerfile
-!*.sh
-
-# Pero permitir estos archivos específicos
-!*.c
-!*.cpp
-!*.cu
-!*.h
-!*.hpp
-!*.cuh
-!*.txt
-!*.md
-!*.json
-!*.yaml
-!*.yml
-!.gitignore
 
 # Temporales
 *.tmp
@@ -64,3 +66,10 @@ Makefile
 *~
 .DS_Store
 *.log
+*.bak
+*.backup
+
+# IDEs
+.vscode/
+.idea/
+*.suo
