@@ -244,6 +244,11 @@ std::vector<Detection> FaceDetector::postprocess(const std::vector<Ort::Value>& 
             
             if (score < conf_threshold) continue;
             
+            // Log TODOS los scores > 0.2 para debug
+            if (score > 0.2f) {
+                spdlog::debug("Escala {} anchor {}: score={:.4f}", scale_idx, i, score);
+            }
+            
             Detection det;
             det.confidence = score;
             

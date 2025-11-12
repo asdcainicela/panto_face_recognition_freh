@@ -6,7 +6,7 @@
 
 int main(int argc, char* argv[]) {
     spdlog::set_pattern("[%Y-%m-%d %H:%M:%S.%e] [%^%l%$] %v");
-    spdlog::set_level(spdlog::level::info);
+    spdlog::set_level(spdlog::level::debug);  // DEBUG para ver todo
     
     if (argc < 3) {
         spdlog::error("uso: {} <modelo.onnx> <video.mp4> [threshold]", argv[0]);
@@ -72,6 +72,22 @@ int main(int argc, char* argv[]) {
         
         while (cap.read(frame)) {
             frame_count++;
+            
+            // Debug: verificar que el frame es válido
+            if (frame_count == 1) {
+                spdlog::info("primer frame: {}x{}, channels={}, type={}", 
+                            frame.cols, frame.rows, frame.channels(), frame.type());
+                
+                // Verificar que no está vacío o corrupto
+                if (frame.empty()) {
+                    spdlog::error("frame vacío!");
+                    break;
+                }
+                
+                if (frame.channels() != 3) {
+                    spdlog::warn("frame no es BGR (channels={})", frame.channels());
+                }
+            }
             
             if (frame_count % 100 == 0) {
                 auto elapsed = std::chrono::steady_clock::now() - start_time;
