@@ -13,7 +13,7 @@ FaceDetector::FaceDetector(const std::string& model_path, bool use_cuda)
             OrtCUDAProviderOptions cuda_options;
             cuda_options.device_id = 0;
             cuda_options.arena_extend_strategy = 0;
-            cuda_options.gpu_mem_limit = 2ULL * 1024 * 1024 * 1024; // 2GB
+            cuda_options.gpu_mem_limit = 2ULL * 1024 * 1024 * 1024;
             cuda_options.cudnn_conv_algo_search = OrtCudnnConvAlgoSearchExhaustive;
             cuda_options.do_copy_in_default_stream = 1;
             
@@ -28,8 +28,9 @@ FaceDetector::FaceDetector(const std::string& model_path, bool use_cuda)
         session = std::make_unique<Ort::Session>(env, model_path.c_str(), session_options);
         spdlog::info("detector: modelo cargado desde {}", model_path);
         
-        // Input names
         Ort::AllocatorWithDefaultOptions allocator;
+        
+        // Input names
         size_t num_input = session->GetInputCount();
         for (size_t i = 0; i < num_input; i++) {
             auto name = session->GetInputNameAllocated(i, allocator);
@@ -118,17 +119,29 @@ std::vector<Detection> FaceDetector::postprocess(const std::vector<Ort::Value>& 
                                                  const cv::Size& orig_size) {
     std::vector<Detection> detections;
     
-    // RetinaFace outputs: [boxes, scores, landmarks]
-    if (outputs.size() < 2) return detections;
+    if (outputs.size() < 3) {
+        spdlog::error("detector: se esperaban 3 outputs, recibidos: {}", outputs.size());
+        return detections;
+    }
+    
+    // RetinaFace típicamente output: [bboxes, scores, landmarks]
+    // Formato: bboxes [1, N, 4], scores [1, N], landmarks [1, N, 10]
+    
+    auto boxes_shape = outputs[0].GetTensorTypeAndShapeInfo().GetShape();
+    auto scores_shape = outputs[1].GetTensorTypeAndShapeInfo().GetShape();
+    
+    spdlog::debug("boxes shape: [{}, {}, {}]", boxes_shape[0], boxes_shape[1], boxes_shape[2]);
+    spdlog::debug("scores shape: [{}, {}]", scores_shape[0], scores_shape[1]);
+    
+    // Obtener número de detecciones
+    int num_detections = static_cast<int>(boxes_shape[1]);
     
     auto* boxes_data = outputs[0].GetTensorData<float>();
     auto* scores_data = outputs[1].GetTensorData<float>();
+    auto* landmarks_data = outputs.size() >= 3 ? outputs[2].GetTensorData<float>() : nullptr;
     
-    auto boxes_shape = outputs[0].GetTensorTypeAndShapeInfo().GetShape();
-    int num_detections = boxes_shape[1]; // [1, N, 4]
-    
-    float scale_x = (float)orig_size.width / input_width;
-    float scale_y = (float)orig_size.height / input_height;
+    float scale_x = static_cast<float>(orig_size.width) / input_width;
+    float scale_y = static_cast<float>(orig_size.height) / input_height;
     
     for (int i = 0; i < num_detections; i++) {
         float score = scores_data[i];
@@ -138,17 +151,25 @@ std::vector<Detection> FaceDetector::postprocess(const std::vector<Ort::Value>& 
         Detection det;
         det.confidence = score;
         
-        // Box: [x1, y1, x2, y2]
+        // Box: [x1, y1, x2, y2] - offset por batch
         float x1 = boxes_data[i * 4 + 0] * scale_x;
         float y1 = boxes_data[i * 4 + 1] * scale_y;
         float x2 = boxes_data[i * 4 + 2] * scale_x;
         float y2 = boxes_data[i * 4 + 3] * scale_y;
         
+        // Validar coordenadas
+        x1 = std::max(0.0f, std::min(x1, (float)orig_size.width));
+        y1 = std::max(0.0f, std::min(y1, (float)orig_size.height));
+        x2 = std::max(0.0f, std::min(x2, (float)orig_size.width));
+        y2 = std::max(0.0f, std::min(y2, (float)orig_size.height));
+        
+        // Asegurar que x2 > x1 y y2 > y1
+        if (x2 <= x1 || y2 <= y1) continue;
+        
         det.box = cv::Rect(cv::Point(x1, y1), cv::Point(x2, y2));
         
-        // Landmarks (si están disponibles)
-        if (outputs.size() >= 3) {
-            auto* landmarks_data = outputs[2].GetTensorData<float>();
+        // Landmarks: 5 puntos (10 valores: x1,y1, x2,y2, ...)
+        if (landmarks_data) {
             for (int j = 0; j < 5; j++) {
                 det.landmarks[j].x = landmarks_data[i * 10 + j * 2] * scale_x;
                 det.landmarks[j].y = landmarks_data[i * 10 + j * 2 + 1] * scale_y;
@@ -158,7 +179,10 @@ std::vector<Detection> FaceDetector::postprocess(const std::vector<Ort::Value>& 
         detections.push_back(det);
     }
     
+    spdlog::debug("antes de NMS: {} detecciones", detections.size());
     nms(detections);
+    spdlog::debug("después de NMS: {} detecciones", detections.size());
+    
     return detections;
 }
 
@@ -174,8 +198,12 @@ void FaceDetector::nms(std::vector<Detection>& detections) {
         bool keep = true;
         
         for (size_t j = 0; j < kept.size(); j++) {
-            float iou = (detections[i].box & kept[j].box).area() / 
-                       (float)(detections[i].box | kept[j].box).area();
+            float intersection = static_cast<float>((detections[i].box & kept[j].box).area());
+            float union_area = static_cast<float>((detections[i].box | kept[j].box).area());
+            
+            if (union_area == 0) continue;
+            
+            float iou = intersection / union_area;
             
             if (iou > nms_threshold) {
                 keep = false;
