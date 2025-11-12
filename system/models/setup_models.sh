@@ -1,83 +1,39 @@
 #!/bin/bash
 set -e
 
-echo "[INFO] Descargando modelos ONNX..."
-
-# ====================================================================
-# Función auxiliar: descarga con reintentos y verificación de tamaño
-# ====================================================================
 download_model() {
-    local url="$1"
-    local output="$2"
-    local min_size="$3"
-    local name=$(basename "$output")
-    
-    # Si ya existe y es válido, skip
-    if [ -f "$output" ] && [ -s "$output" ]; then
-        local size=$(stat -f%z "$output" 2>/dev/null || stat -c%s "$output" 2>/dev/null)
+    url="$1"
+    output="$2"
+    min_size="$3"
+
+    if [ -f "$output" ]; then
+        size=$(stat -c%s "$output" 2>/dev/null || stat -f%z "$output" 2>/dev/null)
         if [ "$size" -ge "$min_size" ]; then
-            echo "  - $name OK ($(du -h "$output" | cut -f1))"
+            echo "$output OK ($(du -h "$output" | cut -f1))"
             return 0
         fi
         rm -f "$output"
     fi
-    
-    echo "  - Descargando $name..."
-    
-    # Intentar con wget
-    if wget -q --show-progress --timeout=30 --tries=2 --no-check-certificate "$url" -O "$output" 2>/dev/null; then
-        local size=$(stat -f%z "$output" 2>/dev/null || stat -c%s "$output" 2>/dev/null)
-        if [ "$size" -ge "$min_size" ]; then
-            echo "    [OK] $name descargado ($(du -h "$output" | cut -f1))"
-            return 0
-        else
-            echo "    [FAIL] $name incompleto ($(du -h "$output" | cut -f1))"
-            rm -f "$output"
-            return 1
-        fi
+
+    wget -q --timeout=30 --tries=2 "$url" -O "$output" 2>/dev/null || \
+    curl -L --max-time 60 --retry 2 -o "$output" "$url" 2>/dev/null
+
+    size=$(stat -c%s "$output" 2>/dev/null || stat -f%z "$output" 2>/dev/null)
+    if [ "$size" -ge "$min_size" ]; then
+        echo "$output OK ($(du -h "$output" | cut -f1))"
+        return 0
     fi
-    
-    # Intentar con curl
-    echo "    wget falló, intentando con curl..."
-    if curl -L --progress-bar --max-time 60 --retry 2 -o "$output" "$url" 2>/dev/null; then
-        local size=$(stat -f%z "$output" 2>/dev/null || stat -c%s "$output" 2>/dev/null)
-        if [ "$size" -ge "$min_size" ]; then
-            echo "    [OK] $name descargado ($(du -h "$output" | cut -f1))"
-            return 0
-        else
-            echo "    [FAIL] $name incompleto ($(du -h "$output" | cut -f1))"
-            rm -f "$output"
-            return 1
-        fi
-    fi
-    
+
+    rm -f "$output"
     return 1
 }
 
-# ====================================================================
-# 1. RetinaFace (detección rostros) - ~105MB
-# ====================================================================
-download_model \
-    "https://huggingface.co/TheEeeeLin/HivisionIDPhotos_matting/resolve/main/retinaface-resnet50.onnx" \
-    "retinaface.onnx" \
-    100000000
+# Descarga modelos principales
+download_model "https://huggingface.co/TheEeeeLin/HivisionIDPhotos_matting/resolve/main/retinaface-resnet50.onnx" "retinaface.onnx" 100000000
+download_model "https://huggingface.co/garavv/arcface-onnx/resolve/main/arc.onnx" "arcface_r100.onnx" 120000000
 
-# ====================================================================
-# 2. ArcFace R100 (reconocimiento) - ~131MB
-# ====================================================================
-download_model \
-    "https://huggingface.co/garavv/arcface-onnx/resolve/main/arc.onnx" \
-    "arcface_r100.onnx" \
-    120000000
-
-# ====================================================================
-# 3. Real-ESRGAN x4 (super-resolución) - ~67MB
-#    TODAS LAS FUENTES POSIBLES
-# ====================================================================
-echo "  - Descargando realesr_x4.onnx..."
+# Real-ESRGAN x4
 SUCCESS=false
-
-# LISTA COMPLETA DE URLS (30+ fuentes)
 URLS=(
     # GitHub Releases oficiales
     "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.onnx"
@@ -144,61 +100,9 @@ URLS=(
     "https://archive.org/download/realesrgan-models/RealESRGAN_x4plus.onnx"
 )
 
-for URL in "${URLS[@]}"; do
-    echo "    probando: $URL"
-    if download_model "$URL" "realesr_x4.onnx" 60000000; then
-        SUCCESS=true
-        break
-    fi
+for u in "${URLS[@]}"; do
+    download_model "$u" "realesr_x4.onnx" 60000000 && { SUCCESS=true; break; }
 done
 
-# Si ninguna funcionó, dar opciones manuales
-if [ "$SUCCESS" = false ]; then
-    echo ""
-    echo "  ╔════════════════════════════════════════════════════════════════╗"
-    echo "  ║  [ERROR] No se pudo descargar realesr_x4.onnx automáticamente ║"
-    echo "  ╚════════════════════════════════════════════════════════════════╝"
-    echo ""
-    echo "  Opciones manuales:"
-    echo ""
-    echo "  1) Descargar desde navegador:"
-    echo "     https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.onnx"
-    echo "     Guardar como: $(pwd)/realesr_x4.onnx"
-    echo ""
-    echo "  2) Usar modelo alternativo (más pequeño):"
-    echo "     wget https://github.com/onnx/models/raw/main/vision/super_resolution/sub_pixel_cnn_2016/model/super-resolution-10.onnx -O realesr_x4.onnx"
-    echo ""
-    echo "  3) Deshabilitar super-resolución temporalmente:"
-    echo "     cd ../configs && sed -i 's/enabled = true/enabled = false/g' config_*.toml"
-    echo ""
-    echo "  4) Usar git-lfs para clonar el repo completo:"
-    echo "     git lfs clone https://github.com/xinntao/Real-ESRGAN.git"
-    echo "     cp Real-ESRGAN/weights/RealESRGAN_x4plus.onnx ."
-    echo ""
-fi
-
-# ====================================================================
-# 4. Verificación final
-# ====================================================================
-echo ""
-echo "[INFO] Modelos descargados:"
-ls -lh *.onnx 2>/dev/null || echo "  - Ninguno disponible"
-
-# ====================================================================
-# 5. TensorRT (opcional)
-# ====================================================================
-echo ""
-echo "[INFO] TensorRT:"
-if command -v trtexec &>/dev/null; then
-    echo "  - TensorRT detectado. Puedes convertir con:"
-    echo "    trtexec --onnx=model.onnx --saveEngine=model.trt --fp16 --workspace=2048"
-else
-    echo "  - TensorRT no disponible (usará ONNX Runtime)"
-fi
-
-echo ""
-if [ "$SUCCESS" = true ]; then
-    echo "[DONE] ✓ Todos los modelos descargados correctamente."
-else
-    echo "[WARN] ⚠ Falta realesr_x4.onnx - ver opciones manuales arriba."
-fi
+ls -lh *.onnx
+[ -f "realesr_x4.onnx" ] && echo "realesr_x4.onnx OK" || echo "realesr_x4.onnx faltante"
