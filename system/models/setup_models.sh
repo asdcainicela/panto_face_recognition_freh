@@ -1,51 +1,24 @@
 #!/bin/bash
 set -e
 
-echo "[INFO] Descargando modelos ONNX..."
+echo "[INFO] Descargando modelos..."
 
-# 1. RetinaFace (detección rostros) - ~27 MB
-if [ ! -f "retinaface.onnx" ]; then
-    echo "  - Descargando RetinaFace..."
-    wget -q --show-progress \
-        https://huggingface.co/TheEeeeLin/HivisionIDPhotos_matting/resolve/main/retinaface-resnet50.onnx \
-        -O retinaface.onnx
-else
-    echo "  - RetinaFace ya existe"
-fi
+download_model() {
+    [ -f "$2" ] || wget -q --show-progress "$1" -O "$2"
+}
 
-# 2. ArcFace R100 (reconocimiento) - ~250 MB
-if [ ! -f "arcface_r100.onnx" ]; then
-    echo "  - Descargando ArcFace R100..."
-    wget -q --show-progress \
-        https://huggingface.co/garavv/arcface-onnx/resolve/main/arc.onnx \
-        -O arcface_r100.onnx
-else
-    echo "  - ArcFace R100 ya existe"
-fi
+download_model https://huggingface.co/TheEeeeLin/HivisionIDPhotos_matting/resolve/main/retinaface-resnet50.onnx retinaface.onnx
+download_model https://huggingface.co/garavv/arcface-onnx/resolve/main/arc.onnx arcface_r100.onnx
+download_model https://huggingface.co/qualcomm/Real-ESRGAN-x4plus/resolve/main/Real-ESRGAN-x4plus.onnx realesr_x4.onnx
 
-# 3. Real-ESRGAN x4 (super-resolución) - ~67 MB
-if [ ! -f "realesr_x4.onnx" ]; then
-    echo "  - Descargando Real-ESRGAN x4..."
-    wget -q --show-progress \
-        https://huggingface.co/qualcomm/Real-ESRGAN-x4plus/resolve/main/Real-ESRGAN-x4plus.onnx \
-        -O realesr_x4.onnx
-else
-    echo "  - Real-ESRGAN x4 ya existe"
-fi
+echo "[INFO] Modelos:"
+ls -lh *.onnx 2>/dev/null || echo "Ninguno"
 
-echo ""
-echo "[INFO] Modelos descargados:"
-ls -lh *.onnx 2>/dev/null || echo "  - Ninguno encontrado"
-
-echo ""
-echo "[INFO] Verificando TensorRT..."
 if command -v trtexec &>/dev/null; then
-    echo "  - TensorRT encontrado. Puedes convertir con:"
-    echo "    trtexec --onnx=modelo.onnx --saveEngine=modelo.trt --fp16"
+    echo "[INFO] TensorRT disponible. Ejemplo:"
+    echo "trtexec --onnx=model.onnx --saveEngine=model.trt --fp16"
 else
-    echo "  - TensorRT no encontrado. Usando ONNX Runtime."
+    echo "[INFO] TensorRT no encontrado."
 fi
 
-echo ""
-echo "[DONE] Configuración completada."
-echo "       Ejecuta desde raíz: ./build.sh"
+echo "[OK] Listo."
