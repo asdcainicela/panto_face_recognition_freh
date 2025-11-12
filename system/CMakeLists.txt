@@ -15,8 +15,21 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 find_package(OpenCV REQUIRED)
 find_package(spdlog REQUIRED)
 
+# ONNX Runtime
+find_path(ONNXRUNTIME_INCLUDE_DIRS onnxruntime_cxx_api.h 
+    HINTS /usr/local/include /usr/include)
+find_library(ONNXRUNTIME_LIBRARIES onnxruntime 
+    HINTS /usr/local/lib /usr/lib)
+
+if(NOT ONNXRUNTIME_INCLUDE_DIRS OR NOT ONNXRUNTIME_LIBRARIES)
+    message(FATAL_ERROR "ONNX Runtime not found!")
+endif()
+
+message(STATUS "ONNX Runtime: ${ONNXRUNTIME_LIBRARIES}")
+
 include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${CMAKE_SOURCE_DIR}/include)
+include_directories(${ONNXRUNTIME_INCLUDE_DIRS})
 
 # ============================================
 # MODULAR SHARED LIBRARIES
@@ -65,6 +78,19 @@ set_target_properties(panto_stream PROPERTIES
     SOVERSION 1
 )
 
+# 5. Detector library (RetinaFace)
+add_library(panto_detector SHARED src/detector.cpp)
+target_link_libraries(panto_detector 
+    ${OpenCV_LIBS}
+    ${ONNXRUNTIME_LIBRARIES}
+    spdlog::spdlog
+)
+set_target_properties(panto_detector PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    VERSION 1.0.0
+    SOVERSION 1
+)
+
 # ============================================
 # EXECUTABLES
 # ============================================
@@ -98,17 +124,26 @@ target_link_libraries(panto
     panto_stream
     panto_utils
     panto_draw
+    panto_detector
+)
+
+# Test: face detection
+add_executable(test_detector test/test_detector.cpp)
+target_link_libraries(test_detector
+    panto_detector
+    panto_utils
+    ${OpenCV_LIBS}
 )
 
 # ============================================
 # INSTALACIÓN
 # ============================================
-install(TARGETS panto_utils panto_draw panto_stream
+install(TARGETS panto_utils panto_draw panto_stream panto_detector
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
 )
 
-install(TARGETS record view record_view panto
+install(TARGETS record view record_view panto test_detector
     RUNTIME DESTINATION bin
 )
 
