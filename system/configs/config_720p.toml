@@ -1,0 +1,90 @@
+[project]
+name = "panto_720p"
+version = "1.0.0"
+
+[camera]
+resolution = [1280, 720]
+fps_target = 20
+device_id = 0
+backend = "gstreamer"
+
+[camera.roi]
+enabled = true
+x = 320
+y = 180
+width = 640
+height = 360
+
+[detection]
+model = "retinaface"
+model_path = "models/retinaface_mobilenet.onnx"
+backend = "onnx"
+use_gpu = true
+min_face_size = 40
+confidence_threshold = 0.70
+nms_threshold = 0.4
+
+[tracking]
+algorithm = "bytetrack"
+max_tracks = 5
+max_age = 30
+min_hits = 3
+direction_filter = "approaching"
+ignore_leaving = true
+
+[superresolution]
+enabled = true
+conditional_threshold = 70
+model = "realesr_x4"
+model_path = "models/realesr_x4.onnx"
+target_size = 200
+use_gpu = true
+
+[recognition]
+model = "arcface_r100"
+model_path = "models/arcface_r100.onnx"
+backend = "onnx"
+use_gpu = true
+embedding_size = 512
+strategy = "multi_frame_voting"
+min_frames = 8
+confidence_threshold = 0.45
+
+[zones]
+enabled = true
+
+[zones.far]
+min_face_size = 40
+max_face_size = 70
+action = "track_with_sr"
+apply_sr = true
+confidence_threshold = 0.60
+frame_weight = 0.25
+
+[zones.optimal]
+min_face_size = 70
+max_face_size = 130
+action = "definitive_match"
+apply_sr = true
+confidence_threshold = 0.45
+frame_weight = 1.0
+trigger_decision = true
+
+[zones.close]
+min_face_size = 130
+action = "verify_and_log"
+apply_sr = false
+confidence_threshold = 0.40
+frame_weight = 1.0
+
+[matching]
+database_path = "data/known_faces.db"
+distance_metric = "cosine"
+unknown_person_threshold = 0.68
+
+[output]
+display_output = true
+draw_detections = true
+draw_tracks = true
+draw_roi = true
+draw_fps = true

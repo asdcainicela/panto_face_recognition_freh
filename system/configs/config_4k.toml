@@ -1,0 +1,95 @@
+[project]
+name = "panto_4k"
+version = "1.0.0"
+
+[camera]
+resolution = [3840, 2160]
+fps_target = 20
+device_id = 0
+backend = "gstreamer"
+
+[camera.roi]
+enabled = false
+
+[detection]
+model = "retinaface"
+model_path = "models/retinaface_mobilenet.onnx"
+backend = "onnx"
+use_gpu = true
+min_face_size = 100
+confidence_threshold = 0.60
+nms_threshold = 0.4
+
+[tracking]
+algorithm = "bytetrack"
+max_tracks = 5
+max_age = 30
+min_hits = 3
+direction_filter = "approaching"
+ignore_leaving = true
+
+[superresolution]
+enabled = false
+conditional_threshold = 150
+model = "realesr_x2"
+model_path = "models/realesr_x2.onnx"
+target_size = 300
+use_gpu = true
+
+[recognition]
+model = "arcface_r100"
+model_path = "models/arcface_r100.onnx"
+backend = "onnx"
+use_gpu = true
+embedding_size = 512
+strategy = "multi_frame_voting"
+min_frames = 15
+confidence_threshold = 0.30
+
+[zones]
+enabled = true
+
+[zones.far]
+min_face_size = 90
+max_face_size = 150
+action = "track_only"
+apply_sr = false
+confidence_threshold = 0.55
+frame_weight = 0.2
+
+[zones.approach]
+min_face_size = 150
+max_face_size = 220
+action = "accumulate"
+apply_sr = false
+confidence_threshold = 0.40
+frame_weight = 0.5
+
+[zones.optimal]
+min_face_size = 220
+max_face_size = 350
+action = "definitive_match"
+apply_sr = false
+confidence_threshold = 0.30
+frame_weight = 1.0
+trigger_decision = true
+
+[zones.close]
+min_face_size = 350
+action = "verify_and_log"
+apply_sr = false
+confidence_threshold = 0.25
+frame_weight = 1.0
+
+[matching]
+database_path = "data/known_faces.db"
+distance_metric = "cosine"
+unknown_person_threshold = 0.55
+
+[output]
+display_output = true
+output_resolution = "1080p"
+draw_detections = true
+draw_tracks = true
+draw_roi = false
+draw_fps = true
