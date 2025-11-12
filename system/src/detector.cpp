@@ -44,7 +44,7 @@ FaceDetector::FaceDetector(const std::string& model_path, bool use_cuda)
             output_names.push_back(strdup(name.get()));
         }
         
-        spdlog::debug("detector: {} inputs, {} outputs", num_input, num_output);
+        spdlog::info("detector: {} inputs, {} outputs", num_input, num_output);
         
     } catch (const std::exception& e) {
         spdlog::error("detector: error al cargar modelo: {}", e.what());
@@ -124,34 +124,35 @@ std::vector<Detection> FaceDetector::postprocess(const std::vector<Ort::Value>& 
         return detections;
     }
     
-    // RetinaFace típicamente output: [bboxes, scores, landmarks]
-    // Formato: bboxes [1, N, 4], scores [1, N], landmarks [1, N, 10]
+    // RetinaFace outputs:
+    // - bbox: [1, 16800, 4] - coordenadas (x1, y1, x2, y2)
+    // - confidence: [1, 16800, 2] - [background_prob, face_prob]
+    // - landmark: [1, 16800, 10] - 5 puntos faciales (x,y cada uno)
     
     auto boxes_shape = outputs[0].GetTensorTypeAndShapeInfo().GetShape();
     auto scores_shape = outputs[1].GetTensorTypeAndShapeInfo().GetShape();
     
-    spdlog::debug("boxes shape: [{}, {}, {}]", boxes_shape[0], boxes_shape[1], boxes_shape[2]);
-    spdlog::debug("scores shape: [{}, {}]", scores_shape[0], scores_shape[1]);
-    
-    // Obtener número de detecciones
-    int num_detections = static_cast<int>(boxes_shape[1]);
+    int num_detections = static_cast<int>(boxes_shape[1]); // 16800
     
     auto* boxes_data = outputs[0].GetTensorData<float>();
     auto* scores_data = outputs[1].GetTensorData<float>();
-    auto* landmarks_data = outputs.size() >= 3 ? outputs[2].GetTensorData<float>() : nullptr;
+    auto* landmarks_data = outputs[2].GetTensorData<float>();
     
     float scale_x = static_cast<float>(orig_size.width) / input_width;
     float scale_y = static_cast<float>(orig_size.height) / input_height;
     
     for (int i = 0; i < num_detections; i++) {
-        float score = scores_data[i];
+        // CRÍTICO: confidence tiene formato [background, face]
+        // Necesitamos la columna 1 (face probability)
+        float background_score = scores_data[i * 2 + 0];
+        float face_score = scores_data[i * 2 + 1];
         
-        if (score < conf_threshold) continue;
+        if (face_score < conf_threshold) continue;
         
         Detection det;
-        det.confidence = score;
+        det.confidence = face_score;
         
-        // Box: [x1, y1, x2, y2] - offset por batch
+        // Box: [x1, y1, x2, y2]
         float x1 = boxes_data[i * 4 + 0] * scale_x;
         float y1 = boxes_data[i * 4 + 1] * scale_y;
         float x2 = boxes_data[i * 4 + 2] * scale_x;
@@ -163,25 +164,28 @@ std::vector<Detection> FaceDetector::postprocess(const std::vector<Ort::Value>& 
         x2 = std::max(0.0f, std::min(x2, (float)orig_size.width));
         y2 = std::max(0.0f, std::min(y2, (float)orig_size.height));
         
-        // Asegurar que x2 > x1 y y2 > y1
+        // Validar que sea un box válido
         if (x2 <= x1 || y2 <= y1) continue;
+        
+        // Validar tamaño mínimo (evitar boxes diminutos)
+        float width = x2 - x1;
+        float height = y2 - y1;
+        if (width < 10 || height < 10) continue;
         
         det.box = cv::Rect(cv::Point(x1, y1), cv::Point(x2, y2));
         
         // Landmarks: 5 puntos (10 valores: x1,y1, x2,y2, ...)
-        if (landmarks_data) {
-            for (int j = 0; j < 5; j++) {
-                det.landmarks[j].x = landmarks_data[i * 10 + j * 2] * scale_x;
-                det.landmarks[j].y = landmarks_data[i * 10 + j * 2 + 1] * scale_y;
-            }
+        for (int j = 0; j < 5; j++) {
+            det.landmarks[j].x = landmarks_data[i * 10 + j * 2] * scale_x;
+            det.landmarks[j].y = landmarks_data[i * 10 + j * 2 + 1] * scale_y;
         }
         
         detections.push_back(det);
     }
     
-    spdlog::debug("antes de NMS: {} detecciones", detections.size());
+    spdlog::info("antes de NMS: {} detecciones", detections.size());
     nms(detections);
-    spdlog::debug("después de NMS: {} detecciones", detections.size());
+    spdlog::info("después de NMS: {} detecciones", detections.size());
     
     return detections;
 }

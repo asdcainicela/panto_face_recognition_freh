@@ -1,3 +1,10 @@
+# Ver qué archivos de ONNX Runtime tienes
+ls -lh /usr/lib/*onnx* /usr/local/lib/*onnx* 2>/dev/null
+
+# Ver providers disponibles
+ldconfig -p | grep onnx
+
+# others
 cd /workspace/panto_face_recognition_freh/system
 
 # 1. Recompilar con detector
