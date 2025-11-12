@@ -111,11 +111,12 @@ FaceDetector::FaceDetector(const std::string& model_path, bool use_cuda)
         input_width = 640;
         input_height = 640;
         
-        // Threshold más bajo por defecto (los scores de det_10g son bajos)
-        conf_threshold = 0.3f;
+        // Threshold más alto para reducir falsos positivos
+        conf_threshold = 0.5f;
+        nms_threshold = 0.3f;
         
-        spdlog::info("detector: usando input size {}x{}, threshold {:.2f}", 
-                    input_width, input_height, conf_threshold);
+        spdlog::info("detector: usando input size {}x{}, conf={:.2f}, nms={:.2f}", 
+                    input_width, input_height, conf_threshold, nms_threshold);
         
     } catch (const std::exception& e) {
         spdlog::error("detector: error al cargar modelo: {}", e.what());
@@ -261,6 +262,22 @@ std::vector<Detection> FaceDetector::postprocess(const std::vector<Ort::Value>& 
             float aspect = static_cast<float>(det.box.width) / det.box.height;
             if (aspect < 0.5f || aspect > 2.0f) continue;
             
+            // Validar que los landmarks estén dentro del box (filtro extra de calidad)
+            int landmarks_inside = 0;
+            for (int j = 0; j < 5; j++) {
+                if (det.landmarks[j].x >= det.box.x && 
+                    det.landmarks[j].x <= det.box.x + det.box.width &&
+                    det.landmarks[j].y >= det.box.y && 
+                    det.landmarks[j].y <= det.box.y + det.box.height) {
+                    landmarks_inside++;
+                }
+            }
+            // Al menos 3 de 5 landmarks deben estar dentro del box
+            if (landmarks_inside < 3) {
+                spdlog::debug("descartado: solo {}/5 landmarks dentro del box", landmarks_inside);
+                continue;
+            }
+            
             // Decodificar landmarks
             decode_landmarks(anchors[i], &kpss_data[i * 10], det.landmarks, scale_x, scale_y);
             
@@ -313,7 +330,14 @@ void FaceDetector::nms(std::vector<Detection>& detections) {
             
             float iou = intersection / union_area;
             
-            if (iou > nms_threshold) {
+            // También considerar si uno está contenido dentro del otro (IoM)
+            float iom_i = intersection / area_i;  // Intersection over Min
+            float iom_j = intersection / area_j;
+            
+            // Suprimir si:
+            // 1. IOU normal es alto (boxes muy solapados)
+            // 2. Uno está casi completamente dentro del otro
+            if (iou > nms_threshold || iom_i > 0.7f || iom_j > 0.7f) {
                 suppressed[j] = true;
             }
         }
