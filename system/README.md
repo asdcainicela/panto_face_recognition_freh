@@ -24,12 +24,31 @@ panto/
 ├── data/
 │   ├── faces.db
 │   └── captures/
+├── include/
+│   ├── utils.hpp
+│   └── stream_capture.hpp
 ├── src/
+│   ├── utils.cpp
+│   └── stream_capture.cpp
 │   ├── detector.cpp
 │   ├── tracker.cpp
 │   ├── recognizer.cpp
 │   └── database.cpp
+├── test/
+│   ├── record.cpp
+│   ├── view.cpp
+│   └── record_view.cpp
+├── build/
+│   ├── bin/
+│   │   ├── record
+│   │   ├── view
+│   │   ├── record_view
+│   │   └── panto
+│   └── lib/
+│       └── libstream_lib.so
 ├── CMakeLists.txt
+├── build.sh
+└── run.sh
 └── main.cpp
 ```
 
@@ -98,25 +117,62 @@ sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
 ## Compilacion
 
 ```bash
-mkdir build
-cd build
-cmake ..
-make -j4
+chmod +x build.sh
+./build.sh
 ```
+
+Esto genera:
+- Libreria compartida: `build/lib/libstream_lib.so`
+- Ejecutables de prueba: `build/bin/record`, `build/bin/view`, `build/bin/record_view`
+- Aplicacion principal: `build/bin/panto`
 
 ---
 
-## Ejecucion
+## Ejecucion Rapida
+
+### Usando script run.sh
 
 ```bash
-# Usando perfil especifico
-./panto --config configs/config_1080p_roi.toml
+chmod +x run.sh
 
-# Usando config.toml principal
-./panto
+# Grabar main stream hasta Ctrl+C
+./run.sh 1
 
-# Con camara especifica
-./panto --config configs/config_1080p_roi.toml --camera 0
+# Grabar main 60 segundos
+./run.sh 1 60
+
+# Ver ambos streams
+./run.sh 3
+
+# Ver solo main
+./run.sh 4
+
+# Grabar + ver main 30 segundos
+./run.sh 6 30
+
+# Ejecutar PANTO principal
+./run.sh 8
+```
+
+### Ejecucion Manual
+
+```bash
+# Solo grabar (sin visualizacion)
+./build/bin/record main          # Hasta Ctrl+C
+./build/bin/record main 60       # 60 segundos
+./build/bin/record sub 120       # Sub stream 120s
+
+# Solo visualizar
+./build/bin/view                 # Ambos streams
+./build/bin/view main            # Solo main
+./build/bin/view sub             # Solo sub
+
+# Grabar + visualizar
+./build/bin/record_view main     # Hasta Ctrl+C
+./build/bin/record_view sub 60   # Sub 60 segundos
+
+# Aplicacion principal PANTO
+./build/bin/panto --config configs/config_1080p_roi.toml
 ```
 
 ---
@@ -253,3 +309,9 @@ tail -f logs/panto.log
 # Consultar base de datos
 sqlite3 data/faces.db "SELECT * FROM detections ORDER BY timestamp DESC LIMIT 10;"
 ```
+
+---
+
+## Licencia
+
+MIT License
