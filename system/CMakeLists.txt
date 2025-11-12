@@ -37,5 +37,5 @@ add_executable(record_view test/record_view.cpp)
 target_link_libraries(record_view stream_lib pthread)
 
 # Main panto application
-add_executable(panto src/main.cpp)
+add_executable(panto main.cpp)
 target_link_libraries(panto stream_lib pthread)
