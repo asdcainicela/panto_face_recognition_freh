@@ -3,6 +3,32 @@
 #include <algorithm>
 #include <cmath>
 
+// ============================================
+// CONFIGURACIÓN DE VALIDACIONES
+// Ajusta estos valores según tus necesidades
+// ============================================
+
+// 1. Tamaño mínimo de rostro (en pixels)
+constexpr int MIN_FACE_SIZE = 20;  // Era 30, ahora más permisivo
+
+// 2. Tamaño máximo (porcentaje del frame)
+constexpr float MAX_FACE_RATIO = 0.9f;  // Era 0.8, ahora 90%
+
+// 3. Aspect ratio (ancho/alto del rostro)
+constexpr float MIN_ASPECT_RATIO = 0.4f;  // Era 0.5
+constexpr float MAX_ASPECT_RATIO = 2.5f;  // Era 2.0
+
+// 4. Validación de landmarks
+constexpr int MIN_LANDMARKS_INSIDE = 2;  // Era 3, ahora más permisivo
+constexpr bool ENABLE_LANDMARK_VALIDATION = false;  // ⚡ DESACTIVAR TEMPORALMENTE
+
+// 5. NMS IoM threshold (Intersection over Minimum)
+constexpr float NMS_IOM_THRESHOLD = 0.8f;  // Era 0.7, menos agresivo
+
+// ============================================
+// FIN CONFIGURACIÓN
+// ============================================
+
 // Generar anchors para una escala específica
 static std::vector<std::vector<float>> generate_anchors(int feat_h, int feat_w, int stride) {
     std::vector<std::vector<float>> anchors;
@@ -244,51 +270,87 @@ std::vector<Detection> FaceDetector::postprocess(const std::vector<Ort::Value>& 
             
             if (score < conf_threshold) continue;
             
-            // Log TODOS los scores > 0.2 para debug
-            if (score > 0.2f) {
+            // Log scores > 0.3 para debug
+            if (score > 0.3f) {
                 spdlog::debug("Escala {} anchor {}: score={:.4f}", scale_idx, i, score);
             }
             
             Detection det;
             det.confidence = score;
             
-            // Decodificar box
+            // Decodificar box y landmarks
             det.box = decode_box(anchors[i], &boxes_data[i * 4], scale_x, scale_y);
+            decode_landmarks(anchors[i], &kpss_data[i * 10], det.landmarks, scale_x, scale_y);
             
-            // Validar box - Más estricto
-            if (det.box.width < 30 || det.box.height < 30) continue;  // Min 30px
-            if (det.box.width > orig_size.width * 0.8) continue;  // Max 80% del frame
-            if (det.box.height > orig_size.height * 0.8) continue;
-            if (det.box.x < 0 || det.box.y < 0) continue;
-            if (det.box.x + det.box.width > orig_size.width) continue;
-            if (det.box.y + det.box.height > orig_size.height) continue;
+            // ========================================
+            // VALIDACIONES CON VALORES CONFIGURABLES
+            // ========================================
             
-            // Validar aspect ratio (rostros son ~1:1.2)
-            float aspect = static_cast<float>(det.box.width) / det.box.height;
-            if (aspect < 0.5f || aspect > 2.0f) continue;
-            
-            // Validar que los landmarks estén dentro del box (filtro extra de calidad)
-            int landmarks_inside = 0;
-            for (int j = 0; j < 5; j++) {
-                if (det.landmarks[j].x >= det.box.x && 
-                    det.landmarks[j].x <= det.box.x + det.box.width &&
-                    det.landmarks[j].y >= det.box.y && 
-                    det.landmarks[j].y <= det.box.y + det.box.height) {
-                    landmarks_inside++;
-                }
-            }
-            // Al menos 3 de 5 landmarks deben estar dentro del box
-            if (landmarks_inside < 3) {
-                spdlog::debug("descartado: solo {}/5 landmarks dentro del box", landmarks_inside);
+            // 1. Tamaño mínimo
+            if (det.box.width < MIN_FACE_SIZE || det.box.height < MIN_FACE_SIZE) {
+                spdlog::debug("descartado: tamaño muy pequeño ({}x{})", 
+                             det.box.width, det.box.height);
                 continue;
             }
             
-            // Decodificar landmarks
-            decode_landmarks(anchors[i], &kpss_data[i * 10], det.landmarks, scale_x, scale_y);
+            // 2. Tamaño máximo (porcentaje del frame)
+            if (det.box.width > orig_size.width * MAX_FACE_RATIO || 
+                det.box.height > orig_size.height * MAX_FACE_RATIO) {
+                spdlog::debug("descartado: tamaño muy grande ({}x{} vs frame {}x{})", 
+                             det.box.width, det.box.height, orig_size.width, orig_size.height);
+                continue;
+            }
             
-            // Debug: Log detecciones con score alto
+            // 3. Bounds del frame
+            if (det.box.x < 0 || det.box.y < 0 || 
+                det.box.x + det.box.width > orig_size.width || 
+                det.box.y + det.box.height > orig_size.height) {
+                spdlog::debug("descartado: fuera de bounds");
+                continue;
+            }
+            
+            // 4. Aspect ratio
+            float aspect = static_cast<float>(det.box.width) / det.box.height;
+            if (aspect < MIN_ASPECT_RATIO || aspect > MAX_ASPECT_RATIO) {
+                spdlog::debug("descartado: aspect ratio inválido ({:.2f})", aspect);
+                continue;
+            }
+            
+            // 5. ⚡ VALIDACIÓN DE LANDMARKS (CONFIGURABLE)
+            if (ENABLE_LANDMARK_VALIDATION) {
+                int landmarks_inside = 0;
+                for (int j = 0; j < 5; j++) {
+                    if (det.landmarks[j].x >= det.box.x && 
+                        det.landmarks[j].x <= det.box.x + det.box.width &&
+                        det.landmarks[j].y >= det.box.y && 
+                        det.landmarks[j].y <= det.box.y + det.box.height) {
+                        landmarks_inside++;
+                    }
+                }
+                
+                if (landmarks_inside < MIN_LANDMARKS_INSIDE) {
+                    spdlog::debug("descartado: solo {}/{} landmarks dentro (min: {})", 
+                                 landmarks_inside, 5, MIN_LANDMARKS_INSIDE);
+                    continue;
+                }
+            } else {
+                // Debug: Mostrar info de landmarks sin rechazar
+                int landmarks_inside = 0;
+                for (int j = 0; j < 5; j++) {
+                    if (det.landmarks[j].x >= det.box.x && 
+                        det.landmarks[j].x <= det.box.x + det.box.width &&
+                        det.landmarks[j].y >= det.box.y && 
+                        det.landmarks[j].y <= det.box.y + det.box.height) {
+                        landmarks_inside++;
+                    }
+                }
+                spdlog::debug("info: {}/5 landmarks dentro del box (validación desactivada)", 
+                             landmarks_inside);
+            }
+            
+            // ✅ DETECCIÓN ACEPTADA
             if (score > 0.4f) {
-                spdlog::info("  Escala {} anchor {}: score={:.3f}, box=[{},{},{},{}]",
+                spdlog::info("  ✓ Escala {} anchor {}: score={:.3f}, box=[{},{},{},{}]",
                             scale_idx, i, score, 
                             det.box.x, det.box.y, det.box.width, det.box.height);
             }
@@ -297,11 +359,11 @@ std::vector<Detection> FaceDetector::postprocess(const std::vector<Ort::Value>& 
         }
     }
     
-    spdlog::debug("detector: {} detecciones antes de NMS", detections.size());
+    spdlog::info("detector: {} detecciones ANTES de NMS", detections.size());
     
     if (!detections.empty()) {
         nms(detections);
-        spdlog::info("detector: {} rostros detectados", detections.size());
+        spdlog::info("detector: {} rostros DESPUÉS de NMS", detections.size());
     } else {
         spdlog::warn("detector: no se detectaron rostros (threshold={:.2f})", conf_threshold);
     }
@@ -335,18 +397,19 @@ void FaceDetector::nms(std::vector<Detection>& detections) {
             
             float iou = intersection / union_area;
             
-            // También considerar si uno está contenido dentro del otro (IoM)
-            float iom_i = intersection / area_i;  // Intersection over Min
+            // IoM (Intersection over Minimum)
+            float iom_i = intersection / area_i;  
             float iom_j = intersection / area_j;
             
-            // Suprimir si:
-            // 1. IOU normal es alto (boxes muy solapados)
-            // 2. Uno está casi completamente dentro del otro
-            if (iou > nms_threshold || iom_i > 0.7f || iom_j > 0.7f) {
+            // Usar threshold configurable
+            if (iou > nms_threshold || iom_i > NMS_IOM_THRESHOLD || iom_j > NMS_IOM_THRESHOLD) {
+                spdlog::debug("NMS: suprimiendo detección j={} (IOU={:.2f}, IoM_i={:.2f}, IoM_j={:.2f})",
+                             j, iou, iom_i, iom_j);
                 suppressed[j] = true;
             }
         }
     }
     
+    spdlog::info("NMS: {} detecciones mantenidas de {} originales", kept.size(), detections.size());
     detections = kept;
 }
