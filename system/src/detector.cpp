@@ -124,30 +124,64 @@ std::vector<Detection> FaceDetector::postprocess(const std::vector<Ort::Value>& 
         return detections;
     }
     
-    // RetinaFace outputs:
-    // - bbox: [1, 16800, 4] - coordenadas (x1, y1, x2, y2)
-    // - confidence: [1, 16800, 2] - [background_prob, face_prob]
-    // - landmark: [1, 16800, 10] - 5 puntos faciales (x,y cada uno)
-    
     auto boxes_shape = outputs[0].GetTensorTypeAndShapeInfo().GetShape();
     auto scores_shape = outputs[1].GetTensorTypeAndShapeInfo().GetShape();
     
-    int num_detections = static_cast<int>(boxes_shape[1]); // 16800
+    int num_detections = static_cast<int>(boxes_shape[1]);
     
     auto* boxes_data = outputs[0].GetTensorData<float>();
     auto* scores_data = outputs[1].GetTensorData<float>();
     auto* landmarks_data = outputs[2].GetTensorData<float>();
     
+    spdlog::info("total anchors: {}", num_detections);
+    
     float scale_x = static_cast<float>(orig_size.width) / input_width;
     float scale_y = static_cast<float>(orig_size.height) / input_height;
     
+    // Encontrar max face score
+    float max_face_score = 0.0f;
+    int max_idx = -1;
     for (int i = 0; i < num_detections; i++) {
-        // CRÍTICO: confidence tiene formato [background, face]
-        // Necesitamos la columna 1 (face probability)
+        float face_score = scores_data[i * 2 + 1];
+        if (face_score > max_face_score) {
+            max_face_score = face_score;
+            max_idx = i;
+        }
+    }
+    
+    spdlog::info("max face score: {:.6f} en índice {}", max_face_score, max_idx);
+    
+    // Mostrar las 5 detecciones con mayor score
+    std::vector<std::pair<int, float>> top_scores;
+    for (int i = 0; i < num_detections; i++) {
+        float face_score = scores_data[i * 2 + 1];
+        top_scores.push_back({i, face_score});
+    }
+    std::sort(top_scores.begin(), top_scores.end(), 
+             [](const auto& a, const auto& b) { return a.second > b.second; });
+    
+    spdlog::info("top 10 face scores:");
+    for (int i = 0; i < std::min(10, (int)top_scores.size()); i++) {
+        int idx = top_scores[i].first;
+        float score = top_scores[i].second;
+        float x1 = boxes_data[idx * 4 + 0];
+        float y1 = boxes_data[idx * 4 + 1];
+        float x2 = boxes_data[idx * 4 + 2];
+        float y2 = boxes_data[idx * 4 + 3];
+        spdlog::info("  #{}: score={:.6f}, bbox=[{:.2f}, {:.2f}, {:.2f}, {:.2f}]",
+                    i+1, score, x1, y1, x2, y2);
+    }
+    
+    // Usar threshold muy bajo para debug
+    float debug_threshold = 0.01f;
+    spdlog::info("usando threshold: {:.3f} (original: {:.3f})", 
+                 debug_threshold, conf_threshold);
+    
+    for (int i = 0; i < num_detections; i++) {
         float background_score = scores_data[i * 2 + 0];
         float face_score = scores_data[i * 2 + 1];
         
-        if (face_score < conf_threshold) continue;
+        if (face_score < debug_threshold) continue;
         
         Detection det;
         det.confidence = face_score;
@@ -164,17 +198,15 @@ std::vector<Detection> FaceDetector::postprocess(const std::vector<Ort::Value>& 
         x2 = std::max(0.0f, std::min(x2, (float)orig_size.width));
         y2 = std::max(0.0f, std::min(y2, (float)orig_size.height));
         
-        // Validar que sea un box válido
         if (x2 <= x1 || y2 <= y1) continue;
         
-        // Validar tamaño mínimo (evitar boxes diminutos)
         float width = x2 - x1;
         float height = y2 - y1;
         if (width < 10 || height < 10) continue;
         
         det.box = cv::Rect(cv::Point(x1, y1), cv::Point(x2, y2));
         
-        // Landmarks: 5 puntos (10 valores: x1,y1, x2,y2, ...)
+        // Landmarks
         for (int j = 0; j < 5; j++) {
             det.landmarks[j].x = landmarks_data[i * 10 + j * 2] * scale_x;
             det.landmarks[j].y = landmarks_data[i * 10 + j * 2 + 1] * scale_y;
