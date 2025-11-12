@@ -4,7 +4,7 @@
 #include <cmath>
 
 // ============================================
-// CONFIGURACIÓN DE VALIDACIONES
+// CONFIGURACIÓN DE VALIDACIONES Y DECODIFICACIÓN
 // Ajusta estos valores según tus necesidades
 // ============================================
 
@@ -25,6 +25,23 @@ constexpr bool ENABLE_LANDMARK_VALIDATION = false;  // ⚡ DESACTIVAR TEMPORALME
 // 5. NMS IoM threshold (Intersection over Minimum)
 constexpr float NMS_IOM_THRESHOLD = 0.8f;  // Era 0.7, menos agresivo
 
+// 6. ⚡ AJUSTES DE DECODIFICACIÓN (para sincronizar box y landmarks)
+constexpr float BOX_OFFSET_X_FACTOR = 1.0f;  // Ajuste horizontal del box (0.9-1.1)
+constexpr float BOX_OFFSET_Y_FACTOR = 1.0f;  // Ajuste vertical del box (0.9-1.1)
+constexpr float BOX_SIZE_W_FACTOR = 1.0f;    // Ajuste ancho del box (0.9-1.1)
+constexpr float BOX_SIZE_H_FACTOR = 1.0f;    // Ajuste alto del box (0.9-1.1)
+
+constexpr float LM_OFFSET_X_FACTOR = 1.0f;   // Ajuste horizontal landmarks (0.9-1.1)
+constexpr float LM_OFFSET_Y_FACTOR = 1.0f;   // Ajuste vertical landmarks (0.9-1.1)
+
+// ============================================
+// GUÍA DE AJUSTE:
+// - Si el box está MÁS A LA IZQUIERDA de los landmarks → BOX_OFFSET_X_FACTOR = 1.05
+// - Si el box está MÁS A LA DERECHA → BOX_OFFSET_X_FACTOR = 0.95
+// - Si el box está MÁS ARRIBA → BOX_OFFSET_Y_FACTOR = 1.05
+// - Si el box está MÁS ABAJO → BOX_OFFSET_Y_FACTOR = 0.95
+// - Si el box es MÁS PEQUEÑO que la cara → BOX_SIZE_W/H_FACTOR = 1.1
+// - Si el box es MÁS GRANDE → BOX_SIZE_W/H_FACTOR = 0.9
 // ============================================
 // FIN CONFIGURACIÓN
 // ============================================
@@ -59,17 +76,36 @@ static cv::Rect decode_box(const std::vector<float>& anchor, const float* bbox_p
     float w = anchor[2];
     float h = anchor[3];
     
-    // Decodificar offsets (formato RetinaFace)
-    float pred_cx = cx + bbox_pred[0] * w;
-    float pred_cy = cy + bbox_pred[1] * h;
-    float pred_w = std::exp(bbox_pred[2]) * w;
-    float pred_h = std::exp(bbox_pred[3]) * h;
+    // Decodificar offsets con factores de ajuste
+    float pred_cx = cx + bbox_pred[0] * w * BOX_OFFSET_X_FACTOR;
+    float pred_cy = cy + bbox_pred[1] * h * BOX_OFFSET_Y_FACTOR;
+    float pred_w = std::exp(bbox_pred[2]) * w * BOX_SIZE_W_FACTOR;
+    float pred_h = std::exp(bbox_pred[3]) * h * BOX_SIZE_H_FACTOR;
     
     // Convertir de centro-ancho a x1y1x2y2
-    float x1 = (pred_cx - pred_w * 0.5f) * scale_x;
-    float y1 = (pred_cy - pred_h * 0.5f) * scale_y;
-    float x2 = (pred_cx + pred_w * 0.5f) * scale_x;
-    float y2 = (pred_cy + pred_h * 0.5f) * scale_y;
+    float x1 = pred_cx - pred_w * 0.5f;
+    float y1 = pred_cy - pred_h * 0.5f;
+    float x2 = pred_cx + pred_w * 0.5f;
+    float y2 = pred_cy + pred_h * 0.5f;
+    
+    // Aplicar escala AL FINAL
+    x1 *= scale_x;
+    y1 *= scale_y;
+    x2 *= scale_x;
+    y2 *= scale_y;
+    
+    // DEBUG: Log primeros boxes decodificados
+    static int debug_count = 0;
+    if (debug_count < 3) {
+        spdlog::debug("decode_box: anchor=[{:.1f},{:.1f}], pred=[{:.3f},{:.3f},{:.3f},{:.3f}]",
+                     cx, cy, bbox_pred[0], bbox_pred[1], bbox_pred[2], bbox_pred[3]);
+        spdlog::debug("  factors: offset=[{:.2f},{:.2f}], size=[{:.2f},{:.2f}]",
+                     BOX_OFFSET_X_FACTOR, BOX_OFFSET_Y_FACTOR,
+                     BOX_SIZE_W_FACTOR, BOX_SIZE_H_FACTOR);
+        spdlog::debug("  -> box=[{:.1f},{:.1f},{:.1f},{:.1f}], scale=[{:.2f},{:.2f}]",
+                     x1, y1, x2-x1, y2-y1, scale_x, scale_y);
+        debug_count++;
+    }
     
     return cv::Rect(cv::Point(x1, y1), cv::Point(x2, y2));
 }
@@ -83,9 +119,26 @@ static void decode_landmarks(const std::vector<float>& anchor, const float* kpss
     float h = anchor[3];
     
     for (int i = 0; i < 5; i++) {
-        float lm_x = (cx + kpss_pred[i * 2] * w) * scale_x;
-        float lm_y = (cy + kpss_pred[i * 2 + 1] * h) * scale_y;
-        landmarks[i] = cv::Point2f(lm_x, lm_y);
+        // Los landmarks vienen normalizados respecto al anchor
+        // Aplicar factores de ajuste
+        float lm_x = cx + kpss_pred[i * 2] * w * LM_OFFSET_X_FACTOR;
+        float lm_y = cy + kpss_pred[i * 2 + 1] * h * LM_OFFSET_Y_FACTOR;
+        
+        // Aplicar escala
+        landmarks[i] = cv::Point2f(lm_x * scale_x, lm_y * scale_y);
+    }
+    
+    // DEBUG: Log primeros landmarks
+    static int debug_lm_count = 0;
+    if (debug_lm_count < 3) {
+        spdlog::debug("decode_landmarks: anchor=[{:.1f},{:.1f}], factors=[{:.2f},{:.2f}]", 
+                     cx, cy, LM_OFFSET_X_FACTOR, LM_OFFSET_Y_FACTOR);
+        for (int i = 0; i < 5; i++) {
+            spdlog::debug("  landmark {}: pred=[{:.3f},{:.3f}] -> pos=[{:.1f},{:.1f}]",
+                         i, kpss_pred[i*2], kpss_pred[i*2+1], 
+                         landmarks[i].x, landmarks[i].y);
+        }
+        debug_lm_count++;
     }
 }
 
