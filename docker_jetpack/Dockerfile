@@ -132,7 +132,6 @@ RUN apt-get update && apt-get install -y \
     nano \
     tree \
     sudo \
-    librt-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN cd /usr/src/gtest && \
