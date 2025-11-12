@@ -1,3 +1,18 @@
+cd /workspace/panto_face_recognition_freh/system
+
+# 1. Recompilar con detector
+./build.sh
+
+# 2. Probar captura con pipeline mejorado
+./run.sh 4
+
+# 3. Test detector standalone (webcam)
+./build/bin/test_detector models/retinaface.onnx
+
+# 4. Test detector con imagen
+./build/bin/test_detector models/retinaface.onnx ruta/a/imagen.jpg
+
+
 # PANTO - Sistema de Reconocimiento Facial
 
 Sistema modular de reconocimiento facial en tiempo real para NVIDIA Jetson Orin Nano.
