@@ -1,3 +1,14 @@
+https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip eso funciona porque descarga buffalo en zip defrente y luego install_models.sh
+
+cd /workspace/panto_face_recognition_freh/system/models
+
+# Descargar det_10g.onnx (el detector real)
+wget https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip
+unzip buffalo_l.zip
+cp buffalo_l/det_10g.onnx ./retinaface.onnx
+rm -rf buffalo_l buffalo_l.zip
+
+
 cd /workspace/panto_face_recognition_freh/system
 
 # Recompilar

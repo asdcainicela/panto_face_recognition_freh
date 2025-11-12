@@ -1,6 +1,7 @@
 #include "detector.hpp"
 #include <spdlog/spdlog.h>
 #include <algorithm>
+#include <cmath>
 
 FaceDetector::FaceDetector(const std::string& model_path, bool use_cuda) 
     : env(ORT_LOGGING_LEVEL_WARNING, "FaceDetector") {
@@ -46,6 +47,14 @@ FaceDetector::FaceDetector(const std::string& model_path, bool use_cuda)
         
         spdlog::info("detector: {} inputs, {} outputs", num_input, num_output);
         
+        // Detectar input size del modelo
+        auto input_shape = session->GetInputTypeInfo(0).GetTensorTypeAndShapeInfo().GetShape();
+        if (input_shape.size() == 4) {
+            input_height = static_cast<int>(input_shape[2]);
+            input_width = static_cast<int>(input_shape[3]);
+            spdlog::info("detector: input size {}x{}", input_width, input_height);
+        }
+        
     } catch (const std::exception& e) {
         spdlog::error("detector: error al cargar modelo: {}", e.what());
         throw;
@@ -61,12 +70,15 @@ cv::Mat FaceDetector::preprocess(const cv::Mat& img) {
     cv::Mat resized;
     cv::resize(img, resized, cv::Size(input_width, input_height));
     
-    // Normalizar [0, 255] -> [0, 1]
+    // Normalizar [0, 255] -> [-1, 1] (det_10g usa mean/std normalization)
     cv::Mat normalized;
-    resized.convertTo(normalized, CV_32F, 1.0 / 255.0);
+    resized.convertTo(normalized, CV_32F);
     
     // BGR -> RGB
     cv::cvtColor(normalized, normalized, cv::COLOR_BGR2RGB);
+    
+    // Normalización: (pixel - 127.5) / 128.0
+    normalized = (normalized - 127.5) / 128.0;
     
     return normalized;
 }
@@ -119,74 +131,46 @@ std::vector<Detection> FaceDetector::postprocess(const std::vector<Ort::Value>& 
                                                  const cv::Size& orig_size) {
     std::vector<Detection> detections;
     
+    // det_10g.onnx produce:
+    // Output 0: scores [N, 1] o [N, 2]
+    // Output 1: boxes [N, 4] 
+    // Output 2: kpss [N, 10] (5 landmarks * 2 coords)
+    
     if (outputs.size() < 3) {
-        spdlog::error("detector: se esperaban 3 outputs, recibidos: {}", outputs.size());
+        spdlog::warn("detector: outputs insuficientes: {}", outputs.size());
         return detections;
     }
     
-    auto boxes_shape = outputs[0].GetTensorTypeAndShapeInfo().GetShape();
-    auto scores_shape = outputs[1].GetTensorTypeAndShapeInfo().GetShape();
+    // Extraer shapes
+    auto scores_shape = outputs[0].GetTensorTypeAndShapeInfo().GetShape();
+    auto boxes_shape = outputs[1].GetTensorTypeAndShapeInfo().GetShape();
+    auto kpss_shape = outputs[2].GetTensorTypeAndShapeInfo().GetShape();
     
-    int num_detections = static_cast<int>(boxes_shape[1]);
+    int num_detections = static_cast<int>(scores_shape[0]);
     
-    auto* boxes_data = outputs[0].GetTensorData<float>();
-    auto* scores_data = outputs[1].GetTensorData<float>();
-    auto* landmarks_data = outputs[2].GetTensorData<float>();
+    if (num_detections == 0) {
+        return detections;
+    }
     
-    spdlog::info("total anchors: {}", num_detections);
+    auto* scores_data = outputs[0].GetTensorData<float>();
+    auto* boxes_data = outputs[1].GetTensorData<float>();
+    auto* kpss_data = outputs[2].GetTensorData<float>();
+    
+    spdlog::debug("detector: {} candidatos iniciales", num_detections);
     
     float scale_x = static_cast<float>(orig_size.width) / input_width;
     float scale_y = static_cast<float>(orig_size.height) / input_height;
     
-    // Encontrar max face score
-    float max_face_score = 0.0f;
-    int max_idx = -1;
+    // Procesar detecciones
     for (int i = 0; i < num_detections; i++) {
-        float face_score = scores_data[i * 2 + 1];
-        if (face_score > max_face_score) {
-            max_face_score = face_score;
-            max_idx = i;
-        }
-    }
-    
-    spdlog::info("max face score: {:.6f} en índice {}", max_face_score, max_idx);
-    
-    // Mostrar las 5 detecciones con mayor score
-    std::vector<std::pair<int, float>> top_scores;
-    for (int i = 0; i < num_detections; i++) {
-        float face_score = scores_data[i * 2 + 1];
-        top_scores.push_back({i, face_score});
-    }
-    std::sort(top_scores.begin(), top_scores.end(), 
-             [](const auto& a, const auto& b) { return a.second > b.second; });
-    
-    spdlog::info("top 10 face scores:");
-    for (int i = 0; i < std::min(10, (int)top_scores.size()); i++) {
-        int idx = top_scores[i].first;
-        float score = top_scores[i].second;
-        float x1 = boxes_data[idx * 4 + 0];
-        float y1 = boxes_data[idx * 4 + 1];
-        float x2 = boxes_data[idx * 4 + 2];
-        float y2 = boxes_data[idx * 4 + 3];
-        spdlog::info("  #{}: score={:.6f}, bbox=[{:.2f}, {:.2f}, {:.2f}, {:.2f}]",
-                    i+1, score, x1, y1, x2, y2);
-    }
-    
-    // Usar threshold muy bajo para debug
-    float debug_threshold = 0.01f;
-    spdlog::info("usando threshold: {:.3f} (original: {:.3f})", 
-                 debug_threshold, conf_threshold);
-    
-    for (int i = 0; i < num_detections; i++) {
-        float background_score = scores_data[i * 2 + 0];
-        float face_score = scores_data[i * 2 + 1];
+        float score = scores_data[i];
         
-        if (face_score < debug_threshold) continue;
+        if (score < conf_threshold) continue;
         
         Detection det;
-        det.confidence = face_score;
+        det.confidence = score;
         
-        // Box: [x1, y1, x2, y2]
+        // Boxes: [x1, y1, x2, y2]
         float x1 = boxes_data[i * 4 + 0] * scale_x;
         float y1 = boxes_data[i * 4 + 1] * scale_y;
         float x2 = boxes_data[i * 4 + 2] * scale_x;
@@ -206,18 +190,18 @@ std::vector<Detection> FaceDetector::postprocess(const std::vector<Ort::Value>& 
         
         det.box = cv::Rect(cv::Point(x1, y1), cv::Point(x2, y2));
         
-        // Landmarks
+        // Landmarks: [x0, y0, x1, y1, ..., x4, y4]
         for (int j = 0; j < 5; j++) {
-            det.landmarks[j].x = landmarks_data[i * 10 + j * 2] * scale_x;
-            det.landmarks[j].y = landmarks_data[i * 10 + j * 2 + 1] * scale_y;
+            det.landmarks[j].x = kpss_data[i * 10 + j * 2] * scale_x;
+            det.landmarks[j].y = kpss_data[i * 10 + j * 2 + 1] * scale_y;
         }
         
         detections.push_back(det);
     }
     
-    spdlog::info("antes de NMS: {} detecciones", detections.size());
+    spdlog::debug("detector: {} detecciones antes de NMS", detections.size());
     nms(detections);
-    spdlog::info("después de NMS: {} detecciones", detections.size());
+    spdlog::info("detector: {} rostros detectados", detections.size());
     
     return detections;
 }
@@ -235,7 +219,7 @@ void FaceDetector::nms(std::vector<Detection>& detections) {
         
         for (size_t j = 0; j < kept.size(); j++) {
             float intersection = static_cast<float>((detections[i].box & kept[j].box).area());
-            float union_area = static_cast<float>((detections[i].box | kept[j].box).area());
+            float union_area = static_cast<float>(detections[i].box.area() + kept[j].box.area() - intersection);
             
             if (union_area == 0) continue;
             
