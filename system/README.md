@@ -1,3 +1,65 @@
+/*
+================================================================================
+PANTO - MODELOS ONNX ACTUALIZADOS (2025)
+================================================================================
+
+# NUEVOS ENLACES DE DESCARGA
+
+1. RECONOCIMIENTO FACIAL - ArcFace R100
+   - Hugging Face: https://huggingface.co/garavv/arcface-onnx
+   - Descarga directa:
+     wget https://huggingface.co/garavv/arcface-onnx/resolve/main/arc.onnx?download=true -O models/arcface_r100.onnx
+
+2. SUPER-RESOLUCIÓN - Real-ESRGAN x4plus
+   - Hugging Face: https://huggingface.co/qualcomm/Real-ESRGAN-x4plus/blob/01179a4da7bf5ac91faca650e6afbf282ac93933/Real-ESRGAN-x4plus.onnx
+   - Descarga directa:
+     wget https://huggingface.co/qualcomm/Real-ESRGAN-x4plus/resolve/main/Real-ESRGAN-x4plus.onnx -O models/realesr_x4.onnx
+
+3. DETECCIÓN DE ROSTROS - RetinaFace (ResNet50)
+   - Hugging Face: https://huggingface.co/TheEeeeLin/HivisionIDPhotos_matting/blob/main/retinaface-resnet50.onnx
+   - Descarga directa:
+     wget https://huggingface.co/TheEeeeLin/HivisionIDPhotos_matting/resolve/main/retinaface-resnet50.onnx -O models/retinaface.onnx
+
+   Alternativa de exportación:
+   - GitHub: https://github.com/kingardor/retinaface-onnx
+   - Script de conversión disponible: export_onnx.py (desde .pth → .onnx)
+
+
+================================================================================
+NOTAS DE INTEGRACIÓN
+================================================================================
+
+1. Directorio de destino
+   Coloca todos los modelos descargados en:
+       panto/models/
+   y verifica que los nombres coincidan con los declarados en config.toml:
+       retinaface.onnx
+       arcface_r100.onnx
+       realesr_x4.onnx
+
+2. Compatibilidad de entrada/salida
+   - ArcFace: entrada 112x112 RGB, salida embedding de 512 dimensiones (float32)
+   - RetinaFace: entrada 640x640 o similar, salida con bounding boxes y landmarks
+   - Real-ESRGAN: entrada variable, idealmente múltiplos de 64 (x4 upscaling)
+
+3. Aceleración en Jetson Orin Nano
+   - Convierte los modelos ONNX a TensorRT para mayor rendimiento:
+         trtexec --onnx=models/arcface_r100.onnx --saveEngine=models/arcface_r100.trt
+         trtexec --onnx=models/retinaface.onnx --saveEngine=models/retinaface.trt
+   - En config.toml:
+         [performance]
+         use_tensorrt = true
+
+4. Recomendaciones
+   - Verifica licencias antes de uso comercial.
+   - Usa ONNX Runtime o TensorRT según disponibilidad de CUDA/cuDNN.
+   - Comprueba la coherencia de dimensiones antes del embedding.
+   - Guarda tus modelos en caché local (no dependas de descargas en tiempo de ejecución).
+
+================================================================================
+*/
+
+
 # PANTO - Reconocimiento Facial en C++
 
 Sistema de reconocimiento facial en tiempo real usando C++ para deteccion, tracking y almacenamiento de rostros en base de datos.
