@@ -65,7 +65,7 @@ if [ ! "$(docker ps -aq -f name=${CONTAINER_NAME})" ]; then
             libgomp1 libgl1-mesa-glx libgles2-mesa libegl1-mesa python3-pip x11-apps
         ldconfig
         pip3 install --quiet jupyterlab 2>/dev/null || true
-        git config --global user.email 'userasd@gmail.com'
+        git config --global user.email 'gerald.cainicela.a@gmail.com'
         git config --global user.name 'userasd'
         git config --global --add safe.directory '*'
         cat > /etc/profile.d/cuda-env.sh << 'CUDAEOF'
