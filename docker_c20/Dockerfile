@@ -280,14 +280,28 @@ RUN update-alternatives --install /usr/bin/gcc gcc /usr/bin/gcc-11 110 \
 ENV CC=/usr/bin/gcc-11
 ENV CXX=/usr/bin/g++-11
 
-# ONNXRuntime
+# ============================================================================
+# ONNXRuntime + Symlinks para CMake
+# ============================================================================
 WORKDIR /tmp
 RUN wget -q https://github.com/microsoft/onnxruntime/releases/download/v1.16.3/onnxruntime-linux-aarch64-1.16.3.tgz \
     && tar -xzf onnxruntime-linux-aarch64-1.16.3.tgz -C /opt \
     && ln -s /opt/onnxruntime-linux-aarch64-1.16.3 /opt/onnxruntime \
     && rm onnxruntime-linux-aarch64-1.16.3.tgz
 
+# Crear symlinks para que CMake lo encuentre automáticamente
+RUN ln -s /opt/onnxruntime/include/* /usr/local/include/ \
+    && ln -s /opt/onnxruntime/lib/libonnxruntime.so* /usr/local/lib/ \
+    && ldconfig
+
 ENV ONNXRUNTIME_DIR=/opt/onnxruntime
+ENV LD_LIBRARY_PATH=/opt/onnxruntime/lib:${LD_LIBRARY_PATH}
+
+# Verificar instalación
+RUN echo " ONNX Runtime instalado " \
+    && ls -lh /opt/onnxruntime/lib/libonnxruntime.so* \
+    && ls -lh /usr/local/lib/libonnxruntime.so* \
+    && ldconfig -p | grep onnxruntime
 
 # Python 3.8 + Jupyter
 RUN apt-get update && apt-get install -y \
@@ -354,4 +368,4 @@ RUN ln -sf /usr/share/zoneinfo/America/Lima /etc/localtime && \
     echo "America/Lima" > /etc/timezone && \
     dpkg-reconfigure -fnoninteractive tzdata
 
-WORKDIR /Workspace
+WORKDIR /workspace
