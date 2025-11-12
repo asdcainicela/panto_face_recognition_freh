@@ -3,6 +3,66 @@
 #include <algorithm>
 #include <cmath>
 
+// Generar anchors para una escala específica
+static std::vector<std::vector<float>> generate_anchors(int feat_h, int feat_w, int stride) {
+    std::vector<std::vector<float>> anchors;
+    
+    // det_10g usa 2 anchors por celda (ratio 1:1)
+    std::vector<int> anchor_sizes = {stride * 1, stride * 2};
+    
+    for (int i = 0; i < feat_h; i++) {
+        for (int j = 0; j < feat_w; j++) {
+            // Centro del anchor
+            float cx = (j + 0.5f) * stride;
+            float cy = (i + 0.5f) * stride;
+            
+            // 2 anchors por celda con diferentes tamaños
+            for (int anchor_size : anchor_sizes) {
+                anchors.push_back({cx, cy, static_cast<float>(anchor_size), static_cast<float>(anchor_size)});
+            }
+        }
+    }
+    
+    return anchors;
+}
+
+// Decodificar box desde offset + anchor
+static cv::Rect decode_box(const std::vector<float>& anchor, const float* bbox_pred, float scale_x, float scale_y) {
+    float cx = anchor[0];
+    float cy = anchor[1];
+    float w = anchor[2];
+    float h = anchor[3];
+    
+    // Decodificar offsets (formato RetinaFace)
+    float pred_cx = cx + bbox_pred[0] * w;
+    float pred_cy = cy + bbox_pred[1] * h;
+    float pred_w = std::exp(bbox_pred[2]) * w;
+    float pred_h = std::exp(bbox_pred[3]) * h;
+    
+    // Convertir de centro-ancho a x1y1x2y2
+    float x1 = (pred_cx - pred_w * 0.5f) * scale_x;
+    float y1 = (pred_cy - pred_h * 0.5f) * scale_y;
+    float x2 = (pred_cx + pred_w * 0.5f) * scale_x;
+    float y2 = (pred_cy + pred_h * 0.5f) * scale_y;
+    
+    return cv::Rect(cv::Point(x1, y1), cv::Point(x2, y2));
+}
+
+// Decodificar landmarks desde offset + anchor
+static void decode_landmarks(const std::vector<float>& anchor, const float* kpss_pred, 
+                            cv::Point2f* landmarks, float scale_x, float scale_y) {
+    float cx = anchor[0];
+    float cy = anchor[1];
+    float w = anchor[2];
+    float h = anchor[3];
+    
+    for (int i = 0; i < 5; i++) {
+        float lm_x = (cx + kpss_pred[i * 2] * w) * scale_x;
+        float lm_y = (cy + kpss_pred[i * 2 + 1] * h) * scale_y;
+        landmarks[i] = cv::Point2f(lm_x, lm_y);
+    }
+}
+
 FaceDetector::FaceDetector(const std::string& model_path, bool use_cuda) 
     : env(ORT_LOGGING_LEVEL_WARNING, "FaceDetector") {
     
@@ -47,10 +107,15 @@ FaceDetector::FaceDetector(const std::string& model_path, bool use_cuda)
         
         spdlog::info("detector: {} inputs, {} outputs", num_input, num_output);
         
-        // det_10g tiene input dinámico [-1, -1], usamos 640x640 por defecto
+        // det_10g tiene input dinámico, usamos 640x640
         input_width = 640;
         input_height = 640;
-        spdlog::info("detector: usando input size {}x{}", input_width, input_height);
+        
+        // Threshold más bajo por defecto (los scores de det_10g son bajos)
+        conf_threshold = 0.3f;
+        
+        spdlog::info("detector: usando input size {}x{}, threshold {:.2f}", 
+                    input_width, input_height, conf_threshold);
         
     } catch (const std::exception& e) {
         spdlog::error("detector: error al cargar modelo: {}", e.what());
@@ -128,11 +193,6 @@ std::vector<Detection> FaceDetector::postprocess(const std::vector<Ort::Value>& 
                                                  const cv::Size& orig_size) {
     std::vector<Detection> detections;
     
-    // det_10g.onnx produce 9 outputs en 3 escalas:
-    // [0,1,2] = scores de 3 escalas
-    // [3,4,5] = boxes de 3 escalas
-    // [6,7,8] = kpss de 3 escalas
-    
     if (outputs.size() != 9) {
         spdlog::error("detector: se esperaban 9 outputs, recibidos: {}", outputs.size());
         return detections;
@@ -141,18 +201,41 @@ std::vector<Detection> FaceDetector::postprocess(const std::vector<Ort::Value>& 
     float scale_x = static_cast<float>(orig_size.width) / input_width;
     float scale_y = static_cast<float>(orig_size.height) / input_height;
     
+    // Strides y tamaños de feature maps para det_10g
+    // 640x640 input → [80x80, 40x40, 20x20] feature maps
+    struct ScaleInfo {
+        int feat_h, feat_w, stride;
+    };
+    
+    std::vector<ScaleInfo> scales = {
+        {80, 80, 8},   // 640/8 = 80
+        {40, 40, 16},  // 640/16 = 40
+        {20, 20, 32}   // 640/32 = 20
+    };
+    
     // Procesar las 3 escalas
     for (int scale_idx = 0; scale_idx < 3; scale_idx++) {
         int score_idx = scale_idx;           // 0, 1, 2
         int box_idx = scale_idx + 3;         // 3, 4, 5
         int kpss_idx = scale_idx + 6;        // 6, 7, 8
         
-        auto scores_shape = outputs[score_idx].GetTensorTypeAndShapeInfo().GetShape();
-        int num_anchors = static_cast<int>(scores_shape[0]);
-        
         auto* scores_data = outputs[score_idx].GetTensorData<float>();
         auto* boxes_data = outputs[box_idx].GetTensorData<float>();
         auto* kpss_data = outputs[kpss_idx].GetTensorData<float>();
+        
+        auto scores_shape = outputs[score_idx].GetTensorTypeAndShapeInfo().GetShape();
+        int num_anchors = static_cast<int>(scores_shape[0]);
+        
+        // Generar anchors para esta escala
+        auto anchors = generate_anchors(scales[scale_idx].feat_h, 
+                                       scales[scale_idx].feat_w, 
+                                       scales[scale_idx].stride);
+        
+        if (anchors.size() != static_cast<size_t>(num_anchors)) {
+            spdlog::warn("detector: mismatch anchors escala {}: generados {} vs esperados {}", 
+                        scale_idx, anchors.size(), num_anchors);
+            continue;
+        }
         
         // Procesar cada anchor
         for (int i = 0; i < num_anchors; i++) {
@@ -163,38 +246,29 @@ std::vector<Detection> FaceDetector::postprocess(const std::vector<Ort::Value>& 
             Detection det;
             det.confidence = score;
             
-            // Boxes: [x1, y1, x2, y2]
-            float x1 = boxes_data[i * 4 + 0] * scale_x;
-            float y1 = boxes_data[i * 4 + 1] * scale_y;
-            float x2 = boxes_data[i * 4 + 2] * scale_x;
-            float y2 = boxes_data[i * 4 + 3] * scale_y;
+            // Decodificar box
+            det.box = decode_box(anchors[i], &boxes_data[i * 4], scale_x, scale_y);
             
-            // Validar y clipear coordenadas
-            x1 = std::max(0.0f, std::min(x1, (float)orig_size.width - 1));
-            y1 = std::max(0.0f, std::min(y1, (float)orig_size.height - 1));
-            x2 = std::max(0.0f, std::min(x2, (float)orig_size.width));
-            y2 = std::max(0.0f, std::min(y2, (float)orig_size.height));
+            // Validar box - Más estricto
+            if (det.box.width < 30 || det.box.height < 30) continue;  // Min 30px
+            if (det.box.width > orig_size.width * 0.8) continue;  // Max 80% del frame
+            if (det.box.height > orig_size.height * 0.8) continue;
+            if (det.box.x < 0 || det.box.y < 0) continue;
+            if (det.box.x + det.box.width > orig_size.width) continue;
+            if (det.box.y + det.box.height > orig_size.height) continue;
             
-            if (x2 <= x1 || y2 <= y1) continue;
+            // Validar aspect ratio (rostros son ~1:1.2)
+            float aspect = static_cast<float>(det.box.width) / det.box.height;
+            if (aspect < 0.5f || aspect > 2.0f) continue;
             
-            float width = x2 - x1;
-            float height = y2 - y1;
+            // Decodificar landmarks
+            decode_landmarks(anchors[i], &kpss_data[i * 10], det.landmarks, scale_x, scale_y);
             
-            // Filtrar boxes muy pequeños
-            if (width < 10 || height < 10) continue;
-            
-            det.box = cv::Rect(cv::Point(x1, y1), cv::Point(x2, y2));
-            
-            // Landmarks: [x0, y0, x1, y1, ..., x4, y4]
-            for (int j = 0; j < 5; j++) {
-                float lm_x = kpss_data[i * 10 + j * 2] * scale_x;
-                float lm_y = kpss_data[i * 10 + j * 2 + 1] * scale_y;
-                
-                // Clipear landmarks dentro de la imagen
-                lm_x = std::max(0.0f, std::min(lm_x, (float)orig_size.width - 1));
-                lm_y = std::max(0.0f, std::min(lm_y, (float)orig_size.height - 1));
-                
-                det.landmarks[j] = cv::Point2f(lm_x, lm_y);
+            // Debug: Log detecciones con score alto
+            if (score > 0.4f) {
+                spdlog::info("  Escala {} anchor {}: score={:.3f}, box=[{},{},{},{}]",
+                            scale_idx, i, score, 
+                            det.box.x, det.box.y, det.box.width, det.box.height);
             }
             
             detections.push_back(det);
@@ -206,13 +280,14 @@ std::vector<Detection> FaceDetector::postprocess(const std::vector<Ort::Value>& 
     if (!detections.empty()) {
         nms(detections);
         spdlog::info("detector: {} rostros detectados", detections.size());
+    } else {
+        spdlog::warn("detector: no se detectaron rostros (threshold={:.2f})", conf_threshold);
     }
     
     return detections;
 }
 
 void FaceDetector::nms(std::vector<Detection>& detections) {
-    // Ordenar por confianza descendente
     std::sort(detections.begin(), detections.end(), 
              [](const Detection& a, const Detection& b) {
                  return a.confidence > b.confidence;
@@ -226,7 +301,6 @@ void FaceDetector::nms(std::vector<Detection>& detections) {
         
         kept.push_back(detections[i]);
         
-        // Suprimir boxes solapados
         for (size_t j = i + 1; j < detections.size(); j++) {
             if (suppressed[j]) continue;
             
