@@ -1,3 +1,12 @@
+cd /workspace/panto_face_recognition_freh/system
+
+# Recompilar
+./build.sh
+
+# Probar con tu video MP4
+./build/bin/test_detector_video models/retinaface.onnx videos/recording_main_*.mp4
+
+
 # Ver qué archivos de ONNX Runtime tienes
 ls -lh /usr/lib/*onnx* /usr/local/lib/*onnx* 2>/dev/null
 
