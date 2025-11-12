@@ -1,9 +1,86 @@
 #include "stream_capture.hpp"
 #include "draw_utils.hpp"
+#include "config.hpp"
 #include <spdlog/spdlog.h>
 #include <csignal>
 #include <atomic>
 #include <fstream>
+#include <map>
+#include <stdexcept>
+
+// Simple TOML parser (sin librería externa)
+class SimpleToml {
+private:
+    std::map<std::string, std::string> values;
+    
+    std::string trim(const std::string& s) {
+        auto start = s.find_first_not_of(" \t");
+        if (start == std::string::npos) return "";
+        auto end = s.find_last_not_of(" \t");
+        return s.substr(start, end - start + 1);
+    }
+    
+public:
+    bool load(const std::string& filename) {
+        std::ifstream file(filename);
+        if (!file.is_open()) {
+            spdlog::warn("no se pudo abrir config: {}", filename);
+            return false;
+        }
+        
+        std::string line, section;
+        while (std::getline(file, line)) {
+            line = trim(line);
+            if (line.empty() || line[0] == '#') continue;
+            
+            if (line[0] == '[' && line.back() == ']') {
+                section = line.substr(1, line.length() - 2);
+                continue;
+            }
+            
+            auto eq = line.find('=');
+            if (eq != std::string::npos) {
+                std::string key = trim(line.substr(0, eq));
+                std::string val = trim(line.substr(eq + 1));
+                
+                // Remover comillas
+                if (val.front() == '"' && val.back() == '"') {
+                    val = val.substr(1, val.length() - 2);
+                }
+                
+                std::string full_key = section.empty() ? key : section + "." + key;
+                values[full_key] = val;
+            }
+        }
+        
+        return true;
+    }
+    
+    std::string get(const std::string& key, const std::string& def = "") const {
+        auto it = values.find(key);
+        return it != values.end() ? it->second : def;
+    }
+    
+    int get_int(const std::string& key, int def = 0) const {
+        try {
+            return std::stoi(get(key));
+        } catch (...) {
+            return def;
+        }
+    }
+    
+    bool get_bool(const std::string& key, bool def = false) const {
+        std::string val = get(key);
+        return val == "true" || val == "1";
+    }
+    
+    void dump() const {
+        spdlog::debug("=== Config Loaded ===");
+        for (const auto& kv : values) {
+            spdlog::debug("  {}: {}", kv.first, kv.second);
+        }
+    }
+};
 
 std::atomic<bool> stop_signal(false);
 
@@ -12,24 +89,6 @@ void signal_handler(int signal) {
         spdlog::info("deteniendo sistema...");
         stop_signal = true;
     }
-}
-
-struct Config {
-    std::string stream_type = "main";
-    bool show_view = true;
-    bool show_info = true;
-    bool enable_record = false;
-    int duration = 0;
-    std::string profile = "config_1080p_roi.toml";
-};
-
-Config load_config() {
-    Config cfg;
-    
-    // TODO: Parsear config.toml aqui
-    // Por ahora valores por defecto
-    
-    return cfg;
 }
 
 std::string detect_resolution_config(const cv::Size& resolution) {
@@ -55,73 +114,101 @@ int main(int argc, char* argv[]) {
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
     
-    Config cfg = load_config();
+    // Parse argumentos
+    std::string config_file = "configs/config_1080p_roi.toml";
+    bool verbose = false;
     
-    // Parse args
     for (int i = 1; i < argc; ++i) {
         std::string arg = argv[i];
         if (arg == "--config" && i + 1 < argc) {
-            cfg.profile = argv[++i];
+            config_file = argv[++i];
+        } else if (arg == "--verbose" || arg == "-v") {
+            verbose = true;
+            spdlog::set_level(spdlog::level::debug);
         }
     }
     
-    std::string user = "admin";
-    std::string pass = "Panto2025";
-    std::string ip = "192.168.0.101";
-    int port = 554;
+    spdlog::info("=== PANTO Sistema de Reconocimiento ===");
+    spdlog::info("config: {}", config_file);
     
-    spdlog::info("iniciando panto...");
-    spdlog::info("perfil: {}", cfg.profile);
+    // Cargar configuración
+    SimpleToml config;
+    if (!config.load(config_file)) {
+        spdlog::warn("usando valores por defecto");
+    }
     
-    StreamCapture capture(user, pass, ip, port, cfg.stream_type);
+    if (verbose) {
+        config.dump();
+    }
+    
+    // Leer valores de config
+    std::string stream_type = "main";
+    bool enable_display = config.get_bool("output.display_output", true);
+    bool draw_fps = config.get_bool("output.draw_fps", true);
+    bool draw_detections = config.get_bool("output.draw_detections", true);
+    bool draw_roi = config.get_bool("output.draw_roi", true);
+    
+    // Credenciales (aún desde config.hpp, pero podrían venir de TOML)
+    std::string user = Config::DEFAULT_USER;
+    std::string pass = Config::DEFAULT_PASS;
+    std::string ip = Config::DEFAULT_IP;
+    int port = Config::DEFAULT_PORT;
+    
+    spdlog::info("conectando a rtsp://{}@{}:{}/{}", user, ip, port, stream_type);
+    
+    // Crear captura
+    StreamCapture capture(user, pass, ip, port, stream_type);
     capture.set_stop_signal(&stop_signal);
-    
-    if (cfg.enable_record) {
-        capture.enable_recording("../videos");
-    }
-    
-    if (cfg.duration > 0) {
-        capture.set_max_duration(cfg.duration);
-    }
     
     if (!capture.open()) {
         spdlog::error("error al abrir stream");
         return 1;
     }
     
-    // Detectar resolucion y sugerir config
+    // Detectar resolución y sugerir config óptimo
     cv::Mat first_frame;
     if (capture.read(first_frame)) {
         const auto& stats = capture.get_stats();
         std::string suggested = detect_resolution_config(stats.resolution);
-        spdlog::info("resolucion detectada: {}x{}", stats.resolution.width, stats.resolution.height);
-        spdlog::info("config sugerido: {}", suggested);
+        
+        spdlog::info("resolucion detectada: {}x{}", 
+                     stats.resolution.width, stats.resolution.height);
+        
+        if (suggested != config_file) {
+            spdlog::info("config sugerido: {}", suggested);
+        }
     }
     
-    if (cfg.show_view) {
-        std::string window_name = "panto - " + cfg.stream_type;
+    // Loop principal
+    if (enable_display) {
+        std::string window_name = "PANTO - " + stream_type;
         cv::namedWindow(window_name, cv::WINDOW_NORMAL);
-        cv::resizeWindow(window_name, 640, 480);
+        cv::resizeWindow(window_name, Config::DEFAULT_DISPLAY_WIDTH, 
+                        Config::DEFAULT_DISPLAY_HEIGHT);
         
         cv::Mat frame, display;
         while (capture.read(frame)) {
-            cv::resize(frame, display, cv::Size(640, 480));
+            cv::resize(frame, display, cv::Size(Config::DEFAULT_DISPLAY_WIDTH, 
+                                               Config::DEFAULT_DISPLAY_HEIGHT));
             
-            if (cfg.show_info) {
-                const auto& stats = capture.get_stats();
-                DrawUtils::DrawConfig config;
-                DrawUtils::draw_stream_info(display, stats, cfg.stream_type, config);
-            }
+            const auto& stats = capture.get_stats();
+            DrawUtils::DrawConfig draw_config;
+            draw_config.show_fps = draw_fps;
+            
+            DrawUtils::draw_stream_info(display, stats, stream_type, draw_config);
             
             cv::imshow(window_name, display);
             
             if (cv::waitKey(1) == 27) break;
             
-            capture.print_stats();
+            if (stats.frames % Config::DEFAULT_FPS_INTERVAL == 0) {
+                capture.print_stats();
+            }
         }
         
         cv::destroyWindow(window_name);
     } else {
+        // Headless mode
         cv::Mat frame;
         while (capture.read(frame)) {
             capture.print_stats();

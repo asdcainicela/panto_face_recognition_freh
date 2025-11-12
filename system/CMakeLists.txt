@@ -19,10 +19,10 @@ include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
 # ============================================
-# MODULAR SHARED LIBRARIES (1 .so per module)
+# MODULAR SHARED LIBRARIES
 # ============================================
 
-# 1. Utils library (base - sin dependencias)
+# 1. Utils library
 add_library(panto_utils SHARED src/utils.cpp)
 target_link_libraries(panto_utils 
     ${OpenCV_LIBS} 
@@ -34,11 +34,11 @@ set_target_properties(panto_utils PROPERTIES
     SOVERSION 1
 )
 
-# 2. Config library (solo headers, pero incluido por si crece)
+# 2. Config library (INTERFACE - solo headers)
 add_library(panto_config INTERFACE)
 target_include_directories(panto_config INTERFACE include)
 
-# 3. Draw utilities library (depende de config)
+# 3. Draw utilities library
 add_library(panto_draw SHARED src/draw_utils.cpp)
 target_link_libraries(panto_draw 
     ${OpenCV_LIBS}
@@ -50,7 +50,7 @@ set_target_properties(panto_draw PROPERTIES
     SOVERSION 1
 )
 
-# 4. Stream capture library (depende de utils, config, draw)
+# 4. Stream capture library
 add_library(panto_stream SHARED src/stream_capture.cpp)
 target_link_libraries(panto_stream 
     panto_utils
@@ -66,17 +66,17 @@ set_target_properties(panto_stream PROPERTIES
 )
 
 # ============================================
-# EXECUTABLES - Linkean solo lo que necesitan
+# EXECUTABLES
 # ============================================
 
-# Test: Solo grabar (necesita stream + utils)
+# Test: record (solo grabar)
 add_executable(record test/record.cpp)
 target_link_libraries(record 
     panto_stream
     panto_utils
 )
 
-# Test: Solo visualizar (necesita todo)
+# Test: view (solo visualizar)
 add_executable(view test/view.cpp)
 target_link_libraries(view 
     panto_stream
@@ -84,7 +84,7 @@ target_link_libraries(view
     panto_draw
 )
 
-# Test: Grabar + visualizar
+# Test: record + view
 add_executable(record_view test/record_view.cpp)
 target_link_libraries(record_view 
     panto_stream
@@ -112,17 +112,20 @@ install(TARGETS record view record_view panto
     RUNTIME DESTINATION bin
 )
 
+install(DIRECTORY configs/ DESTINATION configs)
+install(FILES config.toml DESTINATION .)
+
 # ============================================
 # BUILD INFO
 # ============================================
-message(STATUS "=================================")
+message(STATUS "================================")
 message(STATUS "PANTO Modular Build")
-message(STATUS "=================================")
+message(STATUS "================================")
 message(STATUS "Libraries:")
-message(STATUS "  - libpanto_utils.so    (base utilities)")
-message(STATUS "  - libpanto_draw.so     (drawing functions)")
-message(STATUS "  - libpanto_stream.so   (stream capture)")
+message(STATUS "  - libpanto_utils.so")
+message(STATUS "  - libpanto_draw.so")
+message(STATUS "  - libpanto_stream.so")
 message(STATUS "")
-message(STATUS "Build type: ${CMAKE_BUILD_TYPE}")
+message(STATUS "Build: ${CMAKE_BUILD_TYPE}")
 message(STATUS "OpenCV: ${OpenCV_VERSION}")
-message(STATUS "=================================")
+message(STATUS "================================")

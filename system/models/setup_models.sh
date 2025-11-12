@@ -1,39 +1,51 @@
 #!/bin/bash
 set -e
 
-CONFIG_FILE="../config.toml"
-MODEL_DIR="."
-
 echo "[INFO] Descargando modelos ONNX..."
-wget -q -N https://github.com/onnx/models/raw/main/vision/body_analysis/retinaface/model/retinaface.onnx
-wget -q -N https://github.com/deepinsight/insightface/releases/download/v1.0/arcface_r100.onnx
-wget -q -N https://github.com/xinntao/Real-ESRGAN/releases/download/v0.2.5/realesr_x4.onnx
 
-echo "[INFO] Convirtiendo modelos a TensorRT..."
-convert_model() {
-    local model=$1
-    local output="${model%.onnx}.trt"
-    if command -v trtexec &>/dev/null; then
-        trtexec --onnx="$model" --saveEngine="$output" --fp16 --workspace=2048 &>/dev/null && echo "[OK] $output generado"
-    else
-        echo "[WARN] TensorRT no encontrado, omitiendo conversión de $model"
-    fi
-}
-
-convert_model "retinaface.onnx"
-convert_model "arcface_r100.onnx"
-convert_model "realesr_x4.onnx"
-
-echo "[INFO] Verificando resultados..."
-if ls *.trt &>/dev/null; then
-    echo "[INFO] Motores TensorRT detectados. Actualizando config.toml..."
-    sed -i 's/use_tensorrt *= *.*/use_tensorrt = true/' "$CONFIG_FILE" 2>/dev/null || true
+# 1. RetinaFace (detección rostros) - ~27 MB
+if [ ! -f "retinaface.onnx" ]; then
+    echo "  - Descargando RetinaFace..."
+    wget -q --show-progress \
+        https://huggingface.co/TheEeeeLin/HivisionIDPhotos_matting/resolve/main/retinaface-resnet50.onnx \
+        -O retinaface.onnx
 else
-    echo "[INFO] No se generaron motores TensorRT. Desactivando en config.toml..."
-    sed -i 's/use_tensorrt *= *.*/use_tensorrt = false/' "$CONFIG_FILE" 2>/dev/null || true
+    echo "  - RetinaFace ya existe"
 fi
 
-echo "[INFO] Modelos disponibles:"
-ls -lh *.onnx *.trt 2>/dev/null || true
+# 2. ArcFace R100 (reconocimiento) - ~250 MB
+if [ ! -f "arcface_r100.onnx" ]; then
+    echo "  - Descargando ArcFace R100..."
+    wget -q --show-progress \
+        https://huggingface.co/garavv/arcface-onnx/resolve/main/arc.onnx \
+        -O arcface_r100.onnx
+else
+    echo "  - ArcFace R100 ya existe"
+fi
 
-echo "[DONE] Configuración de modelos completada."
+# 3. Real-ESRGAN x4 (super-resolución) - ~67 MB
+if [ ! -f "realesr_x4.onnx" ]; then
+    echo "  - Descargando Real-ESRGAN x4..."
+    wget -q --show-progress \
+        https://huggingface.co/qualcomm/Real-ESRGAN-x4plus/resolve/main/Real-ESRGAN-x4plus.onnx \
+        -O realesr_x4.onnx
+else
+    echo "  - Real-ESRGAN x4 ya existe"
+fi
+
+echo ""
+echo "[INFO] Modelos descargados:"
+ls -lh *.onnx 2>/dev/null || echo "  - Ninguno encontrado"
+
+echo ""
+echo "[INFO] Verificando TensorRT..."
+if command -v trtexec &>/dev/null; then
+    echo "  - TensorRT encontrado. Puedes convertir con:"
+    echo "    trtexec --onnx=modelo.onnx --saveEngine=modelo.trt --fp16"
+else
+    echo "  - TensorRT no encontrado. Usando ONNX Runtime."
+fi
+
+echo ""
+echo "[DONE] Configuración completada."
+echo "       Ejecuta desde raíz: ./build.sh"
