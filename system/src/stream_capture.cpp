@@ -1,6 +1,7 @@
 #include "stream_capture.hpp"
 #include "utils.hpp"
 #include "config.hpp"
+#include "draw_utils.hpp"
 #include <spdlog/spdlog.h>
 #include <thread>
 #include <iomanip>
@@ -11,9 +12,11 @@ StreamCapture::StreamCapture(const std::string& user, const std::string& pass,
                              const std::string& ip, int port, const std::string& stream_type)
     : user(user), pass(pass), ip(ip), port(port), stream_type(stream_type),
       frames(0), lost(0), current_fps(0.0), recording_enabled(false),
+      viewing_enabled(false), display_size(640, 480),
       stop_signal(nullptr), max_duration(0), fps_interval(Config::DEFAULT_FPS_INTERVAL) {
     
     pipeline = gst_pipeline(user, pass, ip, port, stream_type);
+    window_name = "panto - " + stream_type;
     start_time = std::chrono::steady_clock::now();
     start_fps = start_time;
     cached_stats = {0.0, 0, 0, cv::Size(0, 0)};
@@ -38,6 +41,11 @@ void StreamCapture::enable_recording(const std::string& output_dir) {
        << "_" << std::setfill('0') << std::setw(3) << ms.count() << ".mp4";
     
     output_filename = ss.str();
+}
+
+void StreamCapture::enable_viewing(const cv::Size& size) {
+    viewing_enabled = true;
+    display_size = size;
 }
 
 void StreamCapture::set_max_duration(int seconds) {
@@ -134,6 +142,57 @@ bool StreamCapture::read(cv::Mat& frame) {
     
     update_fps();
     return true;
+}
+
+void StreamCapture::run() {
+    if (!open()) {
+        spdlog::error("error al abrir stream {}", stream_type);
+        return;
+    }
+    
+    if (viewing_enabled) {
+        cv::namedWindow(window_name, cv::WINDOW_NORMAL);
+        cv::resizeWindow(window_name, display_size.width, display_size.height);
+        
+        if (stream_type == "main") {
+            cv::moveWindow(window_name, 0, 0);
+        } else {
+            cv::moveWindow(window_name, Config::WINDOW_OFFSET_X, Config::WINDOW_OFFSET_Y);
+        }
+    }
+    
+    cv::Mat frame, display;
+    
+    while (read(frame)) {
+        if (viewing_enabled) {
+            cv::resize(frame, display, display_size);
+            
+            const auto& stats = get_stats();
+            DrawUtils::DrawConfig config;
+            config.show_recording = is_recording();
+            if (is_recording()) {
+                config.color = cv::Scalar(0, 0, 255);
+            }
+            
+            DrawUtils::draw_stream_info(display, stats, stream_type, config);
+            DrawUtils::draw_recording_indicator(display, is_recording(), config);
+            
+            cv::imshow(window_name, display);
+            
+            if (cv::waitKey(1) == 27) {
+                if (stop_signal) *stop_signal = true;
+                break;
+            }
+        }
+        
+        print_stats();
+    }
+    
+    if (viewing_enabled) {
+        cv::destroyWindow(window_name);
+    }
+    
+    print_final_stats();
 }
 
 void StreamCapture::update_fps() {
