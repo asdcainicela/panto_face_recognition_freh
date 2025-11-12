@@ -14,7 +14,7 @@ int main(int argc, char* argv[]) {
     
     try {
         FaceDetector detector(model_path, true);
-        detector.set_conf_threshold(0.5f); // Bajar threshold para testing
+        detector.set_conf_threshold(0.5f);
         detector.set_nms_threshold(0.4f);
         
         cv::VideoCapture cap;

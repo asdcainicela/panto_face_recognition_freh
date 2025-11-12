@@ -135,6 +135,14 @@ target_link_libraries(test_detector
     ${OpenCV_LIBS}
 )
 
+# Test: diagnose retinaface (NUEVO)
+add_executable(diagnose_retinaface test/diagnose_retinaface.cpp)
+target_link_libraries(diagnose_retinaface
+    ${OpenCV_LIBS}
+    ${ONNXRUNTIME_LIBRARIES}
+    spdlog::spdlog
+)
+
 # ============================================
 # INSTALACIÓN
 # ============================================
@@ -143,7 +151,7 @@ install(TARGETS panto_utils panto_draw panto_stream panto_detector
     ARCHIVE DESTINATION lib
 )
 
-install(TARGETS record view record_view panto test_detector
+install(TARGETS record view record_view panto test_detector diagnose_retinaface
     RUNTIME DESTINATION bin
 )
 
@@ -160,6 +168,11 @@ message(STATUS "Libraries:")
 message(STATUS "  - libpanto_utils.so")
 message(STATUS "  - libpanto_draw.so")
 message(STATUS "  - libpanto_stream.so")
+message(STATUS "  - libpanto_detector.so")
+message(STATUS "")
+message(STATUS "Executables:")
+message(STATUS "  - test_detector")
+message(STATUS "  - diagnose_retinaface (NEW)")
 message(STATUS "")
 message(STATUS "Build: ${CMAKE_BUILD_TYPE}")
 message(STATUS "OpenCV: ${OpenCV_VERSION}")
