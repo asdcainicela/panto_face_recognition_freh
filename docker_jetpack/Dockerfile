@@ -175,8 +175,7 @@ RUN git clone --depth 1 --branch v3.3.0 https://github.com/catchorg/Catch2.git &
     cmake .. && make install && \
     cd /tmp && rm -rf Catch2
 
-RUN update-alternatives --set gcc /usr/bin/gcc-9 && \
-    update-alternatives --set g++ /usr/bin/g++-9
+RUN update-alternatives --set gcc /usr/bin/gcc-9
 
 ENV CC=/usr/bin/gcc-9
 ENV CXX=/usr/bin/g++-9
@@ -225,8 +224,7 @@ RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/ope
     && ldconfig \
     && cd / && rm -rf /tmp/opencv /tmp/opencv_contrib
 
-RUN update-alternatives --set gcc /usr/bin/gcc-11 && \
-    update-alternatives --set g++ /usr/bin/g++-11
+RUN update-alternatives --set gcc /usr/bin/gcc-11
 
 ENV CC=/usr/bin/gcc-11
 ENV CXX=/usr/bin/g++-11
