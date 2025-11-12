@@ -40,20 +40,6 @@ RUN wget -q https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}
     && rm -f cmake-${CMAKE_VERSION}-linux-aarch64.tar.gz
 
 RUN apt-get update && apt-get install -y \
-    nvidia-jetpack \
-    cuda-toolkit-11-4 \
-    libcudnn8 \
-    libcudnn8-dev \
-    libnvinfer8 \
-    libnvinfer-plugin8 \
-    libnvparsers8 \
-    libnvonnxparsers8 \
-    libnvinfer-dev \
-    python3-libnvinfer \
-    tensorrt \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN apt-get update && apt-get install -y \
     libjpeg-dev \
     libpng-dev \
     libtiff-dev \
@@ -235,7 +221,7 @@ RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/ope
         -D BUILD_opencv_cudacodec=ON \
         -D CMAKE_CXX_FLAGS="-O3" \
         .. \
-    && make -j4 \
+    && make -j2 \
     && make install \
     && ldconfig \
     && cd / && rm -rf /tmp/opencv /tmp/opencv_contrib
