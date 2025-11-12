@@ -127,7 +127,7 @@ target_link_libraries(panto
     panto_detector
 )
 
-# Test: face detection
+# Test: face detection con imagen/webcam
 add_executable(test_detector test/test_detector.cpp)
 target_link_libraries(test_detector
     panto_detector
@@ -135,7 +135,15 @@ target_link_libraries(test_detector
     ${OpenCV_LIBS}
 )
 
-# Test: diagnose retinaface (NUEVO)
+# Test: face detection con video MP4
+add_executable(test_detector_video test/test_detector_video.cpp)
+target_link_libraries(test_detector_video
+    panto_detector
+    ${OpenCV_LIBS}
+    spdlog::spdlog
+)
+
+# Test: diagnose retinaface (low-level)
 add_executable(diagnose_retinaface test/diagnose_retinaface.cpp)
 target_link_libraries(diagnose_retinaface
     ${OpenCV_LIBS}
@@ -151,7 +159,7 @@ install(TARGETS panto_utils panto_draw panto_stream panto_detector
     ARCHIVE DESTINATION lib
 )
 
-install(TARGETS record view record_view panto test_detector diagnose_retinaface
+install(TARGETS record view record_view panto test_detector test_detector_video diagnose_retinaface
     RUNTIME DESTINATION bin
 )
 
@@ -171,8 +179,13 @@ message(STATUS "  - libpanto_stream.so")
 message(STATUS "  - libpanto_detector.so")
 message(STATUS "")
 message(STATUS "Executables:")
+message(STATUS "  - record")
+message(STATUS "  - view")
+message(STATUS "  - record_view")
+message(STATUS "  - panto")
 message(STATUS "  - test_detector")
-message(STATUS "  - diagnose_retinaface (NEW)")
+message(STATUS "  - test_detector_video (NEW)")
+message(STATUS "  - diagnose_retinaface")
 message(STATUS "")
 message(STATUS "Build: ${CMAKE_BUILD_TYPE}")
 message(STATUS "OpenCV: ${OpenCV_VERSION}")
