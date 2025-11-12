@@ -79,6 +79,16 @@ export CUDA_HOME=/usr/local/cuda-11.4
 export PATH=/usr/local/cuda-11.4/bin:\$PATH
 export LD_LIBRARY_PATH=/usr/local/cuda-11.4/lib64:\$LD_LIBRARY_PATH
 BASHEOF
+        
+        if [ -d '/opt/onnxruntime' ]; then
+            echo '[INFO] Configurando ONNX Runtime symlinks...'
+            ln -sf /opt/onnxruntime/include/* /usr/local/include/ 2>/dev/null || true
+            ln -sf /opt/onnxruntime/lib/libonnxruntime.so* /usr/local/lib/ 2>/dev/null || true
+            echo 'export ONNXRUNTIME_DIR=/opt/onnxruntime' >> /root/.bashrc
+            echo 'export LD_LIBRARY_PATH=/opt/onnxruntime/lib:\$LD_LIBRARY_PATH' >> /root/.bashrc
+            ldconfig
+            echo '[OK] ONNX Runtime configurado'
+        fi
     " >/dev/null 2>&1
 fi
 
