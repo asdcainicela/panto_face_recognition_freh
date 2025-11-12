@@ -1,225 +1,260 @@
-/*
-================================================================================
-PANTO - MODELOS ONNX ACTUALIZADOS (2025)
-================================================================================
+# PANTO - Real-Time Face Recognition System
 
-# NUEVOS ENLACES DE DESCARGA
+Sistema de reconocimiento facial en tiempo real usando C++ para detección, tracking y almacenamiento en base de datos.
 
-1. RECONOCIMIENTO FACIAL - ArcFace R100
-   - Hugging Face: https://huggingface.co/garavv/arcface-onnx
-   - Descarga directa:
-     wget https://huggingface.co/garavv/arcface-onnx/resolve/main/arc.onnx?download=true -O models/arcface_r100.onnx
-
-2. SUPER-RESOLUCIÓN - Real-ESRGAN x4plus
-   - Hugging Face: https://huggingface.co/qualcomm/Real-ESRGAN-x4plus/blob/01179a4da7bf5ac91faca650e6afbf282ac93933/Real-ESRGAN-x4plus.onnx
-   - Descarga directa:
-     wget https://huggingface.co/qualcomm/Real-ESRGAN-x4plus/resolve/main/Real-ESRGAN-x4plus.onnx -O models/realesr_x4.onnx
-
-3. DETECCIÓN DE ROSTROS - RetinaFace (ResNet50)
-   - Hugging Face: https://huggingface.co/TheEeeeLin/HivisionIDPhotos_matting/blob/main/retinaface-resnet50.onnx
-   - Descarga directa:
-     wget https://huggingface.co/TheEeeeLin/HivisionIDPhotos_matting/resolve/main/retinaface-resnet50.onnx -O models/retinaface.onnx
-
-   Alternativa de exportación:
-   - GitHub: https://github.com/kingardor/retinaface-onnx
-   - Script de conversión disponible: export_onnx.py (desde .pth → .onnx)
-
-
-================================================================================
-NOTAS DE INTEGRACIÓN
-================================================================================
-
-1. Directorio de destino
-   Coloca todos los modelos descargados en:
-       panto/models/
-   y verifica que los nombres coincidan con los declarados en config.toml:
-       retinaface.onnx
-       arcface_r100.onnx
-       realesr_x4.onnx
-
-2. Compatibilidad de entrada/salida
-   - ArcFace: entrada 112x112 RGB, salida embedding de 512 dimensiones (float32)
-   - RetinaFace: entrada 640x640 o similar, salida con bounding boxes y landmarks
-   - Real-ESRGAN: entrada variable, idealmente múltiplos de 64 (x4 upscaling)
-
-3. Aceleración en Jetson Orin Nano
-   - Convierte los modelos ONNX a TensorRT para mayor rendimiento:
-         trtexec --onnx=models/arcface_r100.onnx --saveEngine=models/arcface_r100.trt
-         trtexec --onnx=models/retinaface.onnx --saveEngine=models/retinaface.trt
-   - En config.toml:
-         [performance]
-         use_tensorrt = true
-
-4. Recomendaciones
-   - Verifica licencias antes de uso comercial.
-   - Usa ONNX Runtime o TensorRT según disponibilidad de CUDA/cuDNN.
-   - Comprueba la coherencia de dimensiones antes del embedding.
-   - Guarda tus modelos en caché local (no dependas de descargas en tiempo de ejecución).
-
-================================================================================
-*/
-
-
-# PANTO - Reconocimiento Facial en C++
-
-Sistema de reconocimiento facial en tiempo real usando C++ para deteccion, tracking y almacenamiento de rostros en base de datos.
-
-**Hardware:** NVIDIA Jetson Orin Nano (8GB RAM)
+**Hardware Target:** NVIDIA Jetson Orin Nano (8GB RAM)
 
 ---
 
-## Estructura del Proyecto
+## 📋 Tabla de Contenidos
 
-```
-panto/
-├── config.toml
-├── configs/
-│   ├── config_4k.toml
-│   ├── config_1440p.toml
-│   ├── config_1080p_roi.toml
-│   ├── config_1080p_full.toml
-│   └── config_720p.toml
-├── models/
-│   ├── retinaface.onnx
-│   ├── arcface_r100.onnx
-│   └── realesr_x2.onnx
-├── data/
-│   ├── faces.db
-│   └── captures/
-├── include/
-│   ├── utils.hpp
-│   └── stream_capture.hpp
-├── src/
-│   ├── utils.cpp
-│   └── stream_capture.cpp
-│   ├── detector.cpp
-│   ├── tracker.cpp
-│   ├── recognizer.cpp
-│   └── database.cpp
-├── test/
-│   ├── record.cpp
-│   ├── view.cpp
-│   └── record_view.cpp
-├── build/
-│   ├── bin/
-│   │   ├── record
-│   │   ├── view
-│   │   ├── record_view
-│   │   └── panto
-│   └── lib/
-│       └── libstream_lib.so
-├── CMakeLists.txt
-├── build.sh
-└── run.sh
-└── main.cpp
-```
+- [Características](#características)
+- [Requisitos del Sistema](#requisitos-del-sistema)
+- [Instalación](#instalación)
+- [Descarga de Modelos](#descarga-de-modelos)
+- [Compilación](#compilación)
+- [Configuración](#configuración)
+- [Uso Rápido](#uso-rápido)
+- [Perfiles de Configuración](#perfiles-de-configuración)
+- [Base de Datos](#base-de-datos)
+- [Troubleshooting](#troubleshooting)
 
 ---
 
-## Perfiles de Configuracion
+## ✨ Características
 
-| Resolucion | Archivo | FPS | Precision | ROI | SR |
-|------------|---------|-----|-----------|-----|----|
-| 4K (3840x2160) | `config_4k.toml` | 18-22 | 97-99% | Opcional | Raro |
-| 1440p (2560x1440) | `config_1440p.toml` | 20-24 | 96-98% | Opcional | Ocasional |
-| 1080p + ROI | `config_1080p_roi.toml` | 22-25 | 94-97% | Si | Condicional |
-| 1080p Full | `config_1080p_full.toml` | 15-18 | 90-94% | No | Frecuente |
-| 720p (1280x720) | `config_720p.toml` | 18-22 | 86-90% | Si | Casi siempre |
-
-**Recomendado para Jetson Orin Nano:** `config_1080p_roi.toml`
-
----
-
-## Modelos Necesarios
-
-Todos los modelos son pre-entrenados. NO necesitas entrenar nada.
-
-### 1. Deteccion de Rostros - RetinaFace
-- Formato: ONNX
-- URL: https://github.com/onnx/models/tree/main/vision/body_analysis/retinaface
-- Archivo: `retinaface_mobilenet.onnx`
-
-### 2. Reconocimiento - ArcFace R100
-- Formato: ONNX
-- URL: https://github.com/deepinsight/insightface/tree/master/model_zoo
-- Archivo: `arcface_r100.onnx`
-- Embeddings: 512 dimensiones
-
-### 3. Super-Resolution - RealESR-General
-- Formato: ONNX
-- URL: https://github.com/xinntao/Real-ESRGAN
-- Archivo: `realesr_x2.onnx` o `realesr_x4.onnx`
-
-### 4. Tracking - ByteTrack
-- No requiere modelo
-- Implementado en codigo
-- Referencia: https://github.com/ifzhang/ByteTrack
+- ✅ Detección de rostros con RetinaFace
+- ✅ Tracking multi-objeto con ByteTrack
+- ✅ Reconocimiento facial con ArcFace (embeddings 512D)
+- ✅ Super-resolución condicional con Real-ESRGAN
+- ✅ Grabación de video en tiempo real
+- ✅ Almacenamiento en SQLite con embeddings
+- ✅ Soporte para múltiples resoluciones (720p - 4K)
+- ✅ Aceleración GPU con CUDA/TensorRT
+- ✅ ROI (Region of Interest) configurable
 
 ---
 
-## Dependencias
+## 🖥️ Requisitos del Sistema
+
+### Hardware
+- **Requerido:** NVIDIA Jetson Orin Nano (8GB RAM)
+- **Recomendado:** 32GB+ almacenamiento SSD
+- Cámara IP compatible con RTSP
+
+### Software
+- Ubuntu 20.04/22.04 (JetPack 5.x)
+- CUDA 11.4+
+- cuDNN 8.6+
+- GStreamer 1.0
+- CMake 3.10+
+- C++17 compatible compiler
+
+---
+
+## 📦 Instalación
+
+### 1. Dependencias del Sistema
 
 ```bash
-# OpenCV con CUDA
-sudo apt install libopencv-dev
+# Actualizar sistema
+sudo apt update && sudo apt upgrade -y
 
-# ONNX Runtime para Jetson
-wget https://nvidia.box.com/shared/static/...onnxruntime.tar.gz
-tar -xzvf onnxruntime.tar.gz
+# OpenCV con CUDA
+sudo apt install -y libopencv-dev
 
 # SQLite3
-sudo apt install libsqlite3-dev
+sudo apt install -y libsqlite3-dev
 
 # GStreamer
-sudo apt install libgstreamer1.0-dev libgstreamer-plugins-base1.0-dev
+sudo apt install -y \
+    libgstreamer1.0-dev \
+    libgstreamer-plugins-base1.0-dev \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad \
+    gstreamer1.0-plugins-ugly \
+    gstreamer1.0-libav
+
+# spdlog (logging)
+sudo apt install -y libspdlog-dev
+
+# TensorRT (ya incluido en JetPack)
+# Verificar: dpkg -l | grep tensorrt
+```
+
+### 2. ONNX Runtime para Jetson
+
+```bash
+# Descargar ONNX Runtime optimizado para Jetson
+cd ~/Downloads
+wget https://nvidia.box.com/shared/static/pmsqsiaw4pg9qrbeckcbymho6c01jj4z.gz \
+     -O onnxruntime-1.15.1-linux-aarch64.tar.gz
+
+# Extraer
+tar -xzf onnxruntime-1.15.1-linux-aarch64.tar.gz
+
+# Mover archivos al sistema
+sudo cp -r onnxruntime-linux-aarch64-1.15.1/include/* /usr/local/include/
+sudo cp -r onnxruntime-linux-aarch64-1.15.1/lib/* /usr/local/lib/
+
+# Actualizar library cache
+sudo ldconfig
+```
+
+### 3. Clonar Repositorio
+
+```bash
+cd ~
+git clone https://github.com/tu-usuario/panto.git
+cd panto
 ```
 
 ---
 
-## Compilacion
+## 🤖 Descarga de Modelos
+
+**Ver guía completa:** [MODELS.md](MODELS.md)
+
+### Descarga Rápida
 
 ```bash
-chmod +x build.sh
+# Crear directorio de modelos
+mkdir -p models
+cd models
+
+# 1. RetinaFace (detección de rostros)
+wget https://huggingface.co/TheEeeeLin/HivisionIDPhotos_matting/resolve/main/retinaface-resnet50.onnx \
+     -O retinaface.onnx
+
+# 2. ArcFace R100 (reconocimiento facial)
+wget https://huggingface.co/garavv/arcface-onnx/resolve/main/arc.onnx \
+     -O arcface_r100.onnx
+
+# 3. Real-ESRGAN x4 (super-resolución)
+wget https://huggingface.co/qualcomm/Real-ESRGAN-x4plus/resolve/main/Real-ESRGAN-x4plus.onnx \
+     -O realesr_x4.onnx
+
+cd ..
+```
+
+### Verificar Modelos
+
+```bash
+ls -lh models/
+# Deberías ver:
+# retinaface.onnx       (~27 MB)
+# arcface_r100.onnx     (~250 MB)
+# realesr_x4.onnx       (~67 MB)
+```
+
+---
+
+## 🔨 Compilación
+
+### Compilación Rápida
+
+```bash
+# Hacer ejecutables los scripts
+chmod +x build.sh clean.sh run.sh
+
+# Compilar proyecto
 ./build.sh
+
+# Opcional: compilar en modo Debug
+./build.sh Debug
 ```
 
-Esto genera:
-- Libreria compartida: `build/lib/libstream_lib.so`
-- Ejecutables de prueba: `build/bin/record`, `build/bin/view`, `build/bin/record_view`
-- Aplicacion principal: `build/bin/panto`
+### Compilación Manual
+
+```bash
+mkdir -p build
+cd build
+cmake -DCMAKE_BUILD_TYPE=Release ..
+make -j$(nproc)
+cd ..
+```
+
+### Salida Esperada
+
+```
+build/
+├── bin/
+│   ├── record          # Grabación sin display
+│   ├── view            # Visualización sin grabación
+│   ├── record_view     # Grabación + visualización
+│   └── panto           # Aplicación principal
+└── lib/
+    ├── libpanto_utils.so
+    ├── libpanto_draw.so
+    └── libpanto_stream.so
+```
 
 ---
 
-## Ejecucion Rapida
+## ⚙️ Configuración
 
-### Usando script run.sh
+### Configuración de Cámara
+
+Editar `config.toml`:
+
+```toml
+[camera]
+device_id = 0
+backend = "gstreamer"
+```
+
+Editar credenciales en código (por ahora):
+- **Usuario:** `admin`
+- **Contraseña:** `Panto2025`
+- **IP:** `192.168.0.101`
+- **Puerto:** `554`
+
+### Estructura de Directorios
 
 ```bash
-chmod +x run.sh
+# Crear directorios necesarios
+mkdir -p data/captures videos logs
+```
 
-# Grabar main stream hasta Ctrl+C
+---
+
+## 🚀 Uso Rápido
+
+### Script run.sh
+
+```bash
+# Ver opciones disponibles
+./run.sh
+
+# Grabar stream principal (hasta Ctrl+C)
 ./run.sh 1
 
-# Grabar main 60 segundos
+# Grabar 60 segundos
 ./run.sh 1 60
 
-# Ver ambos streams
+# Ver ambos streams (main + sub)
 ./run.sh 3
 
-# Ver solo main
+# Ver solo main stream
 ./run.sh 4
 
-# Grabar + ver main 30 segundos
+# Grabar + visualizar 30 segundos
 ./run.sh 6 30
 
-# Ejecutar PANTO principal
+# Ejecutar PANTO principal (1080p ROI)
 ./run.sh 8
+
+# PANTO en 720p
+./run.sh 9
+
+# PANTO en 4K
+./run.sh 10
 ```
 
-### Ejecucion Manual
+### Ejecución Manual
 
 ```bash
-# Solo grabar (sin visualizacion)
+# Solo grabar (headless)
 ./build/bin/record main          # Hasta Ctrl+C
 ./build/bin/record main 60       # 60 segundos
 ./build/bin/record sub 120       # Sub stream 120s
@@ -230,20 +265,41 @@ chmod +x run.sh
 ./build/bin/view sub             # Solo sub
 
 # Grabar + visualizar
-./build/bin/record_view main     # Hasta Ctrl+C
-./build/bin/record_view sub 60   # Sub 60 segundos
+./build/bin/record_view main
+./build/bin/record_view sub 60
 
-# Aplicacion principal PANTO
+# PANTO principal
 ./build/bin/panto --config configs/config_1080p_roi.toml
 ```
 
 ---
 
-## Base de Datos
+## 📊 Perfiles de Configuración
+
+| Perfil | Resolución | FPS | Precisión | ROI | SR |
+|--------|-----------|-----|-----------|-----|----|
+| `config_4k.toml` | 3840x2160 | 18-22 | 97-99% | No | Raro |
+| `config_1440p.toml` | 2560x1440 | 20-24 | 96-98% | No | Ocasional |
+| `config_1080p_roi.toml` | 1920x1080 | 22-25 | 94-97% | Sí | Condicional |
+| `config_1080p_full.toml` | 1920x1080 | 15-18 | 90-94% | No | Frecuente |
+| `config_720p.toml` | 1280x720 | 18-22 | 86-90% | Sí | Casi siempre |
+
+**✅ Recomendado:** `config_1080p_roi.toml` para Jetson Orin Nano
+
+### Ejemplo de Uso con Perfil
+
+```bash
+./build/bin/panto --config configs/config_720p.toml
+```
+
+---
+
+## 💾 Base de Datos
 
 ### Esquema SQLite
 
 ```sql
+-- Detecciones en tiempo real
 CREATE TABLE detections (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
@@ -254,6 +310,7 @@ CREATE TABLE detections (
     track_id INTEGER
 );
 
+-- Rostros conocidos
 CREATE TABLE faces (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     person_id TEXT UNIQUE,
@@ -266,114 +323,162 @@ CREATE INDEX idx_timestamp ON detections(timestamp);
 CREATE INDEX idx_track_id ON detections(track_id);
 ```
 
-### Almacenamiento
+### Ubicación de Datos
+
 - Base de datos: `data/faces.db`
-- Imagenes: `data/captures/{date}/{timestamp}.jpg`
-- Embeddings: Vector de 512 floats (2048 bytes)
+- Imágenes capturadas: `data/captures/YYYY-MM-DD/`
+- Videos: `videos/recording_*.mp4`
+- Logs: `logs/panto.log`
 
----
+### Consultas Útiles
 
-## Configuracion Principal
-
-Archivo: `config.toml`
-
-```toml
-[system]
-profile = "configs/config_1080p_roi.toml"
-models_path = "models/"
-data_path = "data/"
-
-[camera]
-device_id = 0
-backend = "gstreamer"
-
-[database]
-path = "data/faces.db"
-save_images = true
-images_path = "data/captures/"
-
-[performance]
-use_tensorrt = true
-num_threads = 4
-```
-
----
-
-## Arquitectura del Sistema
-
-```
-Frame Input (Camera)
-         |
-         v
-    Apply ROI (opcional)
-         |
-         v
-    Face Detection (RetinaFace)
-         |
-         v
-    Tracking (ByteTrack)
-         |
-         v
-    Super-Resolution (condicional)
-         |
-         v
-    Face Recognition (ArcFace)
-         |
-         v
-    Database Storage (SQLite)
-```
-
----
-
-## Calibracion Inicial
-
-### 1. Verificar ROI
 ```bash
-./panto --config configs/config_1080p_roi.toml --calibrate-roi
-```
+# Ver últimas 10 detecciones
+sqlite3 data/faces.db \
+  "SELECT * FROM detections ORDER BY timestamp DESC LIMIT 10;"
 
-### 2. Medir Tamanos de Rostro
-```bash
-./panto --config configs/config_1080p_roi.toml --measure-faces
-```
-
-### 3. Prueba de Performance
-```bash
-./panto --config configs/config_1080p_roi.toml --benchmark
+# Contar detecciones por día
+sqlite3 data/faces.db \
+  "SELECT DATE(timestamp), COUNT(*) FROM detections GROUP BY DATE(timestamp);"
 ```
 
 ---
 
-## Troubleshooting
+## 🐛 Troubleshooting
 
 ### FPS Bajo (<15)
-1. Desactivar SR: `superresolution.enabled = false`
-2. Reducir ROI: `width=640, height=360`
-3. Usar perfil mas bajo: `config_720p.toml`
-
-### No Detecta Rostros
-1. Verificar ROI con: `--calibrate-roi`
-2. Bajar threshold: `detection.confidence_threshold = 0.5`
-3. Reducir min size: `detection.min_face_size = 40`
-
-### Errores de Base de Datos
-1. Verificar permisos: `chmod 666 data/faces.db`
-2. Recrear schema: `sqlite3 data/faces.db < schema.sql`
-
----
-
-## Logs
 
 ```bash
-# Ver logs en tiempo real
-tail -f logs/panto.log
+# 1. Desactivar super-resolución
+# En config: superresolution.enabled = false
 
-# Consultar base de datos
-sqlite3 data/faces.db "SELECT * FROM detections ORDER BY timestamp DESC LIMIT 10;"
+# 2. Usar perfil más bajo
+./build/bin/panto --config configs/config_720p.toml
+
+# 3. Reducir ROI
+# En config: roi.width=640, roi.height=360
+```
+
+### No Detecta Rostros
+
+```bash
+# 1. Verificar modelos
+ls -lh models/
+# Deben existir los 3 archivos .onnx
+
+# 2. Calibrar ROI (pendiente implementar)
+# ./build/bin/panto --calibrate-roi
+
+# 3. Bajar threshold
+# En config: confidence_threshold = 0.5
+```
+
+### Error de Conexión RTSP
+
+```bash
+# Verificar cámara
+ping 192.168.0.101
+
+# Probar URL RTSP manualmente
+gst-launch-1.0 rtspsrc location=rtsp://admin:Panto2025@192.168.0.101:554/main ! fakesink
+
+# Revisar logs
+tail -f logs/panto.log
+```
+
+### Error de CUDA/TensorRT
+
+```bash
+# Verificar CUDA
+nvcc --version
+
+# Verificar TensorRT
+dpkg -l | grep tensorrt
+
+# Deshabilitar aceleración GPU temporalmente
+# En config: use_tensorrt = false, use_cuda = false
+```
+
+### Compilación Fallida
+
+```bash
+# Limpiar build
+./clean.sh
+
+# Verificar dependencias
+pkg-config --modversion opencv4
+pkg-config --modversion spdlog
+
+# Recompilar con verbose
+cd build
+cmake -DCMAKE_BUILD_TYPE=Release -DCMAKE_VERBOSE_MAKEFILE=ON ..
+make -j$(nproc)
 ```
 
 ---
 
-## Licencia
+## 📝 Logs
 
-MIT License
+### Ver Logs en Tiempo Real
+
+```bash
+tail -f logs/panto.log
+```
+
+### Niveles de Log
+
+Editar en `config.toml`:
+
+```toml
+[logging]
+level = "INFO"  # DEBUG, INFO, WARN, ERROR
+log_to_file = true
+log_to_console = true
+```
+
+---
+
+## 🗂️ Estructura del Proyecto
+
+```
+panto/
+├── build/              # Compilados (generado)
+├── configs/            # Perfiles de configuración
+├── data/               # Base de datos y capturas
+├── include/            # Headers C++
+├── logs/               # Archivos de log
+├── models/             # Modelos ONNX (descargar)
+├── src/                # Código fuente
+├── test/               # Programas de prueba
+├── videos/             # Grabaciones (generado)
+├── CMakeLists.txt      # Configuración CMake
+├── config.toml         # Configuración principal
+├── build.sh            # Script de compilación
+├── run.sh              # Script de ejecución rápida
+└── README.md           # Esta documentación
+```
+
+---
+
+## 📚 Documentación Adicional
+
+- **[MODELS.md](MODELS.md)** - Guía completa de modelos ONNX
+- **[ARCHITECTURE.md](ARCHITECTURE.md)** - Arquitectura del sistema
+
+---
+
+## 🔄 Flujo de Trabajo Típico
+
+```bash
+# 1. Primera vez: descargar modelos
+cd models && ./download_models.sh
+
+# 2. Compilar
+./build.sh
+
+# 3. Probar captura básica
+./run.sh 4  # Ver main stream
+
+# 4. Ejecutar sistema completo
+./run.sh 8  # PANTO con config 1080p ROI
+```
