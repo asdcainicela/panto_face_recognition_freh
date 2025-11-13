@@ -6,7 +6,7 @@
 
 ```bash
 cd models
-chmod +x download_models.sh
+chmod +x install_models.sh
 ./download_models.sh
 cd ..
 ```
