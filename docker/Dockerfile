@@ -251,11 +251,12 @@ ENV CC=/usr/bin/gcc-11
 ENV CXX=/usr/bin/g++-11
 
 # ONNX Runtime con soporte GPU para Jetson
+
 WORKDIR /tmp
-RUN wget -q https://github.com/microsoft/onnxruntime/releases/download/v1.19.2/onnxruntime-linux-aarch64-gpu-1.19.2.tgz \
-    && tar -xzf onnxruntime-linux-aarch64-gpu-1.19.2.tgz -C /opt \
-    && mv /opt/onnxruntime-linux-aarch64-gpu-1.19.2 /opt/onnxruntime \
-    && rm onnxruntime-linux-aarch64-gpu-1.19.2.tgz
+RUN wget -q https://github.com/microsoft/onnxruntime/releases/download/v1.17.0/onnxruntime-linux-aarch64-gpu-1.17.0.tgz \
+    && tar -xzf onnxruntime-linux-aarch64-gpu-1.17.0.tgz -C /opt \
+    && mv /opt/onnxruntime-linux-aarch64-gpu-1.17.0 /opt/onnxruntime \
+    && rm onnxruntime-linux-aarch64-gpu-1.17.0.tgz
 
 RUN ln -sf /opt/onnxruntime/include/* /usr/local/include/ \
     && ln -sf /opt/onnxruntime/lib/libonnxruntime.so* /usr/local/lib/ \
