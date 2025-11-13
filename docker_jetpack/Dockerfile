@@ -253,8 +253,6 @@ RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-dev \
     python3-numpy \
-    python3-zmq \
-    libzmq3-dev \
     && rm -rf /var/lib/apt/lists/*
 
 RUN python3 -m pip install --no-cache-dir --upgrade pip
@@ -265,8 +263,6 @@ RUN pip3 install --no-cache-dir \
     wheel \
     "numpy<2.0" \
     Cython
-
-RUN pip3 install --no-cache-dir --no-build-isolation pyzmq
 
 RUN pip3 install --no-cache-dir \
     notebook \
