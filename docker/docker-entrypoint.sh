@@ -3,7 +3,7 @@ set -e
 
 export DISPLAY=${DISPLAY:-:0}
 export XAUTHORITY=${XAUTHORITY:-/tmp/.docker.xauth}
-export LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/tegra:/usr/lib/aarch64-linux-gnu/tegra-egl:/usr/local/cuda/lib64:/opt/onnxruntime/lib:${LD_LIBRARY_PATH}
+export LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu/tegra:/usr/lib/aarch64-linux-gnu/tegra-egl:/usr/local/cuda/lib64:/usr/local/lib:${LD_LIBRARY_PATH}
 export GST_PLUGIN_PATH=/usr/lib/aarch64-linux-gnu/gstreamer-1.0
 
 ldconfig 2>/dev/null || true

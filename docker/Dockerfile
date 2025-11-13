@@ -1,15 +1,40 @@
-FROM nvcr.io/nvidia/l4t-jetpack:r35.4.1
+FROM dustynv/l4t-ml:r35.4.1
 
 ENV DEBIAN_FRONTEND=noninteractive \
     CUDA_HOME=/usr/local/cuda \
     PATH=${CUDA_HOME}/bin:${PATH} \
     LD_LIBRARY_PATH=${CUDA_HOME}/lib64:/usr/lib/aarch64-linux-gnu/tegra:/usr/lib/aarch64-linux-gnu/tegra-egl:${LD_LIBRARY_PATH} \
     DISPLAY=:0 \
-    OPENCV_VERSION=4.10.0 \
-    CMAKE_VERSION=3.28.1 \
-    OPENBLAS_CORETYPE=ARMV8 \
-    ONNXRUNTIME_VERSION=1.15.1
+    OPENBLAS_CORETYPE=ARMV8
 
+# ============================================
+# VERIFICAR Y LINKEAR ONNX Runtime para C++
+# ============================================
+# l4t-ml ya trae ONNX Runtime compilado, aseguramos que headers estén disponibles
+RUN ldconfig && \
+    echo "/usr/local/lib" > /etc/ld.so.conf.d/onnxruntime.conf && \
+    ldconfig
+
+# Si no existen headers, extraerlos del wheel de Python
+RUN if [ ! -d "/usr/local/include/onnxruntime" ]; then \
+        cd /tmp && \
+        python3 -c "import onnxruntime; import shutil; shutil.copytree(onnxruntime.__path__[0] + '/capi/include/onnxruntime', '/usr/local/include/onnxruntime')" || \
+        (pip3 download onnxruntime-gpu && \
+         unzip -q onnxruntime_gpu*.whl && \
+         mkdir -p /usr/local/include && \
+         cp -r onnxruntime/capi/include/onnxruntime /usr/local/include/ && \
+         cd / && rm -rf /tmp/*); \
+    fi
+
+# Verificar libonnxruntime.so
+RUN if [ ! -f "/usr/local/lib/libonnxruntime.so" ]; then \
+        find /usr -name "libonnxruntime.so*" -exec cp {} /usr/local/lib/ \; && \
+        ldconfig; \
+    fi
+
+# ============================================
+# Compiladores y toolchain C++
+# ============================================
 RUN apt-get update && apt-get install -y \
     software-properties-common \
     wget \
@@ -32,14 +57,9 @@ RUN apt-get update && apt-get install -y \
         --slave /usr/bin/gcov gcov /usr/bin/gcov-9 \
     && rm -rf /var/lib/apt/lists/*
 
-WORKDIR /tmp
-RUN wget -q https://github.com/Kitware/CMake/releases/download/v${CMAKE_VERSION}/cmake-${CMAKE_VERSION}-linux-aarch64.tar.gz \
-    && tar -xzf cmake-${CMAKE_VERSION}-linux-aarch64.tar.gz -C /opt \
-    && ln -sf /opt/cmake-${CMAKE_VERSION}-linux-aarch64/bin/cmake /usr/local/bin/cmake \
-    && ln -sf /opt/cmake-${CMAKE_VERSION}-linux-aarch64/bin/ctest /usr/local/bin/ctest \
-    && ln -sf /opt/cmake-${CMAKE_VERSION}-linux-aarch64/bin/cpack /usr/local/bin/cpack \
-    && rm -f cmake-${CMAKE_VERSION}-linux-aarch64.tar.gz
-
+# ============================================
+# Librerías multimedia y visión (complementar OpenCV de l4t-ml)
+# ============================================
 RUN apt-get update && apt-get install -y \
     libjpeg-dev \
     libpng-dev \
@@ -176,130 +196,19 @@ RUN git clone --depth 1 --branch v3.3.0 https://github.com/catchorg/Catch2.git &
     cmake .. && make install && \
     cd /tmp && rm -rf Catch2
 
-# Instalar Python ANTES de compilar OpenCV
-RUN apt-get update && apt-get install -y \
-    python3-pip \
-    python3-dev \
-    python3-numpy \
+# Librerías OpenGL para robot3D
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libglfw3-dev \
+    libglm-dev \
+    libx11-dev \
+    libxi-dev \
+    libxrandr-dev \
+    libxinerama-dev \
+    libxcursor-dev \
+    libopencv-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN python3 -m pip install --no-cache-dir --upgrade pip
-
-RUN pip3 install --no-cache-dir \
-    packaging \
-    setuptools \
-    wheel \
-    "numpy<2.0" \
-    Cython
-
-# Cambiar a GCC 9 para compilar OpenCV
-RUN update-alternatives --set gcc /usr/bin/gcc-9
-
-ENV CC=/usr/bin/gcc-9
-ENV CXX=/usr/bin/g++-9
-
-WORKDIR /tmp
-RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/opencv.git \
-    && git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/opencv_contrib.git \
-    && cd opencv && mkdir build && cd build \
-    && cmake \
-        -D CMAKE_BUILD_TYPE=RELEASE \
-        -D CMAKE_INSTALL_PREFIX=/usr/local \
-        -D CMAKE_CXX_STANDARD=17 \
-        -D OPENCV_EXTRA_MODULES_PATH=../../opencv_contrib/modules \
-        -D WITH_CUDA=ON \
-        -D CUDA_ARCH_BIN="8.7" \
-        -D CUDA_ARCH_PTX="" \
-        -D ENABLE_FAST_MATH=ON \
-        -D CUDA_FAST_MATH=ON \
-        -D WITH_CUBLAS=ON \
-        -D WITH_CUDNN=ON \
-        -D OPENCV_DNN_CUDA=ON \
-        -D WITH_LIBV4L=ON \
-        -D WITH_V4L=ON \
-        -D WITH_GSTREAMER=ON \
-        -D WITH_FFMPEG=ON \
-        -D WITH_GTK=ON \
-        -D WITH_QT=OFF \
-        -D WITH_OPENGL=ON \
-        -D WITH_TBB=OFF \
-        -D WITH_EIGEN=ON \
-        -D WITH_LAPACK=ON \
-        -D WITH_OPENJPEG=OFF \
-        -D WITH_JASPER=OFF \
-        -D BUILD_opencv_python2=OFF \
-        -D BUILD_opencv_python3=ON \
-        -D PYTHON3_EXECUTABLE=$(which python3) \
-        -D PYTHON3_INCLUDE_DIR=$(python3 -c "from distutils.sysconfig import get_python_inc; print(get_python_inc())") \
-        -D PYTHON3_PACKAGES_PATH=$(python3 -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())") \
-        -D PYTHON3_NUMPY_INCLUDE_DIRS=$(python3 -c "import numpy; print(numpy.get_include())") \
-        -D BUILD_TESTS=OFF \
-        -D BUILD_PERF_TESTS=OFF \
-        -D BUILD_EXAMPLES=OFF \
-        -D OPENCV_ENABLE_NONFREE=ON \
-        -D OPENCV_GENERATE_PKGCONFIG=ON \
-        -D BUILD_opencv_cudacodec=ON \
-        -D CMAKE_CXX_FLAGS="-O3" \
-        .. \
-    && make -j2 \
-    && make install \
-    && ldconfig \
-    && cd / && rm -rf /tmp/opencv /tmp/opencv_contrib
-
-# Mantener GCC 9 para ONNX Runtime (compatibilidad con CUDA 11.4)
-WORKDIR /tmp
-
-# Instalar dependencias adicionales para compilar ONNX Runtime
-RUN apt-get update && apt-get install -y \
-    libjemalloc-dev \
-    libatlas-base-dev \
-    libopenblas-dev \
-    re2c \
-    && rm -rf /var/lib/apt/lists/*
-
-# Clonar ONNX Runtime
-RUN git clone --recursive --branch v${ONNXRUNTIME_VERSION} \
-    https://github.com/microsoft/onnxruntime.git
-
-WORKDIR /tmp/onnxruntime
-
-# Compilar ONNX Runtime con CUDA y TensorRT
-# parallel=1 para evitar problemas de memoria
-RUN ./build.sh \
-    --config Release \
-    --build_shared_lib \
-    --parallel 1 \
-    --use_cuda \
-    --cuda_home /usr/local/cuda \
-    --cudnn_home /usr/lib/aarch64-linux-gnu \
-    --use_tensorrt \
-    --tensorrt_home /usr/lib/aarch64-linux-gnu \
-    --cmake_extra_defines \
-        CMAKE_CUDA_ARCHITECTURES=87 \
-        onnxruntime_BUILD_UNIT_TESTS=OFF \
-        onnxruntime_BUILD_BENCHMARKS=OFF \
-    --skip_tests \
-    --build_wheel \
-    --allow_running_as_root
-
-# Instalar el wheel generado
-RUN pip3 install /tmp/onnxruntime/build/Linux/Release/dist/*.whl
-
-# Copiar headers y librería a ubicaciones estándar
-RUN cp -r /tmp/onnxruntime/include/onnxruntime /usr/local/include/ && \
-    cp /tmp/onnxruntime/build/Linux/Release/libonnxruntime.so* /usr/local/lib/ && \
-    ldconfig
-
-# Limpiar para ahorrar espacio
-RUN rm -rf /tmp/onnxruntime
-
-# Volver a GCC 11 para el resto
-RUN update-alternatives --set gcc /usr/bin/gcc-11
-
-ENV CC=/usr/bin/gcc-11
-ENV CXX=/usr/bin/g++-11
-
-
+# Configurar LD_LIBRARY_PATH
 RUN echo "/usr/local/cuda/lib64" > /etc/ld.so.conf.d/cuda.conf \
     && echo "/usr/lib/aarch64-linux-gnu/tegra" > /etc/ld.so.conf.d/tegra.conf \
     && echo "/usr/lib/aarch64-linux-gnu/tegra-egl" >> /etc/ld.so.conf.d/tegra.conf \
@@ -314,31 +223,30 @@ RUN apt-get update && apt-get install -y --no-install-recommends locales \
 ENV LANG=es_ES.UTF-8 \
     LANGUAGE=es_ES:es \
     LC_ALL=es_ES.UTF-8
-        
-# Paquetes Python y JupyterLab
+
+RUN ln -sf /usr/share/zoneinfo/America/Lima /etc/localtime && \
+    echo "America/Lima" > /etc/timezone
+
+# Configuración Git
+RUN git config --global user.email "gerald.cainicela.a@gmail.com" \
+    && git config --global user.name "userasd" \
+    && git config --global --add safe.directory '*'
+
+# Python packages adicionales (l4t-ml ya tiene muchos)
 RUN pip3 install --no-cache-dir \
-    notebook \
-    jupyterlab \
-    ipykernel \
-    matplotlib \
-    pandas \
-    scipy \
-    scikit-learn \
-    seaborn \
-    pillow \
+    packaging \
+    setuptools \
+    wheel \
     tqdm
 
-# Temas para JupyterLab
+# JupyterLab temas (l4t-ml ya tiene Jupyter)
 RUN pip3 install --no-cache-dir \
     jupyterlab-catppuccin \
     jupyterlab-hale-theme \
     jupyterlab-theme-nord \
     jupyterlab-night || echo "Algunos temas no se pudieron instalar, continuando..."
 
-# Verificar extensiones instaladas
-RUN jupyter labextension list || true
-
-# Configuracion JupyterLab
+# Configuración JupyterLab
 RUN mkdir -p ~/.jupyter/lab/user-settings/@jupyterlab/apputils-extension && \
     echo '{ \
       "theme": "Catppuccin Mocha", \
@@ -366,42 +274,17 @@ RUN mkdir -p ~/.jupyter && \
 
 EXPOSE 8888
 
-RUN git config --global user.email "gerald.cainicela.a@gmail.com" \
-    && git config --global user.name "userasd" \
-    && git config --global --add safe.directory '*'
-
-RUN ln -sf /usr/share/zoneinfo/America/Lima /etc/localtime && \
-    echo "America/Lima" > /etc/timezone
-
+# Directorios de trabajo
 RUN mkdir -p /workspace /var/log /opt/tests
 
-# Instalar dependencias para robot3D (OpenGL, GLFW, Eigen, Armadillo, OpenCV headers)
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    build-essential \
-    cmake \
-    git \
-    libglfw3-dev \
-    libglm-dev \
-    libx11-dev \
-    libxi-dev \
-    libxrandr-dev \
-    libxinerama-dev \
-    libxcursor-dev \
-    libopencv-dev \
-    libeigen3-dev \
-    libarmadillo-dev \
-    libgl1-mesa-dev \
-    libglu1-mesa-dev \
-    libglew-dev \
-    && rm -rf /var/lib/apt/lists/*
+WORKDIR /workspace
 
+# Scripts de entrada y tests
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 COPY test/ /opt/tests/
 RUN chmod +x /opt/tests/*.sh /opt/tests/*.py
-
-WORKDIR /workspace
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["sleep", "infinity"]
