@@ -14,7 +14,6 @@ if command -v jupyter >/dev/null 2>&1; then
         --port=8888 \
         --allow-root \
         --no-browser \
-        --NotebookApp.token='nvidia' \
         > /var/log/jupyter.log 2>&1 &
 fi
 
