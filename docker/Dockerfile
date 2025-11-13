@@ -250,21 +250,28 @@ RUN update-alternatives --set gcc /usr/bin/gcc-11
 ENV CC=/usr/bin/gcc-11
 ENV CXX=/usr/bin/g++-11
 
-# ONNX Runtime con soporte GPU para Jetson
+# Compilación de ONNX Runtime con soporte CUDA + TensorRT
 
 WORKDIR /tmp
-RUN wget -q https://github.com/microsoft/onnxruntime/releases/download/v1.17.0/onnxruntime-linux-aarch64-gpu-1.17.0.tgz \
-    && tar -xzf onnxruntime-linux-aarch64-gpu-1.17.0.tgz -C /opt \
-    && mv /opt/onnxruntime-linux-aarch64-gpu-1.17.0 /opt/onnxruntime \
-    && rm onnxruntime-linux-aarch64-gpu-1.17.0.tgz
-
-RUN ln -sf /opt/onnxruntime/include/* /usr/local/include/ \
-    && ln -sf /opt/onnxruntime/lib/libonnxruntime.so* /usr/local/lib/ \
-    && ln -sf /opt/onnxruntime/lib/libonnxruntime_providers_*.so* /usr/local/lib/ 2>/dev/null || true \
-    && ldconfig
-
-ENV ONNXRUNTIME_DIR=/opt/onnxruntime \
-    LD_LIBRARY_PATH=/opt/onnxruntime/lib:${LD_LIBRARY_PATH}
+RUN git clone --recursive https://github.com/microsoft/onnxruntime.git && \
+    cd onnxruntime && \
+    ./build.sh \
+        --config Release \
+        --update --build \
+        --build_shared_lib \
+        --parallel \
+        --use_tensorrt \
+        --use_cuda \
+        --cuda_home /usr/local/cuda \
+        --cudnn_home /usr/lib/aarch64-linux-gnu \
+        --tensorrt_home /usr/lib/aarch64-linux-gnu \
+        --skip_tests \
+        --skip_onnx_tests \
+        --skip_submodule_sync && \
+    cp -r build/Linux/Release/lib* /usr/local/lib/ && \
+    cp -r include /usr/local/include/onnxruntime && \
+    ldconfig && \
+    cd / && rm -rf /tmp/onnxruntime
 
 RUN echo "/opt/onnxruntime/lib" > /etc/ld.so.conf.d/onnxruntime.conf \
     && echo "/usr/local/cuda/lib64" > /etc/ld.so.conf.d/cuda.conf \
