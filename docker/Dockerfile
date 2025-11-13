@@ -59,14 +59,21 @@ RUN apt-get update && apt-get install -y \
 
 # ============================================
 # Librerías multimedia y visión (complementar OpenCV de l4t-ml)
+# NOTA: Instalamos en fases separadas para evitar conflictos con OpenCV
 # ============================================
-RUN apt-get update && apt-get install -y \
+
+# Fase 1: Librerías de imagen básicas (sin dependencias OpenCV)
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg-dev \
     libpng-dev \
     libtiff-dev \
     libwebp-dev \
     libopenexr-dev \
     libopenjp2-7-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+# Fase 2: Librerías multimedia FFmpeg/codec
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libavcodec-dev \
     libavformat-dev \
     libswscale-dev \
@@ -76,6 +83,12 @@ RUN apt-get update && apt-get install -y \
     libx264-dev \
     libx265-dev \
     libvpx-dev \
+    ffmpeg \
+    v4l-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Fase 3: GStreamer
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libgstreamer1.0-dev \
     libgstreamer-plugins-base1.0-dev \
     libgstreamer-plugins-good1.0-dev \
@@ -85,17 +98,12 @@ RUN apt-get update && apt-get install -y \
     gstreamer1.0-tools \
     gstreamer1.0-plugins-good \
     gstreamer1.0-plugins-bad \
+    && rm -rf /var/lib/apt/lists/*
+
+# Fase 4: GTK y librerías de interfaz gráfica
+RUN apt-get update && apt-get install -y --no-install-recommends \
     libgtk-3-dev \
     libgtk2.0-dev \
-    libatlas-base-dev \
-    gfortran \
-    libeigen3-dev \
-    libtbb-dev \
-    libtbb2 \
-    libdc1394-22-dev \
-    libgl1-mesa-dev \
-    libglu1-mesa-dev \
-    libglew-dev \
     libxrender-dev \
     libxrandr-dev \
     libxcursor-dev \
@@ -105,9 +113,24 @@ RUN apt-get update && apt-get install -y \
     libsm6 \
     libice6 \
     x11-apps \
+    && rm -rf /var/lib/apt/lists/*
+
+# Fase 5: Librerías matemáticas y OpenGL
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libatlas-base-dev \
+    gfortran \
+    libeigen3-dev \
+    libtbb-dev \
+    libtbb2 \
+    libdc1394-22-dev \
+    libgl1-mesa-dev \
+    libglu1-mesa-dev \
+    libglew-dev \
     mesa-utils \
-    ffmpeg \
-    v4l-utils \
+    && rm -rf /var/lib/apt/lists/*
+
+# Fase 6: Utilidades de red
+RUN apt-get update && apt-get install -y --no-install-recommends \
     net-tools \
     iputils-ping \
     && rm -rf /var/lib/apt/lists/*
