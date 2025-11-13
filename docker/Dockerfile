@@ -250,13 +250,6 @@ RUN update-alternatives --set gcc /usr/bin/gcc-11
 ENV CC=/usr/bin/gcc-11
 ENV CXX=/usr/bin/g++-11
 
-# Instalar Python temporal solo para build
-RUN apt-get update && apt-get install -y \
-    python3.10 python3.10-dev python3.10-distutils \
-    && curl -sS https://bootstrap.pypa.io/get-pip.py | python3.10
-
-ENV PYTHON_BUILD=/usr/bin/python3.10
-
 # Compilación de ONNX Runtime con soporte CUDA + TensorRT
 
 WORKDIR /tmp
