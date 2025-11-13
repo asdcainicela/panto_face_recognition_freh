@@ -340,6 +340,26 @@ RUN ln -sf /usr/share/zoneinfo/America/Lima /etc/localtime && \
 
 RUN mkdir -p /workspace /var/log /opt/tests
 
+# Instalar dependencias para robot3D (OpenGL, GLFW, Eigen, Armadillo, OpenCV headers)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    cmake \
+    git \
+    libglfw3-dev \
+    libglm-dev \
+    libx11-dev \
+    libxi-dev \
+    libxrandr-dev \
+    libxinerama-dev \
+    libxcursor-dev \
+    libopencv-dev \
+    libeigen3-dev \
+    libarmadillo-dev \
+    libgl1-mesa-dev \
+    libglu1-mesa-dev \
+    libglew-dev \
+    && rm -rf /var/lib/apt/lists/*
+
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
