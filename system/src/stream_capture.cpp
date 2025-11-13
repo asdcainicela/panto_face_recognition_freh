@@ -73,18 +73,18 @@ bool StreamCapture::init_recording() {
     writer.open(output_filename, fourcc, fps, cv::Size(frame_width, frame_height));
     
     if (!writer.isOpened()) {
-        spdlog::error("no se pudo crear archivo: {}", output_filename);
+        spdlog::error("No se pudo crear: {}", output_filename);
         return false;
     }
     
-    spdlog::info("grabando {} en: {}", stream_type, output_filename);
+    spdlog::info("Grabando: {}", output_filename);
     return true;
 }
 
 void StreamCapture::stop_recording() {
     if (writer.isOpened()) {
         writer.release();
-        spdlog::info("grabacion finalizada: {}", output_filename);
+        spdlog::info("Grabación finalizada");
     }
 }
 
@@ -96,7 +96,7 @@ bool StreamCapture::open() {
         }
         return true;
     } catch (const std::exception& e) {
-        spdlog::error("error al abrir stream {}: {}", stream_type, e.what());
+        spdlog::error("Error abriendo stream: {}", e.what());
         return false;
     }
 }
@@ -113,7 +113,6 @@ bool StreamCapture::reconnect() {
         if (was_recording) init_recording();
         return true;
     } catch (...) {
-        spdlog::error("reconexion fallida para {}", stream_type);
         return false;
     }
 }
@@ -146,7 +145,7 @@ bool StreamCapture::read(cv::Mat& frame) {
 
 void StreamCapture::run() {
     if (!open()) {
-        spdlog::error("error al abrir stream {}", stream_type);
+        spdlog::error("Error al abrir stream");
         return;
     }
     
@@ -165,7 +164,7 @@ void StreamCapture::run() {
     
     while (read(frame)) {
         if (viewing_enabled) {
-            cv::resize(frame, display, display_size);
+            cv::resize(frame, display, display_size, 0, 0, cv::INTER_LINEAR);
             
             const auto& stats = get_stats();
             DrawUtils::DrawConfig config;
@@ -185,7 +184,9 @@ void StreamCapture::run() {
             }
         }
         
-        print_stats();
+        if (frames % fps_interval == 0) {
+            print_stats();
+        }
     }
     
     if (viewing_enabled) {
@@ -219,9 +220,9 @@ const StreamStats& StreamCapture::get_stats() {
 
 void StreamCapture::print_stats() const {
     if (frames % fps_interval == 0 && frames > 0) {
-        std::string rec_status = is_recording() ? " [REC]" : "";
-        spdlog::info("{} | frames: {} | fps: {} | perdidos: {}{}", 
-                     stream_type, frames, int(current_fps), lost, rec_status);
+        std::string rec = is_recording() ? " [REC]" : "";
+        spdlog::info("{} | frames: {} | fps: {} | lost: {}{}", 
+                     stream_type, frames, int(current_fps), lost, rec);
     }
 }
 
@@ -229,13 +230,12 @@ void StreamCapture::print_final_stats() const {
     auto end_time = std::chrono::steady_clock::now();
     double duration = std::chrono::duration<double>(end_time - start_time).count();
     
-    spdlog::info("=== stats {} ===", stream_type);
-    spdlog::info("duracion: {:.2f} s", duration);
-    spdlog::info("frames: {} | perdidos: {}", frames, lost);
-    spdlog::info("fps promedio: {:.2f}", frames / duration);
+    spdlog::info("=== {} stats ===", stream_type);
+    spdlog::info("Duración: {:.2f}s | Frames: {} | Lost: {}", duration, frames, lost);
+    spdlog::info("FPS promedio: {:.2f}", frames / duration);
     
     if (recording_enabled) {
-        spdlog::info("archivo: {}", output_filename);
+        spdlog::info("Archivo: {}", output_filename);
     }
 }
 

@@ -9,9 +9,10 @@ std::string gst_pipeline(const std::string& user, const std::string& pass,
     int latency = (stream_type == "main") ? Config::LATENCY_MAIN : Config::LATENCY_SUB;
     
     return "rtspsrc location=rtsp://" + user + ":" + pass + "@" + ip + ":" + 
-           std::to_string(port) + "/" + stream_type + " latency=" + std::to_string(latency) + " ! "
-           "rtph264depay ! h264parse ! nvv4l2decoder ! "
-           "nvvidconv ! video/x-raw, format=BGRx ! videoconvert ! appsink";
+           std::to_string(port) + "/" + stream_type + " latency=" + std::to_string(latency) + 
+           " ! rtph264depay ! h264parse ! nvv4l2decoder enable-max-performance=1" +
+           " ! nvvidconv ! video/x-raw(memory:NVMM), format=BGRx" +
+           " ! nvvidconv ! video/x-raw, format=BGR ! appsink max-buffers=1 drop=true";
 }
 
 cv::VideoCapture open_cap(const std::string& pipeline, int retries) {
@@ -21,13 +22,11 @@ cv::VideoCapture open_cap(const std::string& pipeline, int retries) {
     for (int i = 0; i < retries; ++i) {
         cap.open(pipeline, cv::CAP_GSTREAMER);
         if (cap.isOpened()) {
-            spdlog::info("conectado exitosamente");
+            spdlog::info("stream conectado");
             return cap;
         }
-        spdlog::warn("intento {}/{} fallido. reintentando en {}s...", 
-                     i+1, retries, Config::RETRY_DELAY_SEC);
+        spdlog::warn("reintento {}/{}", i+1, retries);
         std::this_thread::sleep_for(std::chrono::seconds(Config::RETRY_DELAY_SEC));
     }
-    spdlog::error("no se pudo conectar al pipeline");
-    throw std::runtime_error("no se pudo conectar a: " + pipeline);
+    throw std::runtime_error("no se pudo conectar al stream");
 }
