@@ -271,6 +271,17 @@ RUN echo "/opt/onnxruntime/lib" > /etc/ld.so.conf.d/onnxruntime.conf \
     && ldconfig
 
 # Instalar paquetes Python DESPUÉS de OpenCV
+
+# Localización e idioma en spanish 
+RUN apt-get update && apt-get install -y --no-install-recommends locales \
+    && locale-gen es_ES.UTF-8 \
+    && update-locale LANG=es_ES.UTF-8 LANGUAGE=es_ES:es LC_ALL=es_ES.UTF-8 \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV LANG=es_ES.UTF-8 \
+    LANGUAGE=es_ES:es \
+    LC_ALL=es_ES.UTF-8
+
 RUN pip3 install --no-cache-dir \
     notebook \
     jupyterlab \
