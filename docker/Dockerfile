@@ -278,13 +278,9 @@ RUN ./build.sh \
         CMAKE_CUDA_ARCHITECTURES=87 \
         onnxruntime_BUILD_UNIT_TESTS=OFF \
         onnxruntime_BUILD_BENCHMARKS=OFF \
-        onnxruntime_ENABLE_PYTHON=ON \
-        onnxruntime_BUILD_SHARED_LIB=ON \
-        CMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
     --skip_tests \
     --build_wheel \
-    --allow_running_as_root \
-    --cmake_generator Ninja
+    --allow_running_as_root
 
 # Instalar el wheel generado
 RUN pip3 install /tmp/onnxruntime/build/Linux/Release/dist/*.whl
