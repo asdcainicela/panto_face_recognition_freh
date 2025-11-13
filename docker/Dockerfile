@@ -264,11 +264,11 @@ RUN git clone --recursive --branch v${ONNXRUNTIME_VERSION} \
 WORKDIR /tmp/onnxruntime
 
 # Compilar ONNX Runtime con CUDA y TensorRT
-# Nota: Usamos --parallel 2 para no saturar la RAM en Jetson
+# parallel=1 para evitar problemas de memoria
 RUN ./build.sh \
     --config Release \
     --build_shared_lib \
-    --parallel 2 \
+    --parallel 1 \
     --use_cuda \
     --cuda_home /usr/local/cuda \
     --cudnn_home /usr/lib/aarch64-linux-gnu \
@@ -278,9 +278,13 @@ RUN ./build.sh \
         CMAKE_CUDA_ARCHITECTURES=87 \
         onnxruntime_BUILD_UNIT_TESTS=OFF \
         onnxruntime_BUILD_BENCHMARKS=OFF \
+        onnxruntime_ENABLE_PYTHON=ON \
+        onnxruntime_BUILD_SHARED_LIB=ON \
+        CMAKE_CUDA_COMPILER=/usr/local/cuda/bin/nvcc \
     --skip_tests \
     --build_wheel \
-    --allow_running_as_root
+    --allow_running_as_root \
+    --cmake_generator Ninja
 
 # Instalar el wheel generado
 RUN pip3 install /tmp/onnxruntime/build/Linux/Release/dist/*.whl
