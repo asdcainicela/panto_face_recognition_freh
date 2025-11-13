@@ -7,7 +7,8 @@ ENV DEBIAN_FRONTEND=noninteractive \
     DISPLAY=:0 \
     OPENCV_VERSION=4.10.0 \
     CMAKE_VERSION=3.28.1 \
-    OPENBLAS_CORETYPE=ARMV8
+    OPENBLAS_CORETYPE=ARMV8 \
+    ONNXRUNTIME_VERSION=1.15.1
 
 RUN apt-get update && apt-get install -y \
     software-properties-common \
@@ -245,25 +246,58 @@ RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/ope
     && ldconfig \
     && cd / && rm -rf /tmp/opencv /tmp/opencv_contrib
 
+# Mantener GCC 9 para ONNX Runtime (compatibilidad con CUDA 11.4)
+WORKDIR /tmp
+
+# Instalar dependencias adicionales para compilar ONNX Runtime
+RUN apt-get update && apt-get install -y \
+    libjemalloc-dev \
+    libatlas-base-dev \
+    libopenblas-dev \
+    re2c \
+    && rm -rf /var/lib/apt/lists/*
+
+# Clonar ONNX Runtime
+RUN git clone --recursive --branch v${ONNXRUNTIME_VERSION} \
+    https://github.com/microsoft/onnxruntime.git
+
+WORKDIR /tmp/onnxruntime
+
+# Compilar ONNX Runtime con CUDA y TensorRT
+# Nota: Usamos --parallel 2 para no saturar la RAM en Jetson
+RUN ./build.sh \
+    --config Release \
+    --build_shared_lib \
+    --parallel 2 \
+    --use_cuda \
+    --cuda_home /usr/local/cuda \
+    --cudnn_home /usr/lib/aarch64-linux-gnu \
+    --use_tensorrt \
+    --tensorrt_home /usr/lib/aarch64-linux-gnu \
+    --cmake_extra_defines \
+        CMAKE_CUDA_ARCHITECTURES=87 \
+        onnxruntime_BUILD_UNIT_TESTS=OFF \
+        onnxruntime_BUILD_BENCHMARKS=OFF \
+    --skip_tests \
+    --build_wheel
+
+# Instalar el wheel generado
+RUN pip3 install /tmp/onnxruntime/build/Linux/Release/dist/*.whl
+
+# Copiar headers y librería a ubicaciones estándar
+RUN cp -r /tmp/onnxruntime/include/onnxruntime /usr/local/include/ && \
+    cp /tmp/onnxruntime/build/Linux/Release/libonnxruntime.so* /usr/local/lib/ && \
+    ldconfig
+
+# Limpiar para ahorrar espacio
+RUN rm -rf /tmp/onnxruntime
+
+# Volver a GCC 11 para el resto
 RUN update-alternatives --set gcc /usr/bin/gcc-11
 
 ENV CC=/usr/bin/gcc-11
 ENV CXX=/usr/bin/g++-11
 
-# Instalación de ONNX Runtime precompilado por NVIDIA para Jetson
-WORKDIR /tmp
-RUN wget https://nvidia.box.com/shared/static/mvdcltm9ewdy2d5nurkiqorofz1s53ww.whl \
-        -O onnxruntime_gpu-1.15.1-cp38-cp38-linux_aarch64.whl && \
-    pip3 install onnxruntime_gpu-1.15.1-cp38-cp38-linux_aarch64.whl && \
-    rm onnxruntime_gpu-1.15.1-cp38-cp38-linux_aarch64.whl
-
-# Descargar headers de ONNX Runtime para desarrollo en C++
-RUN git clone --depth 1 --branch v1.15.1 https://github.com/microsoft/onnxruntime.git /tmp/ort-src && \
-    mkdir -p /usr/local/include/onnxruntime && \
-    cp -r /tmp/ort-src/include/onnxruntime/core/session /usr/local/include/onnxruntime/ && \
-    cp /tmp/ort-src/include/onnxruntime/core/framework/provider_options.h /usr/local/include/onnxruntime/ || true && \
-    rm -rf /tmp/ort-src && \
-    ldconfig
 
 RUN echo "/usr/local/cuda/lib64" > /etc/ld.so.conf.d/cuda.conf \
     && echo "/usr/lib/aarch64-linux-gnu/tegra" > /etc/ld.so.conf.d/tegra.conf \
