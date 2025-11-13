@@ -10,6 +10,7 @@ ENV DEBIAN_FRONTEND=noninteractive \
 # ============================================
 # VERIFICAR Y LINKEAR ONNX Runtime para C++
 # ============================================
+# l4t-ml ya trae ONNX Runtime compilado, aseguramos que headers estén disponibles
 RUN ldconfig && \
     echo "/usr/local/lib" > /etc/ld.so.conf.d/onnxruntime.conf && \
     ldconfig
@@ -57,17 +58,11 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # ============================================
-# BLOQUEAR OpenCV para evitar conflictos durante instalaciones
-# ============================================
-RUN apt-mark hold libopencv libopencv-dev libopencv-core libopencv-core-dev \
-    libopencv-highgui libopencv-highgui-dev libopencv-imgproc libopencv-imgproc-dev \
-    libopencv-python libopencv-contrib libopencv-contrib-dev 2>/dev/null || true
-
-# ============================================
-# Librerías multimedia y visión (con OpenCV protegido)
+# Librerías multimedia y visión (complementar OpenCV de l4t-ml)
+# NOTA: Instalamos en fases separadas para evitar conflictos con OpenCV
 # ============================================
 
-# Fase 1: Librerías de imagen básicas
+# Fase 1: Librerías de imagen básicas (sin dependencias OpenCV)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg-dev \
     libpng-dev \
@@ -140,17 +135,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
-# ============================================
-# DESBLOQUEAR OpenCV después de instalar multimedia
-# ============================================
-RUN apt-mark unhold libopencv libopencv-dev libopencv-core libopencv-core-dev \
-    libopencv-highgui libopencv-highgui-dev libopencv-imgproc libopencv-imgproc-dev \
-    libopencv-python libopencv-contrib libopencv-contrib-dev 2>/dev/null || true
-
-# ============================================
-# Librerías de desarrollo C++
-# ============================================
-RUN apt-get update && apt-get install -y --no-install-recommends \
+RUN apt-get update && apt-get install -y \
     libspdlog-dev \
     libgoogle-glog-dev \
     libgflags-dev \
@@ -193,7 +178,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     sudo \
     && rm -rf /var/lib/apt/lists/*
 
-# Compilar Google Test
 RUN cd /usr/src/gtest && \
     cmake . && \
     make && \
@@ -201,9 +185,6 @@ RUN cd /usr/src/gtest && \
 
 WORKDIR /tmp
 
-# ============================================
-# Librerías modernas de C++ (header-only)
-# ============================================
 RUN git clone --depth 1 https://github.com/CLIUtils/CLI11.git && \
     cd CLI11 && mkdir build && cd build && \
     cmake .. && make install && \
@@ -238,9 +219,7 @@ RUN git clone --depth 1 --branch v3.3.0 https://github.com/catchorg/Catch2.git &
     cmake .. && make install && \
     cd /tmp && rm -rf Catch2
 
-# ============================================
 # Librerías OpenGL para robot3D
-# ============================================
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglfw3-dev \
     libglm-dev \
@@ -249,6 +228,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrandr-dev \
     libxinerama-dev \
     libxcursor-dev \
+    # libopencv-dev \  # Ya incluido en l4t-ml base image
     && rm -rf /var/lib/apt/lists/*
 
 # Configurar LD_LIBRARY_PATH
@@ -258,9 +238,6 @@ RUN echo "/usr/local/cuda/lib64" > /etc/ld.so.conf.d/cuda.conf \
     && echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf \
     && ldconfig
 
-# ============================================
-# Configuración regional
-# ============================================
 RUN apt-get update && apt-get install -y --no-install-recommends locales \
     && locale-gen es_ES.UTF-8 en_US.UTF-8 \
     && update-locale LANG=es_ES.UTF-8 LANGUAGE=es_ES:es LC_ALL=es_ES.UTF-8 \
@@ -278,24 +255,21 @@ RUN git config --global user.email "gerald.cainicela.a@gmail.com" \
     && git config --global user.name "userasd" \
     && git config --global --add safe.directory '*'
 
-# ============================================
-# Python packages adicionales
-# ============================================
+# Python packages adicionales (l4t-ml ya tiene muchos)
 RUN pip3 install --no-cache-dir \
     packaging \
     setuptools \
     wheel \
     tqdm
 
-# ============================================
-# JupyterLab temas y configuración
-# ============================================
+# JupyterLab temas (l4t-ml ya tiene Jupyter)
 RUN pip3 install --no-cache-dir \
     jupyterlab-catppuccin \
     jupyterlab-hale-theme \
     jupyterlab-theme-nord \
     jupyterlab-night || echo "Algunos temas no se pudieron instalar, continuando..."
 
+# Configuración JupyterLab
 RUN mkdir -p ~/.jupyter/lab/user-settings/@jupyterlab/apputils-extension && \
     echo '{ \
       "theme": "Catppuccin Mocha", \
@@ -306,11 +280,13 @@ RUN mkdir -p ~/.jupyter/lab/user-settings/@jupyterlab/apputils-extension && \
       } \
     }' > ~/.jupyter/lab/user-settings/@jupyterlab/apputils-extension/themes.jupyterlab-settings
 
+# Configuración de traducción a español
 RUN mkdir -p ~/.jupyter/lab/user-settings/@jupyterlab/translation-extension && \
     echo '{ \
       "locale": "es-ES" \
     }' > ~/.jupyter/lab/user-settings/@jupyterlab/translation-extension/plugin.jupyterlab-settings
 
+# Configuración del servidor Jupyter
 RUN mkdir -p ~/.jupyter && \
     echo "c.ServerApp.ip = '0.0.0.0'" > ~/.jupyter/jupyter_server_config.py && \
     echo "c.ServerApp.port = 8888" >> ~/.jupyter/jupyter_server_config.py && \
@@ -321,30 +297,17 @@ RUN mkdir -p ~/.jupyter && \
 
 EXPOSE 8888
 
-# ============================================
 # Directorios de trabajo
-# ============================================
 RUN mkdir -p /workspace /var/log /opt/tests
 
 WORKDIR /workspace
 
-# ============================================
 # Scripts de entrada y tests
-# ============================================
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 COPY test/ /opt/tests/
 RUN chmod +x /opt/tests/*.sh /opt/tests/*.py
-
-# ============================================
-# Verificación OpenCV + CUDA
-# ============================================
-RUN echo '#!/bin/bash\n\
-echo "=== OpenCV + CUDA Verification ==="\n\
-python3 -c "import cv2; print(f\"OpenCV: {cv2.__version__}\"); print(f\"CUDA devices: {cv2.cuda.getCudaEnabledDeviceCount()}\")" || echo "Test with GPU required"\n\
-pkg-config --modversion opencv4 2>/dev/null || pkg-config --modversion opencv 2>/dev/null || echo "pkg-config check failed"\n\
-' > /usr/local/bin/test-opencv-cuda.sh && chmod +x /usr/local/bin/test-opencv-cuda.sh
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["sleep", "infinity"]
