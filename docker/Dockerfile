@@ -9,6 +9,15 @@ ENV DEBIAN_FRONTEND=noninteractive \
     CMAKE_VERSION=3.28.1 \
     OPENBLAS_CORETYPE=ARMV8
 
+RUN apt-get update && apt-get install -y --no-install-recommends locales \
+    && locale-gen es_ES.UTF-8 en_US.UTF-8 \
+    && update-locale LANG=es_ES.UTF-8 LANGUAGE=es_ES:es LC_ALL=es_ES.UTF-8 \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV LANG=es_ES.UTF-8 \
+    LANGUAGE=es_ES:es \
+    LC_ALL=es_ES.UTF-8
+
 RUN apt-get update && apt-get install -y \
     software-properties-common \
     wget \
@@ -270,18 +279,7 @@ RUN echo "/opt/onnxruntime/lib" > /etc/ld.so.conf.d/onnxruntime.conf \
     && echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf \
     && ldconfig
 
-# Instalar paquetes Python DESPUÉS de OpenCV
-
-# Localización e idioma en spanish and english (default)
-RUN apt-get update && apt-get install -y --no-install-recommends locales \
-    && locale-gen es_ES.UTF-8 en_US.UTF-8 \
-    && update-locale LANG=es_ES.UTF-8 LANGUAGE=es_ES:es LC_ALL=es_ES.UTF-8 \
-    && rm -rf /var/lib/apt/lists/*
-
-ENV LANG=es_ES.UTF-8 \
-    LANGUAGE=es_ES:es \
-    LC_ALL=es_ES.UTF-8
-
+# Paquetes Python y JupyterLab
 RUN pip3 install --no-cache-dir \
     notebook \
     jupyterlab \
@@ -295,6 +293,34 @@ RUN pip3 install --no-cache-dir \
     tqdm \
     onnxruntime
 
+# Temas para JupyterLab
+RUN pip3 install --no-cache-dir \
+    jupyterlab-catppuccin \
+    jupyterlab-hale-theme \
+    jupyterlab-theme-nord \
+    jupyterlab-night || echo "Algunos temas no se pudieron instalar, continuando..."
+
+# Verificar extensiones instaladas
+RUN jupyter labextension list || true
+
+# Configuracion JupyterLab
+RUN mkdir -p ~/.jupyter/lab/user-settings/@jupyterlab/apputils-extension && \
+    echo '{ \
+      "theme": "Catppuccin Mocha", \
+      "theme-scrollbars": true, \
+      "overrides": { \
+        "preferredDarkTheme": "Catppuccin Mocha", \
+        "preferredLightTheme": "Hale" \
+      } \
+    }' > ~/.jupyter/lab/user-settings/@jupyterlab/apputils-extension/themes.jupyterlab-settings
+
+# Configuración de traducción a español
+RUN mkdir -p ~/.jupyter/lab/user-settings/@jupyterlab/translation-extension && \
+    echo '{ \
+      "locale": "es-ES" \
+    }' > ~/.jupyter/lab/user-settings/@jupyterlab/translation-extension/plugin.jupyterlab-settings
+
+# Configuración del servidor Jupyter
 RUN mkdir -p ~/.jupyter && \
     echo "c.ServerApp.ip = '0.0.0.0'" > ~/.jupyter/jupyter_server_config.py && \
     echo "c.ServerApp.port = 8888" >> ~/.jupyter/jupyter_server_config.py && \
