@@ -27,20 +27,51 @@ else()
     set(CUDA_LIBRARIES "")
 endif()
 
+# Buscar ONNX Runtime headers
 find_path(ONNXRUNTIME_INCLUDE_DIRS onnxruntime_cxx_api.h 
-    HINTS /usr/local/include /usr/include /opt/onnxruntime/include)
-find_library(ONNXRUNTIME_LIBRARIES onnxruntime 
-    HINTS /usr/local/lib /usr/lib /opt/onnxruntime/lib)
+    HINTS 
+    /usr/local/include/onnxruntime/session
+    /usr/local/include/onnxruntime
+    /usr/local/include
+    /usr/include/onnxruntime/session
+    /usr/include/onnxruntime
+    /usr/include
+    /opt/onnxruntime/include
+)
+
+# Buscar ONNX Runtime library - incluir ubicación de Python package
+find_library(ONNXRUNTIME_LIBRARIES 
+    NAMES onnxruntime libonnxruntime
+    HINTS 
+    /usr/local/lib 
+    /usr/lib 
+    /usr/lib/aarch64-linux-gnu
+    /opt/onnxruntime/lib
+    /usr/local/lib/python3.8/dist-packages/onnxruntime/capi
+    /usr/local/lib/python3.10/dist-packages/onnxruntime/capi
+    /usr/local/lib/python3.11/dist-packages/onnxruntime/capi
+)
 
 if(NOT ONNXRUNTIME_INCLUDE_DIRS OR NOT ONNXRUNTIME_LIBRARIES)
-    message(FATAL_ERROR "ONNX Runtime not found")
+    message(FATAL_ERROR "ONNX Runtime not found\n"
+        "  Headers searched in: /usr/local/include/onnxruntime, /usr/include/onnxruntime\n"
+        "  Library searched in: /usr/local/lib, /usr/lib, Python dist-packages\n"
+        "  Found headers: ${ONNXRUNTIME_INCLUDE_DIRS}\n"
+        "  Found library: ${ONNXRUNTIME_LIBRARIES}")
 endif()
 
-message(STATUS "ONNX Runtime: ${ONNXRUNTIME_LIBRARIES}")
+message(STATUS "ONNX Runtime Include: ${ONNXRUNTIME_INCLUDE_DIRS}")
+message(STATUS "ONNX Runtime Library: ${ONNXRUNTIME_LIBRARIES}")
 
 include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${CMAKE_SOURCE_DIR}/include)
 include_directories(${ONNXRUNTIME_INCLUDE_DIRS})
+
+# Si los headers están en session/, incluir también el directorio padre
+if(ONNXRUNTIME_INCLUDE_DIRS MATCHES "session$")
+    get_filename_component(ONNXRUNTIME_PARENT_DIR ${ONNXRUNTIME_INCLUDE_DIRS} DIRECTORY)
+    include_directories(${ONNXRUNTIME_PARENT_DIR})
+endif()
 
 add_library(panto_utils SHARED src/utils.cpp)
 target_link_libraries(panto_utils 
@@ -164,4 +195,5 @@ message(STATUS "CUDA: ${CUDA_FOUND}")
 if(CUDA_FOUND)
     message(STATUS "  Version: ${CUDA_VERSION}")
 endif()
+message(STATUS "ONNX Runtime: ${ONNXRUNTIME_LIBRARIES}")
 message(STATUS "========================================")
