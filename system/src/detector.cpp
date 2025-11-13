@@ -69,29 +69,68 @@ FaceDetector::FaceDetector(const std::string& model_path, bool use_cuda)
     session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
     
     bool cuda_available = false;
+    
     if (use_cuda) {
         try {
-            OrtCUDAProviderOptions cuda_options;
-            cuda_options.device_id = 0;
-            cuda_options.arena_extend_strategy = 0;
-            cuda_options.gpu_mem_limit = 2ULL * 1024 * 1024 * 1024;
-            cuda_options.cudnn_conv_algo_search = OrtCudnnConvAlgoSearchExhaustive;
-            cuda_options.do_copy_in_default_stream = 1;
+            // Verificar si CUDA esta disponible
+            auto available_providers = Ort::GetAvailableProviders();
+            bool has_cuda = false;
             
-            session_options.AppendExecutionProvider_CUDA(cuda_options);
-            cuda_available = true;
+            spdlog::info("Providers disponibles:");
+            for (const auto& provider : available_providers) {
+                spdlog::info("  - {}", provider);
+                if (provider == "CUDAExecutionProvider") {
+                    has_cuda = true;
+                }
+            }
+            
+            if (has_cuda) {
+                // Metodo simple: configuracion minima
+                OrtCUDAProviderOptions cuda_opts{};
+                cuda_opts.device_id = 0;
+                
+                session_options.AppendExecutionProvider_CUDA(cuda_opts);
+                cuda_available = true;
+                spdlog::info("CUDA Provider habilitado");
+            } else {
+                spdlog::warn("CUDAExecutionProvider no encontrado");
+            }
+            
+        } catch (const Ort::Exception& e) {
+            spdlog::warn("No se pudo habilitar CUDA: {} (codigo: {})", e.what(), e.GetOrtErrorCode());
+            spdlog::info("Continuando con CPU...");
         } catch (const std::exception& e) {
-            spdlog::warn("CUDA no disponible: {}", e.what());
+            spdlog::warn("Error configurando CUDA: {}", e.what());
+        }
+    }
+    
+    // Fallback: intentar con configuracion minimalista
+    if (use_cuda && !cuda_available) {
+        try {
+            OrtCUDAProviderOptions minimal_opts{};
+            minimal_opts.device_id = 0;
+            minimal_opts.cudnn_conv_algo_search = OrtCudnnConvAlgoSearchDefault;
+            minimal_opts.do_copy_in_default_stream = 1;
+            
+            session_options.AppendExecutionProvider_CUDA(minimal_opts);
+            cuda_available = true;
+            spdlog::info("CUDA habilitado (configuracion minima)");
+            
+        } catch (...) {
+            spdlog::info("CUDA no disponible, usando CPU");
         }
     }
     
     try {
         session = std::make_unique<Ort::Session>(env, model_path.c_str(), session_options);
         
-        if (use_cuda && cuda_available) {
-            spdlog::info("Detector con CUDA habilitado");
-        } else if (use_cuda && !cuda_available) {
+        if (cuda_available) {
+            spdlog::info("Detector inicializado con aceleracion CUDA");
+        } else {
             spdlog::warn("DETECTOR USANDO CPU (muy lento)");
+            spdlog::warn("Para habilitar CUDA:");
+            spdlog::warn("  1. Verificar: python3 -c \"import onnxruntime; print(onnxruntime.get_available_providers())\"");
+            spdlog::warn("  2. Debe mostrar: ['CUDAExecutionProvider', 'CPUExecutionProvider']");
         }
         
         Ort::AllocatorWithDefaultOptions allocator;
@@ -108,11 +147,21 @@ FaceDetector::FaceDetector(const std::string& model_path, bool use_cuda)
             output_names.push_back(strdup(name.get()));
         }
         
+        // Verificar que tengamos 9 outputs
+        if (num_output != 9) {
+            spdlog::warn("Modelo retorna {} outputs (esperados: 9)", num_output);
+            spdlog::warn("Esto puede indicar un modelo incorrecto");
+            spdlog::warn("Descarga det_10g.onnx desde buffalo_l");
+        }
+        
         input_width = 640;
         input_height = 640;
         conf_threshold = 0.5f;
         nms_threshold = 0.3f;
         
+    } catch (const Ort::Exception& e) {
+        spdlog::error("Error cargando modelo: {} (codigo: {})", e.what(), e.GetOrtErrorCode());
+        throw;
     } catch (const std::exception& e) {
         spdlog::error("Error cargando modelo: {}", e.what());
         throw;
@@ -167,7 +216,7 @@ std::vector<Detection> FaceDetector::detect(const cv::Mat& img) {
         return postprocess(outputs, orig_size);
         
     } catch (const std::exception& e) {
-        spdlog::error("Inferencia falló: {}", e.what());
+        spdlog::error("Inferencia fallo: {}", e.what());
         return {};
     }
 }
