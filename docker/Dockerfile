@@ -57,15 +57,19 @@ RUN apt-get update && apt-get install -y \
     && rm -rf /var/lib/apt/lists/*
 
 # ============================================
-# BLOQUEAR OpenCV para evitar conflictos durante instalaciones
+# Librerías multimedia y visión
+# ESTRATEGIA: Crear archivo de preferencias para bloquear OpenCV de repositorios
 # ============================================
-RUN apt-mark hold libopencv libopencv-dev libopencv-core libopencv-core-dev \
-    libopencv-highgui libopencv-highgui-dev libopencv-imgproc libopencv-imgproc-dev \
-    libopencv-python libopencv-contrib libopencv-contrib-dev 2>/dev/null || true
 
-# ============================================
-# Librerías multimedia y visión (con OpenCV protegido)
-# ============================================
+# Crear preferencias de APT para prevenir instalación de OpenCV desde repos
+RUN mkdir -p /etc/apt/preferences.d && \
+    echo 'Package: libopencv*' > /etc/apt/preferences.d/opencv-block && \
+    echo 'Pin: release *' >> /etc/apt/preferences.d/opencv-block && \
+    echo 'Pin-Priority: -1' >> /etc/apt/preferences.d/opencv-block && \
+    echo '' >> /etc/apt/preferences.d/opencv-block && \
+    echo 'Package: *opencv*' >> /etc/apt/preferences.d/opencv-block && \
+    echo 'Pin: release *' >> /etc/apt/preferences.d/opencv-block && \
+    echo 'Pin-Priority: -1' >> /etc/apt/preferences.d/opencv-block
 
 # Fase 1: Librerías de imagen básicas
 RUN apt-get update && apt-get install -y --no-install-recommends \
@@ -77,33 +81,46 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libopenjp2-7-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Fase 2: Librerías multimedia FFmpeg/codec
+# Fase 2: Librerías multimedia FFmpeg/codec (sin las -dev que causan conflicto)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libavcodec-dev \
-    libavformat-dev \
-    libswscale-dev \
-    libavresample-dev \
-    libv4l-dev \
-    libxvidcore-dev \
-    libx264-dev \
-    libx265-dev \
-    libvpx-dev \
+    libavcodec58 \
+    libavformat58 \
+    libswscale5 \
+    libavresample4 \
+    libv4l-0 \
+    libxvidcore4 \
+    libx264-155 \
+    libx265-179 \
+    libvpx6 \
     ffmpeg \
     v4l-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Fase 3: GStreamer
+# Fase 2b: Headers de desarrollo de FFmpeg (selectivo)
 RUN apt-get update && apt-get install -y --no-install-recommends \
-    libgstreamer1.0-dev \
-    libgstreamer-plugins-base1.0-dev \
-    libgstreamer-plugins-good1.0-dev \
-    libgstreamer-plugins-bad1.0-dev \
+    libavcodec-dev \
+    libavformat-dev \
+    libswscale-dev \
+    && rm -rf /var/lib/apt/lists/* || \
+    echo "Some FFmpeg dev packages failed, continuing..."
+
+# Fase 3: GStreamer (runtime primero)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgstreamer1.0-0 \
+    gstreamer1.0-plugins-base \
+    gstreamer1.0-plugins-good \
+    gstreamer1.0-plugins-bad \
     gstreamer1.0-plugins-ugly \
     gstreamer1.0-libav \
     gstreamer1.0-tools \
-    gstreamer1.0-plugins-good \
-    gstreamer1.0-plugins-bad \
     && rm -rf /var/lib/apt/lists/*
+
+# Fase 3b: GStreamer dev headers (puede fallar, no es crítico)
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgstreamer1.0-dev \
+    libgstreamer-plugins-base1.0-dev \
+    && rm -rf /var/lib/apt/lists/* || \
+    echo "GStreamer dev packages failed, runtime is available"
 
 # Fase 4: GTK y librerías de interfaz gráfica
 RUN apt-get update && apt-get install -y --no-install-recommends \
