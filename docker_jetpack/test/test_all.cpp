@@ -1,6 +1,8 @@
 #include <onnxruntime_cxx_api.h>
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/cuda.hpp>
+#include <opencv2/cudaarithm.hpp>
+#include <cuda_runtime.h>
 #include <iostream>
 
 void test_onnx() {
