@@ -354,14 +354,5 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 COPY test/ /opt/tests/
 RUN chmod +x /opt/tests/*.sh /opt/tests/*.py
 
-# ============================================
-# Verificación OpenCV + CUDA
-# ============================================
-RUN echo '#!/bin/bash\n\
-echo "=== OpenCV + CUDA Verification ==="\n\
-python3 -c "import cv2; print(f\"OpenCV: {cv2.__version__}\"); print(f\"CUDA devices: {cv2.cuda.getCudaEnabledDeviceCount()}\")" || echo "Test with GPU required"\n\
-pkg-config --modversion opencv4 2>/dev/null || pkg-config --modversion opencv 2>/dev/null || echo "pkg-config check failed"\n\
-' > /usr/local/bin/test-opencv-cuda.sh && chmod +x /usr/local/bin/test-opencv-cuda.sh
-
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["sleep", "infinity"]
