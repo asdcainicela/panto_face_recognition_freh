@@ -175,6 +175,23 @@ RUN git clone --depth 1 --branch v3.3.0 https://github.com/catchorg/Catch2.git &
     cmake .. && make install && \
     cd /tmp && rm -rf Catch2
 
+# Instalar Python ANTES de compilar OpenCV
+RUN apt-get update && apt-get install -y \
+    python3-pip \
+    python3-dev \
+    python3-numpy \
+    && rm -rf /var/lib/apt/lists/*
+
+RUN python3 -m pip install --no-cache-dir --upgrade pip
+
+RUN pip3 install --no-cache-dir \
+    packaging \
+    setuptools \
+    wheel \
+    "numpy<2.0" \
+    Cython
+
+# Cambiar a GCC 9 para compilar OpenCV
 RUN update-alternatives --set gcc /usr/bin/gcc-9
 
 ENV CC=/usr/bin/gcc-9
@@ -210,7 +227,11 @@ RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/ope
         -D WITH_OPENJPEG=OFF \
         -D WITH_JASPER=OFF \
         -D BUILD_opencv_python2=OFF \
-        -D BUILD_opencv_python3=OFF \
+        -D BUILD_opencv_python3=ON \
+        -D PYTHON3_EXECUTABLE=$(which python3) \
+        -D PYTHON3_INCLUDE_DIR=$(python3 -c "from distutils.sysconfig import get_python_inc; print(get_python_inc())") \
+        -D PYTHON3_PACKAGES_PATH=$(python3 -c "from distutils.sysconfig import get_python_lib; print(get_python_lib())") \
+        -D PYTHON3_NUMPY_INCLUDE_DIRS=$(python3 -c "import numpy; print(numpy.get_include())") \
         -D BUILD_TESTS=OFF \
         -D BUILD_PERF_TESTS=OFF \
         -D BUILD_EXAMPLES=OFF \
@@ -249,21 +270,7 @@ RUN echo "/opt/onnxruntime/lib" > /etc/ld.so.conf.d/onnxruntime.conf \
     && echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf \
     && ldconfig
 
-RUN apt-get update && apt-get install -y \
-    python3-pip \
-    python3-dev \
-    python3-numpy \
-    && rm -rf /var/lib/apt/lists/*
-
-RUN python3 -m pip install --no-cache-dir --upgrade pip
-
-RUN pip3 install --no-cache-dir \
-    packaging \
-    setuptools \
-    wheel \
-    "numpy<2.0" \
-    Cython
-
+# Instalar paquetes Python DESPUÉS de OpenCV
 RUN pip3 install --no-cache-dir \
     notebook \
     jupyterlab \
