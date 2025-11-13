@@ -294,13 +294,13 @@ RUN git config --global user.email "gerald.cainicela.a@gmail.com" \
 RUN ln -sf /usr/share/zoneinfo/America/Lima /etc/localtime && \
     echo "America/Lima" > /etc/timezone
 
-RUN mkdir -p /workspace /var/log /workspace/test
+RUN mkdir -p /workspace /var/log /opt/tests
 
 COPY docker-entrypoint.sh /usr/local/bin/
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
-COPY test/ /workspace/test/
-RUN chmod +x /workspace/test/*.sh /workspace/test/*.py
+COPY test/ /opt/tests/
+RUN chmod +x /opt/tests/*.sh /opt/tests/*.py
 
 WORKDIR /workspace
 

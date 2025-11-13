@@ -15,6 +15,10 @@ docker build -t jetson-orin-cpp20 .
 ./run.sh
 ```
 
+# Dentro del contenedor:
+cd /opt/tests
+./verify_all.sh
+
 ## Workspace
 
 `~/jetson_workspace/` → `/workspace`
