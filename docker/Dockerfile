@@ -9,15 +9,6 @@ ENV DEBIAN_FRONTEND=noninteractive \
     CMAKE_VERSION=3.28.1 \
     OPENBLAS_CORETYPE=ARMV8
 
-RUN apt-get update && apt-get install -y --no-install-recommends locales \
-    && locale-gen es_ES.UTF-8 en_US.UTF-8 \
-    && update-locale LANG=es_ES.UTF-8 LANGUAGE=es_ES:es LC_ALL=es_ES.UTF-8 \
-    && rm -rf /var/lib/apt/lists/*
-
-ENV LANG=es_ES.UTF-8 \
-    LANGUAGE=es_ES:es \
-    LC_ALL=es_ES.UTF-8
-
 RUN apt-get update && apt-get install -y \
     software-properties-common \
     wget \
@@ -279,6 +270,15 @@ RUN echo "/opt/onnxruntime/lib" > /etc/ld.so.conf.d/onnxruntime.conf \
     && echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf \
     && ldconfig
 
+RUN apt-get update && apt-get install -y --no-install-recommends locales \
+    && locale-gen es_ES.UTF-8 en_US.UTF-8 \
+    && update-locale LANG=es_ES.UTF-8 LANGUAGE=es_ES:es LC_ALL=es_ES.UTF-8 \
+    && rm -rf /var/lib/apt/lists/*
+
+ENV LANG=es_ES.UTF-8 \
+    LANGUAGE=es_ES:es \
+    LC_ALL=es_ES.UTF-8
+        
 # Paquetes Python y JupyterLab
 RUN pip3 install --no-cache-dir \
     notebook \
