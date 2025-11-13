@@ -88,19 +88,10 @@ FaceDetector::FaceDetector(const std::string& model_path, bool use_cuda)
     try {
         session = std::make_unique<Ort::Session>(env, model_path.c_str(), session_options);
         
-        auto providers = session->GetProviders();
-        bool cuda_active = false;
-        for (const auto& provider : providers) {
-            if (provider.find("CUDA") != std::string::npos) {
-                cuda_active = true;
-                break;
-            }
-        }
-        
-        if (use_cuda && !cuda_active) {
-            spdlog::error("⚠️  DETECTOR USANDO CPU (muy lento)");
-        } else if (cuda_active) {
-            spdlog::info("✓ Detector con CUDA activo");
+        if (use_cuda && cuda_available) {
+            spdlog::info("Detector con CUDA habilitado");
+        } else if (use_cuda && !cuda_available) {
+            spdlog::warn("DETECTOR USANDO CPU (muy lento)");
         }
         
         Ort::AllocatorWithDefaultOptions allocator;
@@ -198,16 +189,15 @@ std::vector<Detection> FaceDetector::postprocess(const std::vector<Ort::Value>& 
     };
     
     std::vector<ScaleInfo> scales = {
-        {80, 80, 8},   // 640/8 = 80
-        {40, 40, 16},  // 640/16 = 40
-        {20, 20, 32}   // 640/32 = 20
+        {80, 80, 8},
+        {40, 40, 16},
+        {20, 20, 32}
     };
     
-    // Procesar las 3 escalas
     for (int scale_idx = 0; scale_idx < 3; scale_idx++) {
-        int score_idx = scale_idx;           // 0, 1, 2
-        int box_idx = scale_idx + 3;         // 3, 4, 5
-        int kpss_idx = scale_idx + 6;        // 6, 7, 8
+        int score_idx = scale_idx;
+        int box_idx = scale_idx + 3;
+        int kpss_idx = scale_idx + 6;
         
         auto* scores_data = outputs[score_idx].GetTensorData<float>();
         auto* boxes_data = outputs[box_idx].GetTensorData<float>();
