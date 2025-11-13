@@ -57,7 +57,7 @@ for pkg in packages:
 "
 echo ""
 
-cd /workspace/test
+cd /opt/tests
 
 echo "Building C++ Tests"
 mkdir -p build && cd build
@@ -71,7 +71,7 @@ else
 fi
 echo ""
 
-cd /workspace/test
+cd /opt/tests
 
 echo "Running Python Tests"
 python3 test_all.py
