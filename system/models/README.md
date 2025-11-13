@@ -4,10 +4,13 @@
 
 **IMPORTANTE:** Ejecutar desde la raíz del proyecto:
 
+# Para Ubuntu/Debian
+apt-get update && apt-get install -y unzip
+
 ```bash
 cd models
 chmod +x install_models.sh
-./download_models.sh
+./install_models.sh
 cd ..
 ```
 
