@@ -205,7 +205,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxrandr-dev \
     libxinerama-dev \
     libxcursor-dev \
-    libopencv-dev \
+    # libopencv-dev \  # Ya incluido en l4t-ml base image
     && rm -rf /var/lib/apt/lists/*
 
 # Configurar LD_LIBRARY_PATH
