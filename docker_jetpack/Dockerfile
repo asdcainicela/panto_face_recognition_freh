@@ -277,14 +277,13 @@ RUN pip3 install --no-cache-dir \
     tqdm \
     onnxruntime
 
-RUN jupyter notebook --generate-config && \
-    python3 -c "from notebook.auth import passwd; print(passwd('nvidia'))" > /tmp/jupyter_pass.txt && \
-    echo "c.NotebookApp.ip = '0.0.0.0'" >> ~/.jupyter/jupyter_notebook_config.py && \
-    echo "c.NotebookApp.port = 8888" >> ~/.jupyter/jupyter_notebook_config.py && \
-    echo "c.NotebookApp.allow_root = True" >> ~/.jupyter/jupyter_notebook_config.py && \
-    echo "c.NotebookApp.open_browser = False" >> ~/.jupyter/jupyter_notebook_config.py && \
-    echo "c.NotebookApp.password = '$(cat /tmp/jupyter_pass.txt)'" >> ~/.jupyter/jupyter_notebook_config.py && \
-    rm /tmp/jupyter_pass.txt
+RUN mkdir -p ~/.jupyter && \
+    echo "c.ServerApp.ip = '0.0.0.0'" > ~/.jupyter/jupyter_server_config.py && \
+    echo "c.ServerApp.port = 8888" >> ~/.jupyter/jupyter_server_config.py && \
+    echo "c.ServerApp.allow_root = True" >> ~/.jupyter/jupyter_server_config.py && \
+    echo "c.ServerApp.open_browser = False" >> ~/.jupyter/jupyter_server_config.py && \
+    echo "c.ServerApp.token = 'nvidia'" >> ~/.jupyter/jupyter_server_config.py && \
+    echo "c.ServerApp.password = ''" >> ~/.jupyter/jupyter_server_config.py
 
 EXPOSE 8888
 
