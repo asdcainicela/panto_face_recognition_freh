@@ -175,7 +175,6 @@ RUN git clone --depth 1 --branch v3.3.0 https://github.com/catchorg/Catch2.git &
     cmake .. && make install && \
     cd /tmp && rm -rf Catch2
 
-# Instalar Python ANTES de compilar OpenCV
 RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-dev \
@@ -191,7 +190,6 @@ RUN pip3 install --no-cache-dir \
     "numpy<2.0" \
     Cython
 
-# Cambiar a GCC 9 para compilar OpenCV
 RUN update-alternatives --set gcc /usr/bin/gcc-9
 
 ENV CC=/usr/bin/gcc-9
@@ -250,7 +248,6 @@ RUN update-alternatives --set gcc /usr/bin/gcc-11
 ENV CC=/usr/bin/gcc-11
 ENV CXX=/usr/bin/g++-11
 
-# ONNX Runtime con soporte GPU para Jetson
 WORKDIR /tmp
 RUN wget -q https://github.com/microsoft/onnxruntime/releases/download/v1.19.2/onnxruntime-linux-aarch64-gpu-1.19.2.tgz \
     && tar -xzf onnxruntime-linux-aarch64-gpu-1.19.2.tgz -C /opt \
@@ -281,7 +278,6 @@ ENV LANG=es_ES.UTF-8 \
     LANGUAGE=es_ES:es \
     LC_ALL=es_ES.UTF-8
         
-# Paquetes Python y JupyterLab
 RUN pip3 install --no-cache-dir \
     notebook \
     jupyterlab \
@@ -295,17 +291,14 @@ RUN pip3 install --no-cache-dir \
     tqdm \
     onnxruntime
 
-# Temas para JupyterLab
 RUN pip3 install --no-cache-dir \
     jupyterlab-catppuccin \
     jupyterlab-hale-theme \
     jupyterlab-theme-nord \
     jupyterlab-night || echo "Algunos temas no se pudieron instalar, continuando..."
 
-# Verificar extensiones instaladas
 RUN jupyter labextension list || true
 
-# Configuracion JupyterLab
 RUN mkdir -p ~/.jupyter/lab/user-settings/@jupyterlab/apputils-extension && \
     echo '{ \
       "theme": "Catppuccin Mocha", \
@@ -316,13 +309,11 @@ RUN mkdir -p ~/.jupyter/lab/user-settings/@jupyterlab/apputils-extension && \
       } \
     }' > ~/.jupyter/lab/user-settings/@jupyterlab/apputils-extension/themes.jupyterlab-settings
 
-# Configuración de traducción a español
 RUN mkdir -p ~/.jupyter/lab/user-settings/@jupyterlab/translation-extension && \
     echo '{ \
       "locale": "es-ES" \
     }' > ~/.jupyter/lab/user-settings/@jupyterlab/translation-extension/plugin.jupyterlab-settings
 
-# Configuración del servidor Jupyter
 RUN mkdir -p ~/.jupyter && \
     echo "c.ServerApp.ip = '0.0.0.0'" > ~/.jupyter/jupyter_server_config.py && \
     echo "c.ServerApp.port = 8888" >> ~/.jupyter/jupyter_server_config.py && \
@@ -330,8 +321,6 @@ RUN mkdir -p ~/.jupyter && \
     echo "c.ServerApp.open_browser = False" >> ~/.jupyter/jupyter_server_config.py && \
     echo "c.ServerApp.token = 'nvidia'" >> ~/.jupyter/jupyter_server_config.py && \
     echo "c.ServerApp.password = ''" >> ~/.jupyter/jupyter_server_config.py
-
-EXPOSE 8888
 
 RUN git config --global user.email "gerald.cainicela.a@gmail.com" \
     && git config --global user.name "userasd" \
@@ -342,13 +331,15 @@ RUN ln -sf /usr/share/zoneinfo/America/Lima /etc/localtime && \
 
 RUN mkdir -p /workspace /var/log /opt/tests
 
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-
-COPY test/ /opt/tests/
-RUN chmod +x /opt/tests/*.sh /opt/tests/*.py
-
 WORKDIR /workspace
+
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY test/ /opt/tests/
+
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh && \
+    chmod +x /opt/tests/*.sh /opt/tests/*.py 2>/dev/null || true
+
+EXPOSE 8888
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["sleep", "infinity"]
