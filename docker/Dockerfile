@@ -7,14 +7,10 @@ ENV DEBIAN_FRONTEND=noninteractive \
     DISPLAY=:0 \
     OPENBLAS_CORETYPE=ARMV8
 
-# ============================================
-# VERIFICAR Y LINKEAR ONNX Runtime para C++
-# ============================================
 RUN ldconfig && \
     echo "/usr/local/lib" > /etc/ld.so.conf.d/onnxruntime.conf && \
     ldconfig
 
-# Si no existen headers, extraerlos del wheel de Python
 RUN if [ ! -d "/usr/local/include/onnxruntime" ]; then \
         cd /tmp && \
         python3 -c "import onnxruntime; import shutil; shutil.copytree(onnxruntime.__path__[0] + '/capi/include/onnxruntime', '/usr/local/include/onnxruntime')" || \
@@ -25,15 +21,11 @@ RUN if [ ! -d "/usr/local/include/onnxruntime" ]; then \
          cd / && rm -rf /tmp/*); \
     fi
 
-# Verificar libonnxruntime.so
 RUN if [ ! -f "/usr/local/lib/libonnxruntime.so" ]; then \
         find /usr -name "libonnxruntime.so*" -exec cp {} /usr/local/lib/ \; && \
         ldconfig; \
     fi
 
-# ============================================
-# Compiladores y toolchain C++
-# ============================================
 RUN apt-get update && apt-get install -y \
     software-properties-common \
     wget \
@@ -56,12 +48,6 @@ RUN apt-get update && apt-get install -y \
         --slave /usr/bin/gcov gcov /usr/bin/gcov-9 \
     && rm -rf /var/lib/apt/lists/*
 
-# ============================================
-# Librerías multimedia y visión
-# ESTRATEGIA: Crear archivo de preferencias para bloquear OpenCV de repositorios
-# ============================================
-
-# Crear preferencias de APT para prevenir instalación de OpenCV desde repos
 RUN mkdir -p /etc/apt/preferences.d && \
     echo 'Package: libopencv*' > /etc/apt/preferences.d/opencv-block && \
     echo 'Pin: release *' >> /etc/apt/preferences.d/opencv-block && \
@@ -71,7 +57,6 @@ RUN mkdir -p /etc/apt/preferences.d && \
     echo 'Pin: release *' >> /etc/apt/preferences.d/opencv-block && \
     echo 'Pin-Priority: -1' >> /etc/apt/preferences.d/opencv-block
 
-# Fase 1: Librerías de imagen básicas
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libjpeg-dev \
     libpng-dev \
@@ -81,7 +66,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libopenjp2-7-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Fase 2: Librerías multimedia FFmpeg/codec (sin las -dev que causan conflicto)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libavcodec58 \
     libavformat58 \
@@ -96,7 +80,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     v4l-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Fase 2b: Headers de desarrollo de FFmpeg (selectivo)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libavcodec-dev \
     libavformat-dev \
@@ -104,7 +87,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/* || \
     echo "Some FFmpeg dev packages failed, continuing..."
 
-# Fase 3: GStreamer (runtime primero)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgstreamer1.0-0 \
     gstreamer1.0-plugins-base \
@@ -115,14 +97,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     gstreamer1.0-tools \
     && rm -rf /var/lib/apt/lists/*
 
-# Fase 3b: GStreamer dev headers (puede fallar, no es crítico)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgstreamer1.0-dev \
     libgstreamer-plugins-base1.0-dev \
     && rm -rf /var/lib/apt/lists/* || \
     echo "GStreamer dev packages failed, runtime is available"
 
-# Fase 4: GTK y librerías de interfaz gráfica
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libgtk-3-dev \
     libgtk2.0-dev \
@@ -137,7 +117,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     x11-apps \
     && rm -rf /var/lib/apt/lists/*
 
-# Fase 5: Librerías matemáticas y OpenGL
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libatlas-base-dev \
     gfortran \
@@ -151,22 +130,15 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     mesa-utils \
     && rm -rf /var/lib/apt/lists/*
 
-# Fase 6: Utilidades de red
 RUN apt-get update && apt-get install -y --no-install-recommends \
     net-tools \
     iputils-ping \
     && rm -rf /var/lib/apt/lists/*
 
-# ============================================
-# DESBLOQUEAR OpenCV después de instalar multimedia
-# ============================================
 RUN apt-mark unhold libopencv libopencv-dev libopencv-core libopencv-core-dev \
     libopencv-highgui libopencv-highgui-dev libopencv-imgproc libopencv-imgproc-dev \
     libopencv-python libopencv-contrib libopencv-contrib-dev 2>/dev/null || true
 
-# ============================================
-# Librerías de desarrollo C++
-# ============================================
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libspdlog-dev \
     libgoogle-glog-dev \
@@ -210,7 +182,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     sudo \
     && rm -rf /var/lib/apt/lists/*
 
-# Compilar Google Test
 RUN cd /usr/src/gtest && \
     cmake . && \
     make && \
@@ -218,9 +189,6 @@ RUN cd /usr/src/gtest && \
 
 WORKDIR /tmp
 
-# ============================================
-# Librerías modernas de C++ (header-only)
-# ============================================
 RUN git clone --depth 1 https://github.com/CLIUtils/CLI11.git && \
     cd CLI11 && mkdir build && cd build && \
     cmake .. && make install && \
@@ -255,9 +223,6 @@ RUN git clone --depth 1 --branch v3.3.0 https://github.com/catchorg/Catch2.git &
     cmake .. && make install && \
     cd /tmp && rm -rf Catch2
 
-# ============================================
-# Librerías OpenGL para robot3D
-# ============================================
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libglfw3-dev \
     libglm-dev \
@@ -268,16 +233,12 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxcursor-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Configurar LD_LIBRARY_PATH
 RUN echo "/usr/local/cuda/lib64" > /etc/ld.so.conf.d/cuda.conf \
     && echo "/usr/lib/aarch64-linux-gnu/tegra" > /etc/ld.so.conf.d/tegra.conf \
     && echo "/usr/lib/aarch64-linux-gnu/tegra-egl" >> /etc/ld.so.conf.d/tegra.conf \
     && echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf \
     && ldconfig
 
-# ============================================
-# Configuración regional
-# ============================================
 RUN apt-get update && apt-get install -y --no-install-recommends locales \
     && locale-gen es_ES.UTF-8 en_US.UTF-8 \
     && update-locale LANG=es_ES.UTF-8 LANGUAGE=es_ES:es LC_ALL=es_ES.UTF-8 \
@@ -290,23 +251,16 @@ ENV LANG=es_ES.UTF-8 \
 RUN ln -sf /usr/share/zoneinfo/America/Lima /etc/localtime && \
     echo "America/Lima" > /etc/timezone
 
-# Configuración Git
 RUN git config --global user.email "gerald.cainicela.a@gmail.com" \
     && git config --global user.name "userasd" \
     && git config --global --add safe.directory '*'
 
-# ============================================
-# Python packages adicionales
-# ============================================
 RUN pip3 install --no-cache-dir \
     packaging \
     setuptools \
     wheel \
     tqdm
 
-# ============================================
-# JupyterLab temas y configuración
-# ============================================
 RUN pip3 install --no-cache-dir \
     jupyterlab-catppuccin \
     jupyterlab-hale-theme \
@@ -336,23 +290,17 @@ RUN mkdir -p ~/.jupyter && \
     echo "c.ServerApp.token = 'nvidia'" >> ~/.jupyter/jupyter_server_config.py && \
     echo "c.ServerApp.password = ''" >> ~/.jupyter/jupyter_server_config.py
 
-EXPOSE 8888
-
-# ============================================
-# Directorios de trabajo
-# ============================================
 RUN mkdir -p /workspace /var/log /opt/tests
 
 WORKDIR /workspace
 
-# ============================================
-# Scripts de entrada y tests
-# ============================================
-COPY docker-entrypoint.sh /usr/local/bin/
-RUN chmod +x /usr/local/bin/docker-entrypoint.sh
-
+COPY docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 COPY test/ /opt/tests/
-RUN chmod +x /opt/tests/*.sh /opt/tests/*.py
+
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh && \
+    find /opt/tests -type f \( -name "*.sh" -o -name "*.py" \) -exec chmod +x {} \; 2>/dev/null || true
+
+EXPOSE 8888
 
 ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 CMD ["sleep", "infinity"]

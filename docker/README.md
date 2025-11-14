@@ -1,10 +1,4 @@
 # Face Recognition C++20
-primero debemos ver la version del jetpack
-
- dpkg -l | grep "nvidia-l4t-core"
- nos debe dar como resultado 5.1.1 
- jorinbriq06@jorinbriq06:~/jetson_workspace/panto_face_recognition_freh/docker$  dpkg -l | grep "nvidia-l4t-core"
-ii  nvidia-l4t-core                            35.4.1-20230801124926                arm64        NVIDIA Core Package
 
 ## Setup
 
@@ -17,7 +11,8 @@ git clone https://asdcainicela:{}@github.com/asdcainicela/panto_face_recognition
 cd ~/jetson_workspace/panto_face_recognition_freh/docker
 chmod +x run.sh
 chmod +x docker-entrypoint.sh
-docker build -t l4t-mlcpp-py .
+docker build -t l4t-cpp-py .
+DOCKER_BUILDKIT=0 docker build --no-cache -t l4t-mlcpp-py . 2>&1 | tee build.log
 ./run.sh
 ```
 
