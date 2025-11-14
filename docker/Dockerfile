@@ -7,24 +7,22 @@ ENV DEBIAN_FRONTEND=noninteractive \
     DISPLAY=:0 \
     OPENBLAS_CORETYPE=ARMV8
 
-RUN ldconfig && \
-    echo "/usr/local/lib" > /etc/ld.so.conf.d/onnxruntime.conf && \
-    ldconfig
+WORKDIR /tmp
+RUN wget -q https://github.com/microsoft/onnxruntime/releases/download/v1.16.3/onnxruntime-linux-aarch64-gpu-1.16.3.tgz \
+    && tar -xzf onnxruntime-linux-aarch64-gpu-1.16.3.tgz -C /opt \
+    && mv /opt/onnxruntime-linux-aarch64-gpu-1.16.3 /opt/onnxruntime \
+    && rm onnxruntime-linux-aarch64-gpu-1.16.3.tgz
 
-RUN if [ ! -d "/usr/local/include/onnxruntime" ]; then \
-        cd /tmp && \
-        python3 -c "import onnxruntime; import shutil; shutil.copytree(onnxruntime.__path__[0] + '/capi/include/onnxruntime', '/usr/local/include/onnxruntime')" || \
-        (pip3 download onnxruntime-gpu && \
-         unzip -q onnxruntime_gpu*.whl && \
-         mkdir -p /usr/local/include && \
-         cp -r onnxruntime/capi/include/onnxruntime /usr/local/include/ && \
-         cd / && rm -rf /tmp/*); \
-    fi
+RUN ln -sf /opt/onnxruntime/include/* /usr/local/include/ \
+    && ln -sf /opt/onnxruntime/lib/libonnxruntime.so* /usr/local/lib/ \
+    && ln -sf /opt/onnxruntime/lib/libonnxruntime_providers_*.so* /usr/local/lib/ 2>/dev/null || true \
+    && ldconfig
 
-RUN if [ ! -f "/usr/local/lib/libonnxruntime.so" ]; then \
-        find /usr -name "libonnxruntime.so*" -exec cp {} /usr/local/lib/ \; && \
-        ldconfig; \
-    fi
+ENV ONNXRUNTIME_DIR=/opt/onnxruntime \
+    LD_LIBRARY_PATH=/opt/onnxruntime/lib:${LD_LIBRARY_PATH}
+
+RUN echo "/opt/onnxruntime/lib" > /etc/ld.so.conf.d/onnxruntime.conf \
+    && ldconfig
 
 RUN apt-get update && apt-get install -y \
     software-properties-common \
@@ -233,7 +231,21 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     libxcursor-dev \
     && rm -rf /var/lib/apt/lists/*
 
-RUN echo "/usr/local/cuda/lib64" > /etc/ld.so.conf.d/cuda.conf \
+WORKDIR /tmp
+RUN wget -q https://github.com/microsoft/onnxruntime/releases/download/v1.16.3/onnxruntime-linux-aarch64-1.16.3.tgz \
+    && tar -xzf onnxruntime-linux-aarch64-1.16.3.tgz -C /opt \
+    && mv /opt/onnxruntime-linux-aarch64-1.16.3 /opt/onnxruntime \
+    && rm onnxruntime-linux-aarch64-1.16.3.tgz
+
+RUN ln -sf /opt/onnxruntime/include/* /usr/local/include/ \
+    && ln -sf /opt/onnxruntime/lib/libonnxruntime.so* /usr/local/lib/ \
+    && ldconfig
+
+ENV ONNXRUNTIME_DIR=/opt/onnxruntime \
+    LD_LIBRARY_PATH=/opt/onnxruntime/lib:${LD_LIBRARY_PATH}
+
+RUN echo "/opt/onnxruntime/lib" > /etc/ld.so.conf.d/onnxruntime.conf \
+    && echo "/usr/local/cuda/lib64" > /etc/ld.so.conf.d/cuda.conf \
     && echo "/usr/lib/aarch64-linux-gnu/tegra" > /etc/ld.so.conf.d/tegra.conf \
     && echo "/usr/lib/aarch64-linux-gnu/tegra-egl" >> /etc/ld.so.conf.d/tegra.conf \
     && echo "/usr/local/lib" > /etc/ld.so.conf.d/local.conf \
