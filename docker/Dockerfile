@@ -1,4 +1,4 @@
-FROM nvcr.io/nvidia/l4t-ml:r35.3.1-py3
+FROM dustynv/l4t-ml:r35.4.1
 
 ENV DEBIAN_FRONTEND=noninteractive \
     CUDA_HOME=/usr/local/cuda \
