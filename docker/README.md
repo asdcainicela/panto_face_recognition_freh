@@ -11,7 +11,7 @@ git clone https://asdcainicela:{}@github.com/asdcainicela/panto_face_recognition
 cd ~/jetson_workspace/panto_face_recognition_freh/docker
 chmod +x run.sh
 chmod +x docker-entrypoint.sh
-docker build -t l4t-cpp-py .
+docker build -t l4t-ml-cpp-py .
 DOCKER_BUILDKIT=0 docker build --no-cache -t l4t-mlcpp-py . 2>&1 | tee build.log
 ./run.sh
 ```

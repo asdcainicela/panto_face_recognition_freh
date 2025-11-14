@@ -1,8 +1,8 @@
 #!/bin/bash
 set -e
 
-CONTAINER_NAME="l4tcpppy"
-IMAGE_NAME="l4t-cpp-py"
+CONTAINER_NAME="l4tmlcpppy"
+IMAGE_NAME="l4t-ml-cpp-py"
 WORKSPACE_DIR="${HOME}/jetson_workspace"
 
 [ ! -d "$WORKSPACE_DIR" ] && mkdir -p "$WORKSPACE_DIR"
