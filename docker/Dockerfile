@@ -8,14 +8,13 @@ ENV DEBIAN_FRONTEND=noninteractive \
     OPENBLAS_CORETYPE=ARMV8
 
 WORKDIR /tmp
-RUN wget -q https://github.com/microsoft/onnxruntime/releases/download/v1.16.3/onnxruntime-linux-aarch64-gpu-1.16.3.tgz \
-    && tar -xzf onnxruntime-linux-aarch64-gpu-1.16.3.tgz -C /opt \
-    && mv /opt/onnxruntime-linux-aarch64-gpu-1.16.3 /opt/onnxruntime \
-    && rm onnxruntime-linux-aarch64-gpu-1.16.3.tgz
+RUN wget -q http://jetson.webredirect.org:8000/jp6/cu124/onnxruntime-gpu-1.19.0.tar.gz \
+    && mkdir -p /opt/onnxruntime \
+    && tar -xzf onnxruntime-gpu-1.19.0.tar.gz -C /opt/onnxruntime --strip-components=1 \
+    && rm onnxruntime-gpu-1.19.0.tar.gz
 
-RUN ln -sf /opt/onnxruntime/include/* /usr/local/include/ \
-    && ln -sf /opt/onnxruntime/lib/libonnxruntime.so* /usr/local/lib/ \
-    && ln -sf /opt/onnxruntime/lib/libonnxruntime_providers_*.so* /usr/local/lib/ 2>/dev/null || true \
+RUN ln -sf /opt/onnxruntime/include/* /usr/local/include/ 2>/dev/null || true \
+    && ln -sf /opt/onnxruntime/lib/*.so* /usr/local/lib/ 2>/dev/null || true \
     && ldconfig
 
 ENV ONNXRUNTIME_DIR=/opt/onnxruntime \
