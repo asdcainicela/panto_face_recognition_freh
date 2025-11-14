@@ -259,7 +259,10 @@ RUN pip3 install --no-cache-dir \
     packaging \
     setuptools \
     wheel \
-    tqdm
+    tqdm \
+    matplotlib \
+    seaborn \
+    scikit-learn
 
 RUN pip3 install --no-cache-dir \
     jupyterlab-catppuccin \
