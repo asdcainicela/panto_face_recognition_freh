@@ -124,37 +124,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /tmp
 
-RUN python3 << 'EOF'
-import onnxruntime as ort
-import os
-import shutil
-
-print(f"ONNX Runtime version: {ort.__version__}")
-print(f"Available providers: {ort.get_available_providers()}")
-
-ort_path = os.path.dirname(ort.__file__)
-capi_path = os.path.join(ort_path, 'capi')
-
-os.makedirs('/opt/onnxruntime/include', exist_ok=True)
-os.makedirs('/opt/onnxruntime/lib', exist_ok=True)
-
-if os.path.exists(os.path.join(capi_path, 'include')):
-    shutil.copytree(
-        os.path.join(capi_path, 'include'), 
-        '/opt/onnxruntime/include', 
-        dirs_exist_ok=True
-    )
-    print("Headers copied")
-
-for file in os.listdir(capi_path):
-    if file.endswith('.so') or '.so.' in file:
-        src = os.path.join(capi_path, file)
-        dst = os.path.join('/opt/onnxruntime/lib', file)
-        shutil.copy(src, dst)
-        print(f"Copied: {file}")
-
-print("ONNX Runtime C++ setup complete")
-EOF
+RUN python3 -c "\
+import onnxruntime as ort; \
+import os; \
+import shutil; \
+print('ONNX Runtime version:', ort.__version__); \
+print('Available providers:', ort.get_available_providers()); \
+ort_path = os.path.dirname(ort.__file__); \
+capi_path = os.path.join(ort_path, 'capi'); \
+os.makedirs('/opt/onnxruntime/include', exist_ok=True); \
+os.makedirs('/opt/onnxruntime/lib', exist_ok=True); \
+include_src = os.path.join(capi_path, 'include'); \
+[shutil.copytree(include_src, '/opt/onnxruntime/include', dirs_exist_ok=True) if os.path.exists(include_src) else None]; \
+[shutil.copy(os.path.join(capi_path, f), os.path.join('/opt/onnxruntime/lib', f)) for f in os.listdir(capi_path) if f.endswith('.so') or '.so.' in f]; \
+print('ONNX Runtime C++ setup complete')"
 
 RUN ln -sf /opt/onnxruntime/include/onnxruntime /usr/local/include/onnxruntime \
     && ln -sf /opt/onnxruntime/lib/*.so* /usr/local/lib/ \
