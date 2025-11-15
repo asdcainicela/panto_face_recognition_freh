@@ -7,8 +7,11 @@ ENV DEBIAN_FRONTEND=noninteractive \
     DISPLAY=:0 \
     OPENCV_VERSION=4.10.0 \
     CMAKE_VERSION=3.28.1 \
-    OPENBLAS_CORETYPE=ARMV8
-
+    OPENBLAS_CORETYPE=ARMV8 \
+    LANG=es_ES.UTF-5 \
+    LANGUAGE=es_ES:es \
+    LC_ALL=es_ES.UTF-5
+|
 # ===== COMPILADORES =====
 RUN apt-get update && apt-get install -y \
     software-properties-common wget curl git \
@@ -65,9 +68,10 @@ RUN apt-get update && apt-get install -y \
     libopenblas-dev liblapack-dev libgsl-dev \
     libgtest-dev libgmock-dev \
     libtool autoconf automake ccache clang-format cppcheck valgrind \
-    gdb htop tmux vim nano tree sudo \
+    gdb htop tmux vim nano tree sudo locales \
     && rm -rf /var/lib/apt/lists/*
 
+# Compilar Google Test
 RUN cd /usr/src/gtest && \
     cmake . && make && \
     cp lib/*.a /usr/lib || cp *.a /usr/lib || true
@@ -119,7 +123,7 @@ RUN python3 -m pip install --no-cache-dir --upgrade pip
 RUN pip3 install --no-cache-dir \
     packaging setuptools wheel "numpy<2.0" Cython
 
-# ===== COMPILAR OPENCV CON GCC 9 =====
+# ===== COMPILAR OPENCV CON GCC 9 Y CUDA =====
 RUN update-alternatives --set gcc /usr/bin/gcc-9
 ENV CC=/usr/bin/gcc-9
 ENV CXX=/usr/bin/g++-9
@@ -141,6 +145,7 @@ RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/ope
         -D WITH_CUBLAS=ON \
         -D WITH_CUDNN=ON \
         -D OPENCV_DNN_CUDA=ON \
+        -D WITH_NVCUVID=ON \
         -D WITH_LIBV4L=ON \
         -D WITH_V4L=ON \
         -D WITH_GSTREAMER=ON \
@@ -160,7 +165,7 @@ RUN git clone --depth 1 --branch ${OPENCV_VERSION} https://github.com/opencv/ope
         -D BUILD_opencv_cudacodec=ON \
         -D CMAKE_CXX_FLAGS="-O3" \
         .. \
-    && make -j2 \
+    && make -j$(nproc) \
     && make install \
     && ldconfig \
     && cd / && rm -rf /tmp/opencv /tmp/opencv_contrib
@@ -181,7 +186,8 @@ RUN pip3 install --no-cache-dir \
     scikit-learn \
     seaborn \
     pillow \
-    tqdm
+    tqdm \
+    opencv-python-headless
 
 # ===== TEMAS JUPYTERLAB =====
 RUN pip3 install --no-cache-dir \
@@ -226,14 +232,8 @@ RUN echo "/usr/local/cuda/lib64" > /etc/ld.so.conf.d/cuda.conf \
     && ldconfig
 
 # ===== LOCALE Y TIMEZONE =====
-RUN apt-get update && apt-get install -y locales \
-    && locale-gen es_ES.UTF-8 en_US.UTF-8 \
-    && update-locale LANG=es_ES.UTF-8 LANGUAGE=es_ES:es LC_ALL=es_ES.UTF-8 \
-    && rm -rf /var/lib/apt/lists/*
-
-ENV LANG=es_ES.UTF-8 \
-    LANGUAGE=es_ES:es \
-    LC_ALL=es_ES.UTF-8
+RUN locale-gen es_ES.UTF-5 en_US.UTF-5 \
+    && update-locale LANG=es_ES.UTF-5 LANGUAGE=es_ES:es LC_ALL=es_ES.UTF-5
 
 # ===== GIT CONFIG =====
 RUN git config --global user.email "gerald.cainicela.a@gmail.com" \
@@ -243,6 +243,7 @@ RUN git config --global user.email "gerald.cainicela.a@gmail.com" \
 RUN ln -sf /usr/share/zoneinfo/America/Lima /etc/localtime && \
     echo "America/Lima" > /etc/timezone
 
+# ===== DIRECTORIOS =====
 RUN mkdir -p /workspace /var/log /opt/tests
 
 # ===== COPIAR ARCHIVOS =====
@@ -251,6 +252,17 @@ RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 COPY test/ /opt/tests/
 RUN chmod +x /opt/tests/*.sh /opt/tests/*.py 2>/dev/null || true
+
+# ===== CREAR SCRIPT DE VERIFICACIÓN RÁPIDA =====
+RUN echo '#!/bin/bash\n\
+echo "=== Quick Verification ==="\n\
+echo "GCC: $(gcc --version | head -n1)"\n\
+echo "CMake: $(cmake --version | head -n1)"\n\
+echo "OpenCV: $(pkg-config --modversion opencv4 2>/dev/null || echo \"Not found\")"\n\
+echo "CUDA Devices: $(python3 -c \"import cv2; print(cv2.cuda.getCudaEnabledDeviceCount())\" 2>/dev/null || echo \"0\")"\n\
+echo "TensorRT: $(ls /usr/lib/aarch64-linux-gnu/libnvinfer.so* 2>/dev/null | head -n1 || echo \"Not found\")"\n\
+echo "JupyterLab: http://localhost:8888 (token: nvidia)"\n\
+' > /usr/local/bin/quick-check && chmod +x /usr/local/bin/quick-check
 
 WORKDIR /workspace
 
