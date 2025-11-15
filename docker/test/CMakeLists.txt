@@ -1,24 +1,13 @@
-cmake_minimum_required(VERSION 3.20)
-project(verify_tests LANGUAGES CXX CUDA)
+# Compilar con CUDA headers
+g++ test_opencv_cuda_tensorrt.cpp -o test_opencv_cuda_tensorrt \
+  -I/usr/local/cuda/include \
+  -I/usr/include/aarch64-linux-gnu \
+  $(pkg-config --cflags --libs opencv4) \
+  -L/usr/local/cuda/lib64 \
+  -L/usr/lib/aarch64-linux-gnu \
+  -lnvinfer \
+  -lcudart \
+  -std=c++17
 
-set(CMAKE_CXX_STANDARD 20)
-set(CMAKE_CUDA_STANDARD 17)
-
-find_package(CUDA REQUIRED)
-find_package(OpenCV REQUIRED)
-
-set(ONNXRUNTIME_ROOT "/opt/onnxruntime")
-
-include_directories(
-    ${ONNXRUNTIME_ROOT}/include
-    ${OpenCV_INCLUDE_DIRS}
-    ${CUDA_INCLUDE_DIRS}
-)
-
-add_executable(test_all test_all.cpp)
-
-target_link_libraries(test_all
-    ${ONNXRUNTIME_ROOT}/lib/libonnxruntime.so
-    ${OpenCV_LIBS}
-    ${CUDA_LIBRARIES}
-)
+# Ejecutar
+./test_opencv_cuda_tensorrt

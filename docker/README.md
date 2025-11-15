@@ -17,6 +17,7 @@ DOCKER_BUILDKIT=0 docker build --no-cache -t l4t-mlcpp-py . 2>&1 | tee build.log
 ```
 
 # Dentro del contenedor:
+en el dockerfile copia test/ en /opt/ y da permisos
 cd /opt/tests
 ./verify_all.sh
 
