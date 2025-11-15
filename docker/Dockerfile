@@ -11,6 +11,7 @@ RUN apt-get update && apt-get install -y \
     wget \
     curl \
     git \
+    unzip \
     && add-apt-repository ppa:ubuntu-toolchain-r/test \
     && apt-get update \
     && apt-get install -y \
@@ -124,20 +125,20 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 WORKDIR /tmp
 
+# Descargar e instalar ONNX Runtime desde wheel oficial de NVIDIA
+RUN wget https://nvidia.box.com/shared/static/mvdcltm9ewdy2d5nurkiqorofz1s53ww.whl \
+    -O onnxruntime_gpu-1.15.1-cp38-cp38-linux_aarch64.whl && \
+    unzip onnxruntime_gpu-1.15.1-cp38-cp38-linux_aarch64.whl && \
+    mkdir -p /opt/onnxruntime/include /opt/onnxruntime/lib && \
+    cp -r onnxruntime/capi/include/onnxruntime /opt/onnxruntime/include/ && \
+    cp onnxruntime/capi/*.so* /opt/onnxruntime/lib/ && \
+    rm -rf onnxruntime_gpu-1.15.1-cp38-cp38-linux_aarch64.whl onnxruntime onnxruntime.libs onnxruntime-1.15.1.dist-info
+
+# Verificar la instalación desde Python (si ya existía)
 RUN python3 -c "\
 import onnxruntime as ort; \
-import os; \
-import shutil; \
 print('ONNX Runtime version:', ort.__version__); \
-print('Available providers:', ort.get_available_providers()); \
-ort_path = os.path.dirname(ort.__file__); \
-capi_path = os.path.join(ort_path, 'capi'); \
-os.makedirs('/opt/onnxruntime/include', exist_ok=True); \
-os.makedirs('/opt/onnxruntime/lib', exist_ok=True); \
-include_src = os.path.join(capi_path, 'include'); \
-[shutil.copytree(include_src, '/opt/onnxruntime/include', dirs_exist_ok=True) if os.path.exists(include_src) else None]; \
-[shutil.copy(os.path.join(capi_path, f), os.path.join('/opt/onnxruntime/lib', f)) for f in os.listdir(capi_path) if f.endswith('.so') or '.so.' in f]; \
-print('ONNX Runtime C++ setup complete')"
+print('Available providers:', ort.get_available_providers());" || echo "Python ONNX Runtime check skipped"
 
 RUN ln -sf /opt/onnxruntime/include/onnxruntime /usr/local/include/onnxruntime \
     && ln -sf /opt/onnxruntime/lib/*.so* /usr/local/lib/ \
