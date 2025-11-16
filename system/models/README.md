@@ -32,3 +32,10 @@ trtexec --onnx=realesr_x4.onnx --saveEngine=realesr_x4.trt --fp16
 ```
 
 TensorRT da 2-3x speedup en Jetson.
+
+
+para convertir en tensor 64 a 32
+pip3 install onnx onnx-simplifier
+
+ir a onnx64-> onnx32
+ despues convert_to_tensorrt-py
