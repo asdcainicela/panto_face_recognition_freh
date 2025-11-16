@@ -35,9 +35,10 @@ int main(int argc, char** argv) {
         spdlog::error("uso: {} <model.engine>", argv[0]);
         return 1;
     }
+
     std::string engPath = argv[1];
 
-    /* 1. existe y tiene tamaño razonable */
+    // 1. validar existencia y tamaño
     std::ifstream f(engPath, std::ios::binary | std::ios::ate);
     if (!f) {
         spdlog::error("archivo no encontrado: {}", engPath);
@@ -45,13 +46,15 @@ int main(int argc, char** argv) {
     }
     size_t sz = f.tellg();
     f.close();
+
     if (sz < 100) {
         spdlog::error("archivo demasiado pequeño ({} B) – engine corrupto", sz);
         return 1;
     }
+
     spdlog::info("tamaño engine: {:.2f} MB", sz / (1024.0 * 1024.0));
 
-    /* 2. cargar con TensorRT */
+    // 2. cargar con TensorRT
     TRTLogger logger;
     auto runtime = std::unique_ptr<IRuntime>(createInferRuntime(logger));
     if (!runtime) {
@@ -66,32 +69,40 @@ int main(int argc, char** argv) {
 
     auto engine = std::unique_ptr<ICudaEngine>(
         runtime->deserializeCudaEngine(blob.data(), blob.size()));
+
     if (!engine) {
         spdlog::error("deserialización fallida – engine corrupto");
         return 1;
     }
-    spdlog::info("✓ engine cargado correctamente");
 
-    /* 3. mostrar bindings */
+    spdlog::info("engine cargado correctamente");
+
+    // 3. mostrar bindings
     int nb = engine->getNbBindings();
     spdlog::info("bindings: {}", nb);
+
     for (int i = 0; i < nb; ++i) {
         bool isIn = engine->bindingIsInput(i);
         const char* name = engine->getBindingName(i);
         Dims dims = engine->getBindingDimensions(i);
         DataType dtype = engine->getBindingDataType(i);
-        spdlog::info("  [{}] {}  {}  {}  dims={}",
-                     i, isIn ? "INPUT" : "OUTPUT",
-                     name, static_cast<int>(dtype), dimsToStr(dims));
+
+        spdlog::info("  [{}] {} {} tipo={} dims={}",
+                     i,
+                     isIn ? "INPUT" : "OUTPUT",
+                     name,
+                     static_cast<int>(dtype),
+                     dimsToStr(dims));
     }
 
-    /* 4. (opcional) crear contexto y probar reserva de memoria */
+    // 4. crear contexto
     auto ctx = std::unique_ptr<IExecutionContext>(engine->createExecutionContext());
     if (!ctx) {
         spdlog::error("no se pudo crear contexto");
         return 1;
     }
-    spdlog::info("✓ contexto creado – engine listo para inferir");
+
+    spdlog::info("contexto creado – engine listo para inferir");
 
     return 0;
 }
