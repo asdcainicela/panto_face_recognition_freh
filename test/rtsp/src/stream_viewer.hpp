@@ -23,6 +23,7 @@ private:
 
     int frames, lost;
     int last_frame_count;   // NUEVO: para tracking de frames
+    int latency_warnings;   // NUEVO: contador de advertencias de latencia
     double current_fps;
     std::chrono::steady_clock::time_point start_main, start_fps, last_health_check;
     std::string window_name;

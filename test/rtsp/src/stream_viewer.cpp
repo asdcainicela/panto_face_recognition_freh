@@ -11,7 +11,8 @@ StreamViewer::StreamViewer(const std::string& user, const std::string& pass,
                            cv::Size display_size, int fps_interval)
     : user(user), pass(pass), ip(ip), port(port), stream_type(stream_type),
       display_size(display_size), fps_interval(fps_interval),
-      frames(0), lost(0), last_frame_count(0), current_fps(0.0), recording_enabled(false),
+      frames(0), lost(0), last_frame_count(0), latency_warnings(0), 
+      current_fps(0.0), recording_enabled(false),
       stop_signal(nullptr), max_duration(0), reconnect_count(0), 
       use_adaptive_latency(true), frames_recorded(0), recording_paused(false) {
     
@@ -249,18 +250,8 @@ const StreamStats& StreamViewer::get_stats() {
 }
 
 void StreamViewer::print_stats() {
-    // Imprimir más frecuentemente al inicio para ver progreso
-    bool should_print = false;
-    
-    if (frames <= 20) {
-        should_print = (frames % 5 == 0);  // Cada 5 frames al inicio
-    } else if (frames <= 100) {
-        should_print = (frames % 15 == 0);  // Cada 15 frames en inicio medio
-    } else {
-        should_print = (frames % fps_interval == 0);  // Normal después
-    }
-    
-    if (should_print) {
+    // Imprimir cada 25 frames (consistente con cálculo FPS)
+    if (frames % 25 == 0 && frames > 0) {
         const auto& s = get_stats();
         std::string rec_status = is_recording() ? 
             (recording_paused ? " [REC-PAUSED]" : " [REC]") : "";
@@ -269,11 +260,11 @@ void StreamViewer::print_stats() {
         std::string fps_status;
         if (current_fps <= 5) fps_status = " ⚠️";
         else if (current_fps <= 10) fps_status = " ⚡";
-        else if (current_fps >= 25) fps_status = " ✓";
+        else if (current_fps >= 20) fps_status = " ✓";
         else fps_status = "";
         
         // Mostrar indicador de inicio
-        std::string phase = frames <= 20 ? " [STARTING]" : "";
+        std::string phase = frames <= 50 ? " [STARTING]" : "";
         
         spdlog::info("stream: {} | frames: {} | fps: {:.1f}{} | perdidos: {} | rec: {} | reconex: {}{}{}{}", 
                      stream_type, s.frames, s.fps, fps_status, s.lost, 
@@ -347,6 +338,10 @@ void StreamViewer::run() {
     int consecutive_fails = 0;
     const int MAX_CONSECUTIVE_FAILS = 100;  // Más tolerante
     const int RECONNECT_THRESHOLD = 5;       // Reconectar después de 5 fallos
+    
+    // Para main stream: vaciar buffer acumulado periódicamente
+    int frames_since_flush = 0;
+    const int FLUSH_INTERVAL = (stream_type == "main") ? 10 : 30;  // Main: más frecuente
 
     while (true) {
         if (stop_signal && *stop_signal) break;
@@ -386,6 +381,28 @@ void StreamViewer::run() {
 
         consecutive_fails = 0;
         frames++;
+        frames_since_flush++;
+        
+        // FLUSH AGRESIVO para main stream (evitar acumulación)
+        if (frames_since_flush >= FLUSH_INTERVAL) {
+            // Intentar leer frames adicionales del buffer sin procesar
+            cv::Mat dummy;
+            int flushed = 0;
+            while (flushed < 5 && cap.grab()) {  // Vaciar hasta 5 frames
+                flushed++;
+            }
+            if (flushed > 0) {
+                latency_warnings++;
+                if (stream_type == "main") {
+                    spdlog::warn("🗑️ {} flushed {} frames acumulados (total warnings: {})", 
+                                stream_type, flushed, latency_warnings);
+                }
+            } else {
+                // Resetear contador si no hay acumulación
+                if (latency_warnings > 0) latency_warnings--;
+            }
+            frames_since_flush = 0;
+        }
         
         // Grabar frame si está habilitado y no pausado
         // IMPORTANTE: No bloquear si writer es lento
@@ -407,7 +424,7 @@ void StreamViewer::run() {
             cv::Scalar(255, 0, 0);
         
         // Color especial durante inicio (primeros frames)
-        if (frames <= 20) {
+        if (frames <= 50) {
             color = cv::Scalar(0, 255, 255);  // Amarillo durante inicio
         }
         
@@ -416,9 +433,9 @@ void StreamViewer::run() {
         cv::putText(display, "channel: " + stream_type, cv::Point(10, 20), cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 1);
         cv::putText(display, "frames: " + std::to_string(s.frames), cv::Point(10, 40), cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 1);
         
-        // Mostrar FPS con más precisión al inicio
+        // Mostrar FPS con precisión apropiada
         std::string fps_text;
-        if (frames <= 20 || current_fps <= 10) {
+        if (frames <= 50 || current_fps <= 15) {
             fps_text = "fps: " + std::to_string(static_cast<int>(s.fps * 10) / 10.0);  // 1 decimal
         } else {
             fps_text = "fps: " + std::to_string(static_cast<int>(s.fps));  // Sin decimales
@@ -428,6 +445,12 @@ void StreamViewer::run() {
         cv::putText(display, "lost: " + std::to_string(s.lost), cv::Point(10, 80), cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 1);
         cv::putText(display, "resolution: " + std::to_string(frame.cols) + "*" + std::to_string(frame.rows), cv::Point(10, 100), cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 1);
         cv::putText(display, "reconnects: " + std::to_string(reconnect_count), cv::Point(10, 120), cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 1);
+        
+        // Advertencia de latencia para main
+        if (stream_type == "main" && latency_warnings > 0) {
+            cv::putText(display, "LATENCY: " + std::to_string(latency_warnings), 
+                       cv::Point(10, 140), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 255), 2);
+        }
         
         if (is_recording()) {
             std::string rec_text = recording_paused ? "REC-PAUSED" : "REC";
@@ -442,7 +465,7 @@ void StreamViewer::run() {
         }
         
         // Indicador de inicio
-        if (frames <= 20) {
+        if (frames <= 50) {
             cv::putText(display, "STARTING...", cv::Point(display.cols - 150, 30), 
                        cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 255), 2);
         }
