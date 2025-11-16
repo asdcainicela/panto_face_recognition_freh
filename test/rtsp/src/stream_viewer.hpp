@@ -22,12 +22,15 @@ private:
     cv::VideoWriter writer;
 
     int frames, lost;
+    int last_frame_count;   // NUEVO: para tracking de frames
     double current_fps;
     std::chrono::steady_clock::time_point start_main, start_fps, last_health_check;
     std::string window_name;
     std::string pipeline;
 
     bool recording_enabled;
+    bool recording_paused;  // NUEVO: para pausar grabación sin cerrar writer
+    int frames_recorded;    // NUEVO: contador de frames grabados
     std::string output_filename;
     std::atomic<bool>* stop_signal;
     int max_duration;
@@ -41,6 +44,8 @@ private:
     void print_final_stats();
     bool init_recording();
     void stop_recording();
+    void pause_recording();   // NUEVO
+    void resume_recording();  // NUEVO
     
     StreamStats cached_stats;
 
@@ -57,4 +62,5 @@ public:
     
     bool is_recording() const { return recording_enabled && writer.isOpened(); }
     int get_reconnect_count() const { return reconnect_count; }
+    int get_frames_recorded() const { return frames_recorded; }  // NUEVO
 };
