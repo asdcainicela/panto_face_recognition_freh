@@ -33,7 +33,15 @@ trtexec --onnx=realesr_x4.onnx --saveEngine=realesr_x4.trt --fp16
 
 TensorRT da 2-3x speedup en Jetson.
 
+convertir onnx a rt primero verificamos el sh, pero tambien el path 
 
+si quieres usar terminal
+
+/usr/src/tensorrt/bin/trtexec --onnx=retinaface.onnx --saveEngine=retinaface.engine --fp16 --workspace=3072
+
+debe revisar el path importante
+
+si usamos python (no usasr)
 para convertir en tensor 64 a 32
 pip3 install onnx onnx-simplifier
 

@@ -8,7 +8,12 @@ declare -A MODELOS=(
 
 WORKSPACE_MB=3072
 
-if ! command -v trtexec &> /dev/null; then
+# Buscar trtexec
+if command -v trtexec &> /dev/null; then
+    TRTEXEC=$(command -v trtexec)
+elif [ -f "/usr/src/tensorrt/bin/trtexec" ]; then
+    TRTEXEC="/usr/src/tensorrt/bin/trtexec"
+else
     echo "trtexec no encontrado. Instala TensorRT."
     exit 1
 fi
@@ -20,7 +25,7 @@ for ONNX_FILE in "${!MODELOS[@]}"; do
     [ -f "$ENGINE_FILE" ] && echo "Engine ya existe: $ENGINE_FILE" && continue
 
     echo "Convirtiendo $ONNX_FILE → $ENGINE_FILE..."
-    trtexec \
+    $TRTEXEC \
         --onnx="$ONNX_FILE" \
         --saveEngine="$ENGINE_FILE" \
         --fp16 \
