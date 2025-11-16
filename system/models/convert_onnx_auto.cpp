@@ -1,3 +1,5 @@
+//./convert_onnx_auto arcface_r100.onnx engines/arcface_r100.onx
+
 #include <NvInfer.h>
 #include <NvOnnxParser.h>
 #include <cuda_runtime_api.h>
@@ -8,16 +10,15 @@
 #include <memory>
 #include <string>
 #include <vector>
-#include <sstream>
+#include <cstdio>
 
 using namespace nvinfer1;
 
 class TRTLogger : public ILogger {
 public:
     void log(Severity severity, const char* msg) noexcept override {
-        if (severity <= Severity::kWARNING) {
+        if (severity <= Severity::kWARNING)
             spdlog::warn("[TensorRT] {}", msg);
-        }
     }
 };
 
@@ -30,420 +31,186 @@ struct OnnxMetadata {
     std::string error;
 };
 
+/* ----------  Python helper  ---------- */
 class PythonOnnxInspector {
-private:
-    PyObject* pModule = nullptr;
-    PyObject* pOnnxModule = nullptr;
-    
 public:
     PythonOnnxInspector() {
         Py_Initialize();
-        
-        // Import sys para agregar path si es necesario
         PyRun_SimpleString("import sys");
-        
-        // Import onnx
-        pOnnxModule = PyImport_ImportModule("onnx");
-        if (!pOnnxModule) {
-            spdlog::error("No se pudo importar módulo 'onnx'");
-            PyErr_Print();
-        }
+        pOnnx = PyImport_ImportModule("onnx");
+        if (!pOnnx) { PyErr_Print(); spdlog::error("onnx no disponible"); }
     }
-    
     ~PythonOnnxInspector() {
-        Py_XDECREF(pOnnxModule);
-        Py_XDECREF(pModule);
+        Py_XDECREF(pOnnx);
         Py_Finalize();
     }
-    
-    OnnxMetadata inspect(const std::string& onnxPath) {
-        OnnxMetadata meta;
-        
-        if (!pOnnxModule) {
-            meta.error = "Módulo ONNX no disponible";
-            return meta;
-        }
-        
-        // Construir código Python para inspección
-        std::string pythonCode = R"(
-import onnx
+    OnnxMetadata inspect(const std::string& path) {
+        OnnxMetadata m;
+        if (!pOnnx) { m.error = "onnx no disponible"; return m; }
 
-def inspect_onnx(path):
+        char code[4096];
+        std::snprintf(code, sizeof(code), R"(
+import onnx
+def inspect(path):
     try:
-        model = onnx.load(path)
-        
-        # Input info
-        input_tensor = model.graph.input[0]
-        input_name = input_tensor.name
-        input_shape = [dim.dim_value for dim in input_tensor.type.tensor_type.shape.dim]
-        
-        # Output info
-        output_tensor = model.graph.output[0]
-        output_name = output_tensor.name
-        output_shape = [dim.dim_value for dim in output_tensor.type.tensor_type.shape.dim]
-        
+        g = onnx.load(path).graph
+        inp = g.input[0]
+        out = g.output[0]
         return {
-            'input_name': input_name,
-            'input_shape': input_shape,
-            'output_name': output_name,
-            'output_shape': output_shape,
-            'valid': True
+            'valid':True,
+            'input_name': inp.name,
+            'input_shape': [d.dim_value for d in inp.type.tensor_type.shape.dim],
+            'output_name': out.name,
+            'output_shape': [d.dim_value for d in out.type.tensor_type.shape.dim]
         }
     except Exception as e:
-        return {
-            'valid': False,
-            'error': str(e)
-        }
+        return {'valid':False,'error':str(e)}
+result = inspect(r'%s')
+)", path.c_str());
 
-result = inspect_onnx(')" + onnxPath + R"(')
-)";
-        
-        // Ejecutar código Python
-        PyObject* pMain = PyImport_AddModule("__main__");
-        PyObject* pDict = PyModule_GetDict(pMain);
-        
-        PyRun_String(pythonCode.c_str(), Py_file_input, pDict, pDict);
-        
-        // Obtener resultado
-        PyObject* pResult = PyDict_GetItemString(pDict, "result");
-        
-        if (!pResult || !PyDict_Check(pResult)) {
-            meta.error = "Error ejecutando inspección Python";
-            PyErr_Print();
-            return meta;
+        PyObject* main = PyImport_AddModule("__main__");
+        PyObject* dict = PyModule_GetDict(main);
+        PyRun_String(code, Py_file_input, dict, dict);
+        PyObject* res = PyDict_GetItemString(dict, "result");
+        if (!res || !PyDict_Check(res)) { m.error = "python error"; return m; }
+
+        PyObject* pValid = PyDict_GetItemString(res, "valid");
+        m.valid = pValid && pValid == Py_True;
+        if (!m.valid) {
+            PyObject* pErr = PyDict_GetItemString(res, "error");
+            if (pErr) m.error = PyUnicode_AsUTF8(pErr);
+            return m;
         }
-        
-        // Extraer 'valid'
-        PyObject* pValid = PyDict_GetItemString(pResult, "valid");
-        if (pValid && PyBool_Check(pValid)) {
-            meta.valid = (pValid == Py_True);
-        }
-        
-        if (!meta.valid) {
-            // Extraer error
-            PyObject* pError = PyDict_GetItemString(pResult, "error");
-            if (pError && PyUnicode_Check(pError)) {
-                meta.error = PyUnicode_AsUTF8(pError);
-            }
-            return meta;
-        }
-        
-        // Extraer input_name
-        PyObject* pInputName = PyDict_GetItemString(pResult, "input_name");
-        if (pInputName && PyUnicode_Check(pInputName)) {
-            meta.inputName = PyUnicode_AsUTF8(pInputName);
-        }
-        
-        // Extraer input_shape
-        PyObject* pInputShape = PyDict_GetItemString(pResult, "input_shape");
-        if (pInputShape && PyList_Check(pInputShape)) {
-            Py_ssize_t size = PyList_Size(pInputShape);
-            for (Py_ssize_t i = 0; i < size; ++i) {
-                PyObject* item = PyList_GetItem(pInputShape, i);
-                if (PyLong_Check(item)) {
-                    meta.inputShape.push_back(PyLong_AsLongLong(item));
-                }
-            }
-        }
-        
-        // Extraer output_name
-        PyObject* pOutputName = PyDict_GetItemString(pResult, "output_name");
-        if (pOutputName && PyUnicode_Check(pOutputName)) {
-            meta.outputName = PyUnicode_AsUTF8(pOutputName);
-        }
-        
-        // Extraer output_shape
-        PyObject* pOutputShape = PyDict_GetItemString(pResult, "output_shape");
-        if (pOutputShape && PyList_Check(pOutputShape)) {
-            Py_ssize_t size = PyList_Size(pOutputShape);
-            for (Py_ssize_t i = 0; i < size; ++i) {
-                PyObject* item = PyList_GetItem(pOutputShape, i);
-                if (PyLong_Check(item)) {
-                    meta.outputShape.push_back(PyLong_AsLongLong(item));
-                }
-            }
-        }
-        
-        return meta;
+        auto getStr = [&](const char* k){
+            PyObject* o = PyDict_GetItemString(res, k);
+            return std::string(o ? PyUnicode_AsUTF8(o) : "");
+        };
+        auto getVec = [&](const char* k){
+            std::vector<int64_t> v;
+            PyObject* o = PyDict_GetItemString(res, k);
+            if (PyList_Check(o))
+                for (Py_ssize_t i = 0; i < PyList_Size(o); ++i)
+                    v.push_back(PyLong_AsLong(PyList_GetItem(o, i)));
+            return v;
+        };
+        m.inputName  = getStr("input_name");
+        m.inputShape = getVec("input_shape");
+        m.outputName = getStr("output_name");
+        m.outputShape= getVec("output_shape");
+        return m;
     }
+private:
+    PyObject* pOnnx = nullptr;
 };
 
-std::string readFile(const std::string& filename) {
-    std::ifstream file(filename, std::ios::binary | std::ios::ate);
-    if (!file) {
-        throw std::runtime_error("No se pudo abrir: " + filename);
-    }
-    
-    std::streamsize size = file.tellg();
-    file.seekg(0, std::ios::beg);
-    
-    std::string buffer(size, '\0');
-    if (!file.read(buffer.data(), size)) {
-        throw std::runtime_error("Error leyendo: " + filename);
-    }
-    return buffer;
+/* ----------  helpers  ---------- */
+std::string readFile(const std::string& file) {
+    std::ifstream f(file, std::ios::binary | std::ios::ate);
+    if (!f) throw std::runtime_error("no se puede abrir " + file);
+    auto sz = f.tellg();
+    f.seekg(0);
+    std::string buf(sz, '\0');
+    if (!f.read(buf.data(), sz)) throw std::runtime_error("lectura falló");
+    return buf;
 }
-
-void printShape(const std::vector<int64_t>& shape) {
+void printShape(const std::vector<int64_t>& s) {
     std::cout << "[";
-    for (size_t i = 0; i < shape.size(); ++i) {
-        std::cout << shape[i];
-        if (i < shape.size() - 1) std::cout << ", ";
-    }
+    for (size_t i = 0; i < s.size(); ++i)
+        std::cout << s[i] << (i + 1 < s.size() ? ", " : "");
     std::cout << "]";
 }
 
+/* ----------  main  ---------- */
 int main(int argc, char** argv) {
     if (argc != 3) {
-        spdlog::error("Uso: {} <input.onnx> <output.engine>", argv[0]);
+        spdlog::error("uso: {} <model.onnx> <model.engine>", argv[0]);
         return 1;
     }
-    
-    std::string onnxFile = argv[1];
-    std::string engineFile = argv[2];
-    
-    spdlog::info("=== TensorRT Auto Converter ===");
-    spdlog::info("ONNX Input:  {}", onnxFile);
-    spdlog::info("Engine Output: {}", engineFile);
-    
-    // Verificar que existe el archivo
-    std::ifstream testFile(onnxFile);
-    if (!testFile.good()) {
-        spdlog::error("Archivo ONNX no encontrado: {}", onnxFile);
-        return 1;
-    }
-    testFile.close();
-    
-    // Inspeccionar ONNX con Python
-    spdlog::info("Inspeccionando modelo ONNX...");
-    PythonOnnxInspector inspector;
-    OnnxMetadata meta = inspector.inspect(onnxFile);
-    
-    if (!meta.valid) {
-        spdlog::error("Error inspeccionando ONNX: {}", meta.error);
-        return 1;
-    }
-    
-    // Mostrar información detectada
-    spdlog::info("✓ Metadata detectada:");
-    std::cout << "  Input:  " << meta.inputName << " ";
-    printShape(meta.inputShape);
-    std::cout << std::endl;
-    
-    std::cout << "  Output: " << meta.outputName << " ";
-    printShape(meta.outputShape);
-    std::cout << std::endl;
-    
-    // Validar shape de input
-    if (meta.inputShape.size() != 4) {
-        spdlog::error("Se esperaba input shape de 4 dimensiones (NCHW)");
-        return 1;
-    }
-    
-    // Crear TensorRT builder
+    std::string onnxPath = argv[1];
+    std::string engPath  = argv[2];
+
+    spdlog::info("=== TensorRT auto-converter ===");
+    spdlog::info("ONNX : {}", onnxPath);
+    spdlog::info("ENGINE: {}", engPath);
+
     TRTLogger logger;
-    
+    PythonOnnxInspector py;
+
+    auto meta = py.inspect(onnxPath);
+    if (!meta.valid) {
+        spdlog::error("inspección onnx: {}", meta.error);
+        return 1;
+    }
+    spdlog::info("metadatos:");
+    std::cout << "  input  : " << meta.inputName << " "; printShape(meta.inputShape); std::cout << "\n";
+    std::cout << "  output : " << meta.outputName << " "; printShape(meta.outputShape); std::cout << "\n";
+
     auto builder = std::unique_ptr<IBuilder>(createInferBuilder(logger));
-    if (!builder) {
-        spdlog::error("No se pudo crear IBuilder");
-        return 1;
-    }
-    
-    const auto explicitBatch = 1U << static_cast<uint32_t>(
-        NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
-    
-    auto network = std::unique_ptr<INetworkDefinition>(
-        builder->createNetworkV2(explicitBatch));
-    
-    if (!network) {
-        spdlog::error("No se pudo crear INetworkDefinition");
-        return 1;
-    }
-    
-    // Parser ONNX
-    auto parser = std::unique_ptr<nvonnxparser::IParser>(
-        nvonnxparser::createParser(*network, logger));
-    
-    if (!parser) {
-        spdlog::error("No se pudo crear ONNX parser");
-        return 1;
-    }
-    
-    spdlog::info("Parseando modelo ONNX...");
-    std::string onnxModel = readFile(onnxFile);
-    
-    if (!parser->parse(onnxModel.data(), onnxModel.size())) {
-        spdlog::error("Error parseando ONNX");
-        for (int i = 0; i < parser->getNbErrors(); ++i) {
+    if (!builder) { spdlog::error("sin builder"); return 1; }
+
+    const auto flag = 1U << static_cast<uint32_t>(NetworkDefinitionCreationFlag::kEXPLICIT_BATCH);
+    auto network = std::unique_ptr<INetworkDefinition>(builder->createNetworkV2(flag));
+    if (!network) { spdlog::error("sin network"); return 1; }
+
+    auto parser = std::unique_ptr<nvonnxparser::IParser>(nvonnxparser::createParser(*network, logger));
+    if (!parser) { spdlog::error("sin parser"); return 1; }
+
+    std::string onnxBlob = readFile(onnxPath);
+    if (!parser->parse(onnxBlob.data(), onnxBlob.size())) {
+        spdlog::error("error parseando onnx");
+        for (int i = 0; i < parser->getNbErrors(); ++i)
             spdlog::error("  - {}", parser->getError(i)->desc());
-        }
         return 1;
     }
-    
-    // IMPORTANTE: Configurar optimization profile ANTES de config
-    auto inputTensor = network->getInput(0);
-    
-    // Detectar si tiene dimensiones dinámicas
-    Dims originalDims = inputTensor->getDimensions();
-    bool hasDynamicDims = false;
-    for (int i = 0; i < originalDims.nbDims; ++i) {
-        if (originalDims.d[i] == -1 || originalDims.d[i] == 0) {
-            hasDynamicDims = true;
-            break;
-        }
-    }
-    
-    if (hasDynamicDims) {
-        spdlog::warn("⚠️  Detectadas dimensiones dinámicas, configurando optimization profile...");
-        
-        // Convertir shape de metadata a Dims
-        Dims targetDims;
-        targetDims.nbDims = meta.inputShape.size();
-        for (size_t i = 0; i < meta.inputShape.size(); ++i) {
-            targetDims.d[i] = static_cast<int32_t>(meta.inputShape[i]);
-        }
-        
-        spdlog::info("Target shape: [{}, {}, {}, {}]",
-            targetDims.d[0], targetDims.d[1], targetDims.d[2], targetDims.d[3]);
-        
-        // Crear optimization profile
-        auto profile = builder->createOptimizationProfile();
-        
-        // min, opt, max (todos iguales para shape fijo)
-        profile->setDimensions(inputTensor->getName(), 
-                              OptProfileSelector::kMIN, targetDims);
-        profile->setDimensions(inputTensor->getName(), 
-                              OptProfileSelector::kOPT, targetDims);
-        profile->setDimensions(inputTensor->getName(), 
-                              OptProfileSelector::kMAX, targetDims);
-        
-        // Crear config y agregar profile
-        auto config = std::unique_ptr<IBuilderConfig>(builder->createBuilderConfig());
-        if (!config) {
-            spdlog::error("No se pudo crear IBuilderConfig");
-            return 1;
-        }
-        
-        config->addOptimizationProfile(profile);
-        config->setMemoryPoolLimit(MemoryPoolType::kWORKSPACE, 3ULL << 30);
-        
-        if (builder->platformHasFastFp16()) {
-            spdlog::info("✓ FP16 habilitado");
-            config->setFlag(BuilderFlag::kFP16);
-        } else {
-            spdlog::warn("FP16 no disponible en esta plataforma");
-        }
-        
-        spdlog::info("Construyendo TensorRT engine (esto puede tardar varios minutos)...");
-        auto engine = std::unique_ptr<ICudaEngine>(
-            builder->buildEngineWithConfig(*network, *config));
-        
-        if (!engine) {
-            spdlog::error("Error construyendo engine TensorRT");
-            return 1;
-        }
-        
-        // Serializar y guardar
-        spdlog::info("Serializando engine...");
-        auto serialized = std::unique_ptr<IHostMemory>(engine->serialize());
-        
-        if (!serialized) {
-            spdlog::error("Error serializando engine");
-            return 1;
-        }
-        
-        std::ofstream outFile(engineFile, std::ios::binary);
-        if (!outFile) {
-            spdlog::error("No se pudo crear archivo: {}", engineFile);
-            return 1;
-        }
-        
-        outFile.write(reinterpret_cast<const char*>(serialized->data()), 
-                      serialized->size());
-        outFile.close();
-        
-        spdlog::info("✓ Engine guardado exitosamente: {}", engineFile);
-        spdlog::info("Tamaño: {} MB", serialized->size() / (1024.0 * 1024.0));
-        
-        return 0;
-    }
-    
-    // Si NO hay dimensiones dinámicas, continuar normalmente
-    
-    
-    // Configurar builder (caso sin dimensiones dinámicas)
-    spdlog::info("Modelo con dimensiones fijas");
+
+    /* ----------  ¿dimensiones dinámicas?  ---------- */
+    auto* inputT = network->getInput(0);
+    Dims orig = inputT->getDimensions();
+    bool dynamic = false;
+    for (int i = 0; i < orig.nbDims; ++i)
+        if (orig.d[i] <= 0) { dynamic = true; break; }
+
     auto config = std::unique_ptr<IBuilderConfig>(builder->createBuilderConfig());
-    if (!config) {
-        spdlog::error("No se pudo crear IBuilderConfig");
-        return 1;
-    }
-    
-    // Memoria de trabajo: 3GB
     config->setMemoryPoolLimit(MemoryPoolType::kWORKSPACE, 3ULL << 30);
-    
-    // Habilitar FP16 si está disponible
     if (builder->platformHasFastFp16()) {
-        spdlog::info("✓ FP16 habilitado");
         config->setFlag(BuilderFlag::kFP16);
-    } else {
-        spdlog::warn("FP16 no disponible en esta plataforma");
+        spdlog::info("FP16 habilitado");
     }
-    
-    // Aplicar dimensiones configuradas
-    auto inputTensor = network->getInput(0);
-    inputTensor->setName(meta.inputName.c_str());
-    
-    Dims inputDims;
-    inputDims.nbDims = meta.inputShape.size();
-    for (size_t i = 0; i < meta.inputShape.size(); ++i) {
-        inputDims.d[i] = static_cast<int32_t>(meta.inputShape[i]);
+
+    if (dynamic) {
+        spdlog::warn("dimensiones dinámicas detectadas – configurando perfil");
+        auto ask = [&](const char* name, int64_t& val) {
+            if (val <= 0) {
+                std::cout << "  " << name << " : ";
+                std::cin  >> val;
+            }
+        };
+        ask("Batch (N)", meta.inputShape[0]);
+        if (meta.inputShape.size() >= 2) ask("Channels (C)", meta.inputShape[1]);
+        if (meta.inputShape.size() >= 3) ask("Height  (H)", meta.inputShape[2]);
+        if (meta.inputShape.size() >= 4) ask("Width   (W)", meta.inputShape[3]);
+
+        Dims tgt;
+        tgt.nbDims = meta.inputShape.size();
+        for (size_t i = 0; i < meta.inputShape.size(); ++i) tgt.d[i] = meta.inputShape[i];
+
+        auto* profile = builder->createOptimizationProfile();
+        profile->setDimensions(inputT->getName(), OptProfileSelector::kMIN, tgt);
+        profile->setDimensions(inputT->getName(), OptProfileSelector::kOPT, tgt);
+        profile->setDimensions(inputT->getName(), OptProfileSelector::kMAX, tgt);
+        config->addOptimizationProfile(profile);
+        spdlog::info("perfil fijado a [{} {} {} {}]",
+                     tgt.d[0], tgt.d[1], tgt.d[2], tgt.d[3]);
     }
-    
-    spdlog::info("Aplicando dimensiones al input tensor...");
-    inputTensor->setDimensions(inputDims);
-    
-    // Verificar que las dimensiones se aplicaron correctamente
-    Dims appliedDims = inputTensor->getDimensions();
-    spdlog::info("Dimensiones aplicadas: [{}, {}, {}, {}]",
-        appliedDims.d[0], appliedDims.d[1], appliedDims.d[2], appliedDims.d[3]);
-    
-    // Construir engine
-    spdlog::info("Construyendo TensorRT engine (esto puede tardar varios minutos)...");
-    auto serializedNetwork = std::unique_ptr<IHostMemory>(
-        builder->buildSerializedNetwork(*network, *config));
-    
-    if (!serializedNetwork) {
-        spdlog::error("Error construyendo serialized network");
-        return 1;
-    }
-    
-    auto runtime = std::unique_ptr<IRuntime>(createInferRuntime(logger));
-    auto engine = std::unique_ptr<ICudaEngine>(
-        runtime->deserializeCudaEngine(serializedNetwork->data(), serializedNetwork->size()));
-    
-    
-    // Serializar y guardar
-    spdlog::info("Serializando engine...");
-    auto serialized = std::unique_ptr<IHostMemory>(engine->serialize());
-    
-    if (!serialized) {
-        spdlog::error("Error serializando engine");
-        return 1;
-    }
-    
-    std::ofstream outFile(engineFile, std::ios::binary);
-    if (!outFile) {
-        spdlog::error("No se pudo crear archivo: {}", engineFile);
-        return 1;
-    }
-    
-    outFile.write(reinterpret_cast<const char*>(serialized->data()), 
-                  serialized->size());
-    outFile.close();
-    
-    spdlog::info("✓ Engine guardado exitosamente: {}", engineFile);
-    spdlog::info("Tamaño: {} MB", serialized->size() / (1024.0 * 1024.0));
-    
+
+    spdlog::info("construyendo engine (puede tardar varios minutos)...");
+    auto serialized = std::unique_ptr<IHostMemory>(
+            builder->buildSerializedNetwork(*network, *config));
+    if (!serialized) { spdlog::error("buildSerializedNetwork falló"); return 1; }
+
+    std::ofstream out(engPath, std::ios::binary);
+    if (!out) { spdlog::error("no se puede crear {}", engPath); return 1; }
+    out.write(reinterpret_cast<const char*>(serialized->data()), serialized->size());
+    spdlog::info("✓ engine guardado: {}  ({} MB)", engPath, serialized->size() / (1024.0 * 1024.0));
     return 0;
 }
