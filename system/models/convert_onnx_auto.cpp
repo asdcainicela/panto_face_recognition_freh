@@ -317,6 +317,96 @@ int main(int argc, char** argv) {
         return 1;
     }
     
+    // IMPORTANTE: Configurar optimization profile ANTES de config
+    auto inputTensor = network->getInput(0);
+    
+    // Detectar si tiene dimensiones dinámicas
+    Dims originalDims = inputTensor->getDimensions();
+    bool hasDynamicDims = false;
+    for (int i = 0; i < originalDims.nbDims; ++i) {
+        if (originalDims.d[i] == -1 || originalDims.d[i] == 0) {
+            hasDynamicDims = true;
+            break;
+        }
+    }
+    
+    if (hasDynamicDims) {
+        spdlog::warn("⚠️  Detectadas dimensiones dinámicas, configurando optimization profile...");
+        
+        // Convertir shape de metadata a Dims
+        Dims targetDims;
+        targetDims.nbDims = meta.inputShape.size();
+        for (size_t i = 0; i < meta.inputShape.size(); ++i) {
+            targetDims.d[i] = static_cast<int32_t>(meta.inputShape[i]);
+        }
+        
+        spdlog::info("Target shape: [{}, {}, {}, {}]",
+            targetDims.d[0], targetDims.d[1], targetDims.d[2], targetDims.d[3]);
+        
+        // Crear optimization profile
+        auto profile = builder->createOptimizationProfile();
+        
+        // min, opt, max (todos iguales para shape fijo)
+        profile->setDimensions(inputTensor->getName(), 
+                              OptProfileSelector::kMIN, targetDims);
+        profile->setDimensions(inputTensor->getName(), 
+                              OptProfileSelector::kOPT, targetDims);
+        profile->setDimensions(inputTensor->getName(), 
+                              OptProfileSelector::kMAX, targetDims);
+        
+        // Crear config y agregar profile
+        auto config = std::unique_ptr<IBuilderConfig>(builder->createBuilderConfig());
+        if (!config) {
+            spdlog::error("No se pudo crear IBuilderConfig");
+            return 1;
+        }
+        
+        config->addOptimizationProfile(profile);
+        config->setMemoryPoolLimit(MemoryPoolType::kWORKSPACE, 3ULL << 30);
+        
+        if (builder->platformHasFastFp16()) {
+            spdlog::info("✓ FP16 habilitado");
+            config->setFlag(BuilderFlag::kFP16);
+        } else {
+            spdlog::warn("FP16 no disponible en esta plataforma");
+        }
+        
+        spdlog::info("Construyendo TensorRT engine (esto puede tardar varios minutos)...");
+        auto engine = std::unique_ptr<ICudaEngine>(
+            builder->buildEngineWithConfig(*network, *config));
+        
+        if (!engine) {
+            spdlog::error("Error construyendo engine TensorRT");
+            return 1;
+        }
+        
+        // Serializar y guardar
+        spdlog::info("Serializando engine...");
+        auto serialized = std::unique_ptr<IHostMemory>(engine->serialize());
+        
+        if (!serialized) {
+            spdlog::error("Error serializando engine");
+            return 1;
+        }
+        
+        std::ofstream outFile(engineFile, std::ios::binary);
+        if (!outFile) {
+            spdlog::error("No se pudo crear archivo: {}", engineFile);
+            return 1;
+        }
+        
+        outFile.write(reinterpret_cast<const char*>(serialized->data()), 
+                      serialized->size());
+        outFile.close();
+        
+        spdlog::info("✓ Engine guardado exitosamente: {}", engineFile);
+        spdlog::info("Tamaño: {} MB", serialized->size() / (1024.0 * 1024.0));
+        
+        return 0;
+    }
+    
+    // Si NO hay dimensiones dinámicas, continuar normalmente
+    
     // Configurar builder
     auto config = std::unique_ptr<IBuilderConfig>(builder->createBuilderConfig());
     if (!config) {
@@ -335,16 +425,23 @@ int main(int argc, char** argv) {
         spdlog::warn("FP16 no disponible en esta plataforma");
     }
     
-    // Aplicar dimensiones detectadas
+    // Aplicar dimensiones detectadas/configuradas
     auto inputTensor = network->getInput(0);
     inputTensor->setName(meta.inputName.c_str());
     
     Dims inputDims;
     inputDims.nbDims = meta.inputShape.size();
     for (size_t i = 0; i < meta.inputShape.size(); ++i) {
-        inputDims.d[i] = meta.inputShape[i];
+        inputDims.d[i] = static_cast<int32_t>(meta.inputShape[i]);
     }
+    
+    spdlog::info("Aplicando dimensiones al input tensor...");
     inputTensor->setDimensions(inputDims);
+    
+    // Verificar que las dimensiones se aplicaron correctamente
+    Dims appliedDims = inputTensor->getDimensions();
+    spdlog::info("Dimensiones aplicadas: [{}, {}, {}, {}]",
+        appliedDims.d[0], appliedDims.d[1], appliedDims.d[2], appliedDims.d[3]);
     
     // Construir engine
     spdlog::info("Construyendo TensorRT engine (esto puede tardar varios minutos)...");
