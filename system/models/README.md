@@ -39,11 +39,8 @@ si quieres usar terminal
 
 /usr/src/tensorrt/bin/trtexec --onnx=retinaface.onnx --saveEngine=retinaface.engine --fp16 --workspace=3072
 
-debe revisar el path importante
+si usamos el archivo c++
+primero compilamos con convert_ro_tensorrt.sh
+luego ejemplo
+./convert_onnx_auto retinaface.onnx retinaface_fp16.engine
 
-si usamos python (no usasr)
-para convertir en tensor 64 a 32
-pip3 install onnx onnx-simplifier
-
-ir a onnx64-> onnx32
- despues convert_to_tensorrt-py
