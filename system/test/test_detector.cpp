@@ -6,13 +6,13 @@ int main(int argc, char* argv[]) {
     spdlog::set_pattern("[%H:%M:%S] %v");
     spdlog::set_level(spdlog::level::info);
     
-    std::string model_path = argc >= 2 ? argv[1] : "models/retinaface.onnx";
+    std::string engine_path = argc >= 2 ? argv[1] : "models/engines/model.engine";
     std::string image_path = argc >= 3 ? argv[2] : "";
     
-    spdlog::info("Modelo: {}", model_path);
+    spdlog::info("TensorRT Engine: {}", engine_path);
     
     try {
-        FaceDetector detector(model_path, true);
+        FaceDetector detector(engine_path);
         detector.set_conf_threshold(0.5f);
         detector.set_nms_threshold(0.4f);
         
@@ -76,8 +76,8 @@ int main(int argc, char* argv[]) {
                 }
             }
             
-            std::string info = cv::format("%.1fms | %d faces", ms, (int)detections.size());
-            cv::rectangle(display, cv::Point(0, 0), cv::Point(250, 30), 
+            std::string info = cv::format("TensorRT: %.1fms | %d faces", ms, (int)detections.size());
+            cv::rectangle(display, cv::Point(0, 0), cv::Point(300, 30), 
                          cv::Scalar(0, 0, 0), -1);
             cv::putText(display, info, cv::Point(10, 20),
                        cv::FONT_HERSHEY_SIMPLEX, 0.6, cv::Scalar(0, 255, 0), 2);

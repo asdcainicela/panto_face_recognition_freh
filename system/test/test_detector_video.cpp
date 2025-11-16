@@ -7,11 +7,11 @@ int main(int argc, char* argv[]) {
     spdlog::set_level(spdlog::level::info);
     
     if (argc < 3) {
-        spdlog::error("Uso: {} <modelo.onnx> <video.mp4> [threshold]", argv[0]);
+        spdlog::error("Uso: {} <model.engine> <video.mp4> [threshold]", argv[0]);
         return 1;
     }
     
-    std::string model_path = argv[1];
+    std::string engine_path = argv[1];
     std::string video_path = argv[2];
     float threshold = argc >= 4 ? std::atof(argv[3]) : 0.5f;
     
@@ -27,9 +27,10 @@ int main(int argc, char* argv[]) {
     int height = static_cast<int>(cap.get(cv::CAP_PROP_FRAME_HEIGHT));
     
     spdlog::info("Video: {}x{} @ {:.1f}fps, {} frames", width, height, fps, total_frames);
+    spdlog::info("TensorRT Engine: {}", engine_path);
     
     try {
-        FaceDetector detector(model_path, true);
+        FaceDetector detector(engine_path);
         detector.set_conf_threshold(threshold);
         
         spdlog::info("Controles: SPACE=pausar | ESC=salir | +/-=threshold | S=guardar");
@@ -88,19 +89,21 @@ int main(int argc, char* argv[]) {
                 }
                 
                 cv::Mat overlay = display.clone();
-                cv::rectangle(overlay, cv::Point(0, 0), cv::Point(450, 120), 
+                cv::rectangle(overlay, cv::Point(0, 0), cv::Point(500, 140), 
                              cv::Scalar(0, 0, 0), -1);
                 cv::addWeighted(overlay, 0.75, display, 0.25, 0, display);
                 
                 std::vector<std::string> lines = {
                     cv::format("Frame: %d/%d (%.1f%%)", frame_count, total_frames, 
                               100.0 * frame_count / total_frames),
-                    cv::format("Inferencia: %.1fms (%.1ffps)", ms, 1000.0/ms),
+                    cv::format("TensorRT: %.1fms (%.1ffps)", ms, 1000.0/ms),
                     cv::format("Rostros: %d (thr: %.2f)", (int)dets.size(), threshold),
                     cv::format("Promedio: %.1f rostros/frame", 
                               frame_count > 0 ? (double)total_dets / frame_count : 0.0),
                     cv::format("Tiempo: %.1fms/frame", 
-                              frame_count > 0 ? total_ms / frame_count : 0.0)
+                              frame_count > 0 ? total_ms / frame_count : 0.0),
+                    cv::format("Speedup: ~%.1fx vs ONNX-CUDA", 
+                              40.0 / (frame_count > 0 ? total_ms / frame_count : 40.0))
                 };
                 
                 int y = 25;
@@ -143,12 +146,15 @@ int main(int argc, char* argv[]) {
             }
         }
         
+        double avg_ms = frame_count > 0 ? total_ms / frame_count : 0.0;
+        
         spdlog::info("=== Stats ===");
         spdlog::info("Frames: {}/{}", frame_count, total_frames);
         spdlog::info("Detecciones: {} ({:.2f}/frame)", total_dets, 
                     frame_count > 0 ? (double)total_dets / frame_count : 0.0);
-        spdlog::info("Tiempo: {:.1f}ms/frame", 
-                    frame_count > 0 ? total_ms / frame_count : 0.0);
+        spdlog::info("TensorRT: {:.1f}ms/frame", avg_ms);
+        spdlog::info("Throughput: {:.1f} FPS", 1000.0 / avg_ms);
+        spdlog::info("Speedup vs ONNX-CUDA (~40ms): {:.1fx", 40.0 / avg_ms);
         
     } catch (const std::exception& e) {
         spdlog::error("Error: {}", e.what());

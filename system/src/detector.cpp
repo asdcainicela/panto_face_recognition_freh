@@ -2,13 +2,12 @@
 #include <spdlog/spdlog.h>
 #include <algorithm>
 #include <cmath>
+#include <fstream>
 
 constexpr int MIN_FACE_SIZE = 20;
 constexpr float MAX_FACE_RATIO = 0.9f;
 constexpr float MIN_ASPECT_RATIO = 0.4f;
 constexpr float MAX_ASPECT_RATIO = 2.5f;
-constexpr int MIN_LANDMARKS_INSIDE = 2;
-constexpr bool ENABLE_LANDMARK_VALIDATION = false;
 constexpr float NMS_IOM_THRESHOLD = 0.8f;
 
 static std::vector<std::vector<float>> generate_anchors(int feat_h, int feat_w, int stride) {
@@ -62,115 +61,101 @@ static void decode_landmarks(const std::vector<float>& anchor, const float* kpss
     }
 }
 
-FaceDetector::FaceDetector(const std::string& model_path, bool use_cuda) 
-    : env(ORT_LOGGING_LEVEL_WARNING, "FaceDetector") {
+FaceDetector::FaceDetector(const std::string& engine_path) {
+    spdlog::info("Cargando TensorRT engine: {}", engine_path);
     
-    session_options.SetIntraOpNumThreads(4);
-    session_options.SetGraphOptimizationLevel(GraphOptimizationLevel::ORT_ENABLE_ALL);
-    
-    bool cuda_available = false;
-    
-    if (use_cuda) {
-        try {
-            // Verificar si CUDA esta disponible
-            auto available_providers = Ort::GetAvailableProviders();
-            bool has_cuda = false;
-            
-            spdlog::info("Providers disponibles:");
-            for (const auto& provider : available_providers) {
-                spdlog::info("  - {}", provider);
-                if (provider == "CUDAExecutionProvider") {
-                    has_cuda = true;
-                }
-            }
-            
-            if (has_cuda) {
-                // Metodo simple: configuracion minima
-                OrtCUDAProviderOptions cuda_opts{};
-                cuda_opts.device_id = 0;
-                
-                session_options.AppendExecutionProvider_CUDA(cuda_opts);
-                cuda_available = true;
-                spdlog::info("CUDA Provider habilitado");
-            } else {
-                spdlog::warn("CUDAExecutionProvider no encontrado");
-            }
-            
-        } catch (const Ort::Exception& e) {
-            spdlog::warn("No se pudo habilitar CUDA: {} (codigo: {})", e.what(), e.GetOrtErrorCode());
-            spdlog::info("Continuando con CPU...");
-        } catch (const std::exception& e) {
-            spdlog::warn("Error configurando CUDA: {}", e.what());
-        }
+    if (!loadEngine(engine_path)) {
+        throw std::runtime_error("No se pudo cargar TensorRT engine");
     }
     
-    // Fallback: intentar con configuracion minimalista
-    if (use_cuda && !cuda_available) {
-        try {
-            OrtCUDAProviderOptions minimal_opts{};
-            minimal_opts.device_id = 0;
-            minimal_opts.cudnn_conv_algo_search = OrtCudnnConvAlgoSearchDefault;
-            minimal_opts.do_copy_in_default_stream = 1;
-            
-            session_options.AppendExecutionProvider_CUDA(minimal_opts);
-            cuda_available = true;
-            spdlog::info("CUDA habilitado (configuracion minima)");
-            
-        } catch (...) {
-            spdlog::info("CUDA no disponible, usando CPU");
-        }
-    }
+    // Crear CUDA stream
+    cudaStreamCreate(&stream);
     
-    try {
-        session = std::make_unique<Ort::Session>(env, model_path.c_str(), session_options);
-        
-        if (cuda_available) {
-            spdlog::info("Detector inicializado con aceleracion CUDA");
-        } else {
-            spdlog::warn("DETECTOR USANDO CPU (muy lento)");
-            spdlog::warn("Para habilitar CUDA:");
-            spdlog::warn("  1. Verificar: python3 -c \"import onnxruntime; print(onnxruntime.get_available_providers())\"");
-            spdlog::warn("  2. Debe mostrar: ['CUDAExecutionProvider', 'CPUExecutionProvider']");
-        }
-        
-        Ort::AllocatorWithDefaultOptions allocator;
-        
-        size_t num_input = session->GetInputCount();
-        for (size_t i = 0; i < num_input; i++) {
-            auto name = session->GetInputNameAllocated(i, allocator);
-            input_names.push_back(strdup(name.get()));
-        }
-        
-        size_t num_output = session->GetOutputCount();
-        for (size_t i = 0; i < num_output; i++) {
-            auto name = session->GetOutputNameAllocated(i, allocator);
-            output_names.push_back(strdup(name.get()));
-        }
-        
-        // Verificar que tengamos 9 outputs
-        if (num_output != 9) {
-            spdlog::warn("Modelo retorna {} outputs (esperados: 9)", num_output);
-            spdlog::warn("Esto puede indicar un modelo incorrecto");
-            spdlog::warn("Descarga det_10g.onnx desde buffalo_l");
-        }
-        
-        input_width = 640;
-        input_height = 640;
-        conf_threshold = 0.5f;
-        nms_threshold = 0.3f;
-        
-    } catch (const Ort::Exception& e) {
-        spdlog::error("Error cargando modelo: {} (codigo: {})", e.what(), e.GetOrtErrorCode());
-        throw;
-    } catch (const std::exception& e) {
-        spdlog::error("Error cargando modelo: {}", e.what());
-        throw;
-    }
+    spdlog::info("Detector TensorRT inicializado correctamente");
 }
 
 FaceDetector::~FaceDetector() {
-    for (auto name : input_names) free(const_cast<char*>(name));
-    for (auto name : output_names) free(const_cast<char*>(name));
+    // Liberar buffers GPU
+    for (int i = 0; i < 10; i++) {
+        if (buffers[i]) {
+            cudaFree(buffers[i]);
+        }
+    }
+    
+    if (stream) {
+        cudaStreamDestroy(stream);
+    }
+}
+
+bool FaceDetector::loadEngine(const std::string& engine_path) {
+    std::ifstream file(engine_path, std::ios::binary);
+    if (!file.good()) {
+        spdlog::error("No se puede abrir engine: {}", engine_path);
+        return false;
+    }
+    
+    file.seekg(0, file.end);
+    size_t size = file.tellg();
+    file.seekg(0, file.beg);
+    
+    std::vector<char> engine_data(size);
+    file.read(engine_data.data(), size);
+    file.close();
+    
+    runtime.reset(nvinfer1::createInferRuntime(logger));
+    if (!runtime) {
+        spdlog::error("No se pudo crear runtime");
+        return false;
+    }
+    
+    engine.reset(runtime->deserializeCudaEngine(engine_data.data(), size));
+    if (!engine) {
+        spdlog::error("No se pudo deserializar engine");
+        return false;
+    }
+    
+    context.reset(engine->createExecutionContext());
+    if (!context) {
+        spdlog::error("No se pudo crear execution context");
+        return false;
+    }
+    
+    // Identificar input y outputs
+    int nb_bindings = engine->getNbBindings();
+    spdlog::info("Engine tiene {} bindings", nb_bindings);
+    
+    for (int i = 0; i < nb_bindings; i++) {
+        auto dims = engine->getBindingDimensions(i);
+        auto dtype = engine->getBindingDataType(i);
+        bool is_input = engine->bindingIsInput(i);
+        
+        spdlog::info("Binding {}: {} [{}] - {}", 
+                    i, engine->getBindingName(i),
+                    is_input ? "INPUT" : "OUTPUT",
+                    dims.d[0]);
+        
+        if (is_input) {
+            input_index = i;
+            input_height = dims.d[2];
+            input_width = dims.d[3];
+        } else {
+            output_indices.push_back(i);
+        }
+        
+        // Alocar memoria GPU
+        size_t binding_size = 1;
+        for (int j = 0; j < dims.nbDims; j++) {
+            binding_size *= dims.d[j];
+        }
+        binding_size *= sizeof(float);
+        
+        cudaMalloc(&buffers[i], binding_size);
+    }
+    
+    spdlog::info("Input: {}x{}", input_width, input_height);
+    spdlog::info("Outputs: {} tensors", output_indices.size());
+    
+    return true;
 }
 
 cv::Mat FaceDetector::preprocess(const cv::Mat& img) {
@@ -186,42 +171,51 @@ std::vector<Detection> FaceDetector::detect(const cv::Mat& img) {
     cv::Size orig_size = img.size();
     cv::Mat input_blob = preprocess(img);
     
-    std::vector<int64_t> input_shape = {1, 3, input_height, input_width};
-    size_t input_size = 1 * 3 * input_height * input_width;
-    
-    std::vector<float> input_data(input_size);
+    // HWC -> CHW
     std::vector<cv::Mat> channels(3);
     cv::split(input_blob, channels);
     
     size_t single_channel_size = input_height * input_width;
+    std::vector<float> input_data(1 * 3 * input_height * input_width);
+    
     for (int c = 0; c < 3; c++) {
         std::memcpy(input_data.data() + c * single_channel_size, 
                    channels[c].data, 
                    single_channel_size * sizeof(float));
     }
     
-    auto memory_info = Ort::MemoryInfo::CreateCpu(OrtArenaAllocator, OrtMemTypeDefault);
-    Ort::Value input_tensor = Ort::Value::CreateTensor<float>(
-        memory_info, input_data.data(), input_size, 
-        input_shape.data(), input_shape.size()
-    );
+    // Copiar input a GPU
+    cudaMemcpyAsync(buffers[input_index], input_data.data(), 
+                    input_data.size() * sizeof(float),
+                    cudaMemcpyHostToDevice, stream);
     
-    try {
-        auto outputs = session->Run(
-            Ort::RunOptions{nullptr},
-            input_names.data(), &input_tensor, input_names.size(),
-            output_names.data(), output_names.size()
-        );
+    // Ejecutar inferencia
+    context->enqueueV2(buffers, stream, nullptr);
+    
+    // Copiar outputs de GPU a CPU
+    std::vector<std::vector<float>> outputs(output_indices.size());
+    
+    for (size_t i = 0; i < output_indices.size(); i++) {
+        int idx = output_indices[i];
+        auto dims = engine->getBindingDimensions(idx);
         
-        return postprocess(outputs, orig_size);
+        size_t size = 1;
+        for (int j = 0; j < dims.nbDims; j++) {
+            size *= dims.d[j];
+        }
         
-    } catch (const std::exception& e) {
-        spdlog::error("Inferencia fallo: {}", e.what());
-        return {};
+        outputs[i].resize(size);
+        cudaMemcpyAsync(outputs[i].data(), buffers[idx],
+                       size * sizeof(float),
+                       cudaMemcpyDeviceToHost, stream);
     }
+    
+    cudaStreamSynchronize(stream);
+    
+    return postprocess(outputs, orig_size);
 }
 
-std::vector<Detection> FaceDetector::postprocess(const std::vector<Ort::Value>& outputs,
+std::vector<Detection> FaceDetector::postprocess(const std::vector<std::vector<float>>& outputs,
                                                  const cv::Size& orig_size) {
     std::vector<Detection> detections;
     
@@ -248,12 +242,11 @@ std::vector<Detection> FaceDetector::postprocess(const std::vector<Ort::Value>& 
         int box_idx = scale_idx + 3;
         int kpss_idx = scale_idx + 6;
         
-        auto* scores_data = outputs[score_idx].GetTensorData<float>();
-        auto* boxes_data = outputs[box_idx].GetTensorData<float>();
-        auto* kpss_data = outputs[kpss_idx].GetTensorData<float>();
+        const float* scores_data = outputs[score_idx].data();
+        const float* boxes_data = outputs[box_idx].data();
+        const float* kpss_data = outputs[kpss_idx].data();
         
-        auto scores_shape = outputs[score_idx].GetTensorTypeAndShapeInfo().GetShape();
-        int num_anchors = static_cast<int>(scores_shape[0]);
+        int num_anchors = static_cast<int>(outputs[score_idx].size());
         
         auto anchors = generate_anchors(scales[scale_idx].feat_h, 
                                        scales[scale_idx].feat_w, 
@@ -279,19 +272,6 @@ std::vector<Detection> FaceDetector::postprocess(const std::vector<Ort::Value>& 
             
             float aspect = static_cast<float>(det.box.width) / det.box.height;
             if (aspect < MIN_ASPECT_RATIO || aspect > MAX_ASPECT_RATIO) continue;
-            
-            if (ENABLE_LANDMARK_VALIDATION) {
-                int landmarks_inside = 0;
-                for (int j = 0; j < 5; j++) {
-                    if (det.landmarks[j].x >= det.box.x && 
-                        det.landmarks[j].x <= det.box.x + det.box.width &&
-                        det.landmarks[j].y >= det.box.y && 
-                        det.landmarks[j].y <= det.box.y + det.box.height) {
-                        landmarks_inside++;
-                    }
-                }
-                if (landmarks_inside < MIN_LANDMARKS_INSIDE) continue;
-            }
             
             detections.push_back(det);
         }

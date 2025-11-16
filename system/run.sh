@@ -54,19 +54,18 @@ case "$1" in
         echo "Threshold: $THRESHOLD"
         echo ""
         
-        # Compilar si es necesario
         if [ ! -f "build/bin/test_detector" ]; then
             echo "Compilando..."
             ./build.sh
         fi
         
-        ./build/bin/test_detector models/retinaface.onnx "$IMAGE"
+        # Usar TensorRT engine en vez de ONNX
+        ./build/bin/test_detector models/engines/model.engine "$IMAGE"
         ;;
     
     test-video)
         echo "=== Test Detector: Video ==="
         
-        # Si no se especifica video, usar el más reciente
         if [ -z "$2" ]; then
             VIDEO=$(ls -t videos/recording_*.mp4 2>/dev/null | head -1)
             if [ -z "$VIDEO" ]; then
@@ -98,13 +97,13 @@ case "$1" in
         echo "  F     - modo rápido"
         echo ""
         
-        # Compilar si es necesario
         if [ ! -f "build/bin/test_detector_video" ]; then
             echo "Compilando..."
             ./build.sh
         fi
         
-        ./build/bin/test_detector_video models/retinaface.onnx "$VIDEO" $THRESHOLD
+        # Usar TensorRT engine
+        ./build/bin/test_detector_video models/engines/model.engine "$VIDEO" $THRESHOLD
         ;;
     
     test-webcam)
@@ -117,24 +116,45 @@ case "$1" in
             ./build.sh
         fi
         
-        ./build/bin/test_detector models/retinaface.onnx
+        ./build/bin/test_detector models/engines/model.engine
         ;;
     
-    diagnose)
-        echo "=== Diagnóstico de Modelo ==="
-        IMAGE=${2:-test/img/test1.png}
+    # ============================================
+    # CONVERSIÓN ONNX -> TENSORRT
+    # ============================================
+    convert)
+        echo "=== Convertir ONNX a TensorRT ==="
+        ONNX_MODEL=${2:-models/retinaface.onnx}
+        OUTPUT_ENGINE=${3:-models/engines/model.engine}
         
-        if [ ! -f "$IMAGE" ]; then
-            echo "Imagen no encontrada: $IMAGE"
+        if [ ! -f "$ONNX_MODEL" ]; then
+            echo "Error: Modelo ONNX no encontrado: $ONNX_MODEL"
             exit 1
         fi
         
-        if [ ! -f "build/bin/diagnose_retinaface" ]; then
-            echo "Compilando..."
-            ./build.sh
-        fi
+        mkdir -p models/engines
         
-        ./build/bin/diagnose_retinaface models/retinaface.onnx "$IMAGE"
+        echo "Entrada: $ONNX_MODEL"
+        echo "Salida: $OUTPUT_ENGINE"
+        echo ""
+        echo "Convirtiendo con trtexec..."
+        
+        trtexec \
+            --onnx="$ONNX_MODEL" \
+            --saveEngine="$OUTPUT_ENGINE" \
+            --fp16 \
+            --workspace=2048 \
+            --verbose
+        
+        if [ $? -eq 0 ]; then
+            echo ""
+            echo "✓ Conversión exitosa: $OUTPUT_ENGINE"
+            ls -lh "$OUTPUT_ENGINE"
+        else
+            echo ""
+            echo "✗ Error en conversión"
+            exit 1
+        fi
         ;;
     
     # ============================================
@@ -187,6 +207,7 @@ case "$1" in
         cat << 'EOF'
 ╔════════════════════════════════════════════════════════════╗
 ║                   PANTO - Menú de Comandos                 ║
+║                    (TensorRT Version)                      ║
 ╚════════════════════════════════════════════════════════════╝
 
 📹 CAPTURA DE VIDEO
@@ -202,12 +223,12 @@ case "$1" in
     ./run.sh record 60           # 60 segundos
     ./run.sh view-main
 
-🎯 DETECCIÓN DE ROSTROS
+🎯 DETECCIÓN DE ROSTROS (TensorRT)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   test-img          - Probar con imagen
   test-video        - Probar con video MP4
   test-webcam       - Probar con webcam
-  diagnose          - Diagnóstico de modelo
+  convert           - Convertir ONNX a TensorRT
 
   Ejemplos:
     ./run.sh test-img                          # Usa test/img/test1.png
@@ -217,6 +238,8 @@ case "$1" in
     ./run.sh test-video                        # Video más reciente
     ./run.sh test-video videos/video.mp4       # Video específico
     ./run.sh test-video videos/video.mp4 0.6   # Con threshold 0.6
+    
+    ./run.sh convert models/retinaface.onnx    # Convertir a TensorRT
 
 🚀 APLICACIÓN PRINCIPAL
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -235,9 +258,17 @@ case "$1" in
 
 📖 PRIMEROS PASOS
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-  1. Descargar modelos:  ./run.sh models
-  2. Compilar:           ./run.sh build
-  3. Probar detector:    ./run.sh test-img
+  1. Descargar modelo ONNX:   ./run.sh models
+  2. Convertir a TensorRT:    ./run.sh convert models/retinaface.onnx
+  3. Compilar:                ./run.sh build
+  4. Probar detector:         ./run.sh test-img
+
+⚡ TENSORRT vs ONNX
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+  • ONNX Runtime:  ~40ms/frame (CPU) o ~8ms (CUDA)
+  • TensorRT:      ~3-5ms/frame (optimizado para Jetson)
+  
+  TensorRT es 2-3x más rápido que ONNX Runtime CUDA
 
 ⚙️  AJUSTAR THRESHOLD
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━

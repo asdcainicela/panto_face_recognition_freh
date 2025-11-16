@@ -17,61 +17,50 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 find_package(OpenCV REQUIRED)
 find_package(spdlog REQUIRED)
 
-find_package(CUDA QUIET)
-if(CUDA_FOUND)
-    message(STATUS "CUDA found: ${CUDA_VERSION}")
-    include_directories(${CUDA_INCLUDE_DIRS})
-    set(CUDA_LIBRARIES ${CUDA_LIBRARIES})
-else()
-    message(WARNING "CUDA not found - detector will use CPU only")
-    set(CUDA_LIBRARIES "")
-endif()
+find_package(CUDA REQUIRED)
+message(STATUS "CUDA found: ${CUDA_VERSION}")
+include_directories(${CUDA_INCLUDE_DIRS})
 
-# Buscar ONNX Runtime headers
-find_path(ONNXRUNTIME_INCLUDE_DIRS onnxruntime_cxx_api.h 
-    HINTS 
-    /usr/local/include/onnxruntime/session
-    /usr/local/include/onnxruntime
-    /usr/local/include
-    /usr/include/onnxruntime/session
-    /usr/include/onnxruntime
+# Buscar TensorRT
+find_path(TENSORRT_INCLUDE_DIR NvInfer.h
+    HINTS
+    /usr/include/aarch64-linux-gnu
     /usr/include
-    /opt/onnxruntime/include
+    /usr/local/include
+    /opt/tensorrt/include
 )
 
-# Buscar ONNX Runtime library - incluir ubicación de Python package
-find_library(ONNXRUNTIME_LIBRARIES 
-    NAMES onnxruntime libonnxruntime
-    HINTS 
-    /usr/local/lib 
-    /usr/lib 
+find_library(TENSORRT_LIBRARY nvinfer
+    HINTS
     /usr/lib/aarch64-linux-gnu
-    /opt/onnxruntime/lib
-    /usr/local/lib/python3.8/dist-packages/onnxruntime/capi
-    /usr/local/lib/python3.10/dist-packages/onnxruntime/capi
-    /usr/local/lib/python3.11/dist-packages/onnxruntime/capi
+    /usr/lib
+    /usr/local/lib
+    /opt/tensorrt/lib
 )
 
-if(NOT ONNXRUNTIME_INCLUDE_DIRS OR NOT ONNXRUNTIME_LIBRARIES)
-    message(FATAL_ERROR "ONNX Runtime not found\n"
-        "  Headers searched in: /usr/local/include/onnxruntime, /usr/include/onnxruntime\n"
-        "  Library searched in: /usr/local/lib, /usr/lib, Python dist-packages\n"
-        "  Found headers: ${ONNXRUNTIME_INCLUDE_DIRS}\n"
-        "  Found library: ${ONNXRUNTIME_LIBRARIES}")
+find_library(TENSORRT_PLUGIN_LIBRARY nvinfer_plugin
+    HINTS
+    /usr/lib/aarch64-linux-gnu
+    /usr/lib
+    /usr/local/lib
+    /opt/tensorrt/lib
+)
+
+if(NOT TENSORRT_INCLUDE_DIR OR NOT TENSORRT_LIBRARY)
+    message(FATAL_ERROR "TensorRT not found\n"
+        "  Headers searched in: /usr/include/aarch64-linux-gnu, /usr/include\n"
+        "  Library searched in: /usr/lib/aarch64-linux-gnu, /usr/lib\n"
+        "  Found headers: ${TENSORRT_INCLUDE_DIR}\n"
+        "  Found library: ${TENSORRT_LIBRARY}")
 endif()
 
-message(STATUS "ONNX Runtime Include: ${ONNXRUNTIME_INCLUDE_DIRS}")
-message(STATUS "ONNX Runtime Library: ${ONNXRUNTIME_LIBRARIES}")
+message(STATUS "TensorRT Include: ${TENSORRT_INCLUDE_DIR}")
+message(STATUS "TensorRT Library: ${TENSORRT_LIBRARY}")
+message(STATUS "TensorRT Plugin: ${TENSORRT_PLUGIN_LIBRARY}")
 
 include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${CMAKE_SOURCE_DIR}/include)
-include_directories(${ONNXRUNTIME_INCLUDE_DIRS})
-
-# Si los headers están en session/, incluir también el directorio padre
-if(ONNXRUNTIME_INCLUDE_DIRS MATCHES "session$")
-    get_filename_component(ONNXRUNTIME_PARENT_DIR ${ONNXRUNTIME_INCLUDE_DIRS} DIRECTORY)
-    include_directories(${ONNXRUNTIME_PARENT_DIR})
-endif()
+include_directories(${TENSORRT_INCLUDE_DIR})
 
 add_library(panto_utils SHARED src/utils.cpp)
 target_link_libraries(panto_utils 
@@ -115,8 +104,10 @@ set_target_properties(panto_stream PROPERTIES
 add_library(panto_detector SHARED src/detector.cpp)
 target_link_libraries(panto_detector 
     ${OpenCV_LIBS}
-    ${ONNXRUNTIME_LIBRARIES}
+    ${TENSORRT_LIBRARY}
+    ${TENSORRT_PLUGIN_LIBRARY}
     ${CUDA_LIBRARIES}
+    cudart
     spdlog::spdlog
 )
 set_target_properties(panto_detector PROPERTIES
@@ -167,20 +158,12 @@ target_link_libraries(test_detector_video
     spdlog::spdlog
 )
 
-add_executable(diagnose_retinaface test/diagnose_retinaface.cpp)
-target_link_libraries(diagnose_retinaface
-    ${OpenCV_LIBS}
-    ${ONNXRUNTIME_LIBRARIES}
-    ${CUDA_LIBRARIES}
-    spdlog::spdlog
-)
-
 install(TARGETS panto_utils panto_draw panto_stream panto_detector
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
 )
 
-install(TARGETS record view record_view panto test_detector test_detector_video diagnose_retinaface
+install(TARGETS record view record_view panto test_detector test_detector_video
     RUNTIME DESTINATION bin
 )
 
@@ -191,9 +174,6 @@ message(STATUS "========================================")
 message(STATUS "PANTO Build Configuration")
 message(STATUS "========================================")
 message(STATUS "OpenCV: ${OpenCV_VERSION}")
-message(STATUS "CUDA: ${CUDA_FOUND}")
-if(CUDA_FOUND)
-    message(STATUS "  Version: ${CUDA_VERSION}")
-endif()
-message(STATUS "ONNX Runtime: ${ONNXRUNTIME_LIBRARIES}")
+message(STATUS "CUDA: ${CUDA_VERSION}")
+message(STATUS "TensorRT: ${TENSORRT_LIBRARY}")
 message(STATUS "========================================")
