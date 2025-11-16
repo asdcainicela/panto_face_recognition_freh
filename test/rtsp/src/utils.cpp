@@ -9,6 +9,7 @@ std::string gst_pipeline(const std::string& user, const std::string& pass,
     int latency = (stream_type == "main") ? 100 : 80;
     
     // Pipeline optimizado con GPU y mejor manejo de buffer
+    /*
     return "rtspsrc location=rtsp://" + user + ":" + pass + "@" + ip + ":" + 
            std::to_string(port) + "/" + stream_type + 
            " latency=" + std::to_string(latency) + 
@@ -33,6 +34,27 @@ std::string gst_pipeline(const std::string& user, const std::string& pass,
            "videoconvert ! "
            "video/x-raw,format=BGR ! "
            "appsink drop=0 max-buffers=10 sync=0 emit-signals=true";  // Más buffers
+           */
+        return "rtspsrc location=rtsp://" + user + ":" + pass + "@" + ip + ":" + 
+           std::to_string(port) + "/" + stream_type + 
+           " latency=200"                    // Buffer medio para estabilidad
+           " protocols=tcp"
+           " buffer-mode=4"                  // Slave mode: sincroniza con cámara
+           " ntp-sync=true"                  // Sincronización temporal
+           " timeout=20000000"               // 20 segundos timeout
+           " tcp-timeout=20000000"
+           " do-rtcp=true"                   // Control de calidad
+           " retry=10"                       // Más reintentos
+           " drop-on-latency=false ! "       // NO descartar frames (importante para grabación)
+           "queue max-size-buffers=20 max-size-time=0 max-size-bytes=0 ! "  // Buffer grande
+           "rtph264depay ! "
+           "h264parse config-interval=-1 ! " // Enviar headers regularmente
+           "nvv4l2decoder enable-max-performance=1 drop-frame-interval=0 ! "
+           "nvvidconv ! "
+           "video/x-raw,format=BGRx ! "
+           "videoconvert ! "
+           "video/x-raw,format=BGR ! "
+           "appsink drop=false max-buffers=15 sync=false";  // NO sync para evitar acumulación     
 }
 
 std::string gst_pipeline_adaptive(const std::string& user, const std::string& pass, 
