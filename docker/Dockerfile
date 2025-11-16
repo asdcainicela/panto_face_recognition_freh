@@ -211,18 +211,36 @@ RUN git clone --depth 1 --branch v3.3.0 https://github.com/catchorg/Catch2.git &
     cmake .. && make install && \
     cd /tmp && rm -rf Catch2
 
-# Python y NumPy
+# ========================================
+# SECCIÓN PYTHON - ORDEN CORRECTO
+# ========================================
+
+# 1. Instalar Python base y dependencias del sistema
 RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-dev \
     python3-numpy \
     && rm -rf /var/lib/apt/lists/*
 
+# 2. Actualizar pip
 RUN python3 -m pip install --no-cache-dir --upgrade pip
 
-RUN pip3 install --no-cache-dir onnx onnx-simplifier
+# 3. PRIMERO: Instalar dependencias base con versiones específicas
+RUN pip3 install --no-cache-dir \
+    packaging \
+    setuptools \
+    wheel \
+    "numpy<2.0" \
+    Cython
 
-RUN pip3 install --no-cache-dir packaging setuptools wheel "numpy<2.0" Cython
+# 4. DESPUÉS: Instalar ONNX básico (solo para inspección, sin Runtime)
+RUN pip3 install --no-cache-dir \
+    onnx==1.15.0 \
+    protobuf==3.20.3
+
+# ========================================
+# FIN SECCIÓN PYTHON
+# ========================================
 
 # Compilar OpenCV con GCC 9
 RUN update-alternatives --set gcc /usr/bin/gcc-9
@@ -280,7 +298,7 @@ RUN update-alternatives --set gcc /usr/bin/gcc-11
 ENV CC=/usr/bin/gcc-11
 ENV CXX=/usr/bin/g++-11
 
-# Paquetes Python
+# Paquetes Python adicionales (DESPUÉS de OpenCV)
 RUN pip3 install --no-cache-dir \
     notebook \
     jupyterlab \
@@ -362,6 +380,7 @@ RUN echo '#!/bin/bash' > /usr/local/bin/quick-check && \
     echo 'echo "OpenCV: $(pkg-config --modversion opencv4 2>/dev/null || echo Not found)"' >> /usr/local/bin/quick-check && \
     echo 'echo "CUDA Devices: $(python3 -c \"import cv2; print(cv2.cuda.getCudaEnabledDeviceCount())\" 2>/dev/null || echo 0)"' >> /usr/local/bin/quick-check && \
     echo 'echo "TensorRT: $(ls /usr/lib/aarch64-linux-gnu/libnvinfer.so* 2>/dev/null | head -n1 || echo Not found)"' >> /usr/local/bin/quick-check && \
+    echo 'echo "ONNX Version: $(python3 -c \"import onnx; print(onnx.__version__)\" 2>/dev/null || echo Not installed)"' >> /usr/local/bin/quick-check && \
     echo 'echo "JupyterLab: http://localhost:8888 (token: nvidia)"' >> /usr/local/bin/quick-check && \
     chmod +x /usr/local/bin/quick-check
 
