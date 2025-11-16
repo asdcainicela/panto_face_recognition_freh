@@ -10,7 +10,8 @@ std::string gst_pipeline(const std::string& user, const std::string& pass,
     return "rtspsrc location=rtsp://" + user + ":" + pass + "@" + ip + ":" + 
            std::to_string(port) + "/" + stream_type + " latency=" + std::to_string(latency) + " ! "
            "rtph264depay ! h264parse ! nvv4l2decoder ! "
-           "nvvidconv ! video/x-raw, format=BGRx ! videoconvert ! appsink";
+           "nvvidconv ! video/x-raw,format=BGRx ! videoconvert ! "
+           "video/x-raw,format=BGR ! appsink drop=1 max-buffers=2 sync=0";
 }
 
 cv::VideoCapture open_cap(const std::string& pipeline, int retries) {
