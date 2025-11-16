@@ -220,6 +220,8 @@ RUN apt-get update && apt-get install -y \
 
 RUN python3 -m pip install --no-cache-dir --upgrade pip
 
+RUN pip3 install --no-cache-dir onnx onnx-simplifier
+
 RUN pip3 install --no-cache-dir packaging setuptools wheel "numpy<2.0" Cython
 
 # Compilar OpenCV con GCC 9
