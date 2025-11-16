@@ -240,6 +240,43 @@ int main(int argc, char** argv) {
         return 1;
     }
     
+    // Detectar dimensiones dinámicas (0 = dynamic)
+    bool hasDynamicDims = false;
+    for (size_t i = 0; i < meta.inputShape.size(); ++i) {
+        if (meta.inputShape[i] == 0) {
+            hasDynamicDims = true;
+            break;
+        }
+    }
+    
+    if (hasDynamicDims) {
+        spdlog::warn("⚠️  Detectadas dimensiones dinámicas en el modelo");
+        spdlog::info("Por favor, ingrese las dimensiones reales para el engine:");
+        
+        std::cout << "  Batch size (N): ";
+        std::cin >> meta.inputShape[0];
+        
+        // C ya está definido, verificar si es dinámico
+        if (meta.inputShape[1] == 0) {
+            std::cout << "  Channels (C): ";
+            std::cin >> meta.inputShape[1];
+        }
+        
+        if (meta.inputShape[2] == 0) {
+            std::cout << "  Height (H): ";
+            std::cin >> meta.inputShape[2];
+        }
+        
+        if (meta.inputShape[3] == 0) {
+            std::cout << "  Width (W): ";
+            std::cin >> meta.inputShape[3];
+        }
+        
+        spdlog::info("Shape configurado: [{}, {}, {}, {}]",
+            meta.inputShape[0], meta.inputShape[1], 
+            meta.inputShape[2], meta.inputShape[3]);
+    }
+    
     // Crear TensorRT builder
     TRTLogger logger;
     
@@ -311,13 +348,18 @@ int main(int argc, char** argv) {
     
     // Construir engine
     spdlog::info("Construyendo TensorRT engine (esto puede tardar varios minutos)...");
-    auto engine = std::unique_ptr<ICudaEngine>(
-        builder->buildEngineWithConfig(*network, *config));
+    auto serializedNetwork = std::unique_ptr<IHostMemory>(
+        builder->buildSerializedNetwork(*network, *config));
     
-    if (!engine) {
-        spdlog::error("Error construyendo engine TensorRT");
+    if (!serializedNetwork) {
+        spdlog::error("Error construyendo serialized network");
         return 1;
     }
+    
+    auto runtime = std::unique_ptr<IRuntime>(createInferRuntime(logger));
+    auto engine = std::unique_ptr<ICudaEngine>(
+        runtime->deserializeCudaEngine(serializedNetwork->data(), serializedNetwork->size()));
+    
     
     // Serializar y guardar
     spdlog::info("Serializando engine...");
