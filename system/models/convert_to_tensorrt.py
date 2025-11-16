@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-python3 convert_to_tensort.py --input retinaface.onnx --output retinaface.engine
-python3 convert_to_tensort.py --input ./buffalo_models --output ./engines
+python3 convert_to_tensorrt.py --input retinaface.onnx --output retinaface.engine
+python3 convert_to_tensorrt.py --input ./buffalo_models --output ./engines
 
 """
 
