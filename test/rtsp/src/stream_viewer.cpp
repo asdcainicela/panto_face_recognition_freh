@@ -12,12 +12,14 @@ StreamViewer::StreamViewer(const std::string& user, const std::string& pass,
     : user(user), pass(pass), ip(ip), port(port), stream_type(stream_type),
       display_size(display_size), fps_interval(fps_interval),
       frames(0), lost(0), current_fps(0.0), recording_enabled(false),
-      stop_signal(nullptr), max_duration(0) {
+      stop_signal(nullptr), max_duration(0), reconnect_count(0), 
+      use_adaptive_latency(true) {  // Activar latencia adaptativa por defecto
     
     pipeline = gst_pipeline(user, pass, ip, port, stream_type);
     window_name = "rtsp " + ip + "/" + stream_type + " " + std::to_string(port) + " stream";
     start_main = std::chrono::steady_clock::now();
     start_fps = start_main;
+    last_health_check = start_main;
     cached_stats = {0.0, 0, 0};
 }
 
@@ -44,6 +46,10 @@ void StreamViewer::set_max_duration(int seconds) {
 
 void StreamViewer::set_stop_signal(std::atomic<bool>* signal) {
     stop_signal = signal;
+}
+
+void StreamViewer::enable_adaptive_latency(bool enable) {
+    use_adaptive_latency = enable;
 }
 
 bool StreamViewer::init_recording() {
@@ -75,18 +81,42 @@ void StreamViewer::stop_recording() {
 }
 
 bool StreamViewer::reconnect() {
+    reconnect_count++;
+    spdlog::warn("reconectando stream {} (intento #{})", stream_type, reconnect_count);
+    
     bool was_recording = writer.isOpened();
     if (was_recording) writer.release();
     
     cap.release();
-    std::this_thread::sleep_for(std::chrono::seconds(1));
+    
+    // Espera progresiva: 1s, 2s, 3s, hasta máximo 5s
+    int wait_time = std::min(reconnect_count, 5);
+    spdlog::info("esperando {}s antes de reconectar...", wait_time);
+    std::this_thread::sleep_for(std::chrono::seconds(wait_time));
     
     try {
-        cap = open_cap(pipeline);
+        // Usar latencia adaptativa en reconexión si está activada
+        if (use_adaptive_latency && current_fps > 0) {
+            pipeline = gst_pipeline_adaptive(user, pass, ip, port, stream_type, current_fps);
+            spdlog::info("usando pipeline adaptativo para reconexión");
+        }
+        
+        cap = open_cap(pipeline, 3);  // Menos reintentos en reconexión
+        
+        // Verificar salud del stream
+        if (!verify_stream_health(cap)) {
+            spdlog::error("stream reconectado pero no está saludable");
+            return false;
+        }
+        
         if (was_recording) init_recording();
+        
+        spdlog::info("✓ reconexión exitosa para stream {}", stream_type);
+        reconnect_count = 0;  // Reset contador en reconexión exitosa
         return true;
-    } catch (...) {
-        spdlog::error("reconexion fallida para stream {}", stream_type);
+        
+    } catch (const std::exception& e) {
+        spdlog::error("reconexión fallida para stream {}: {}", stream_type, e.what());
         return false;
     }
 }
@@ -94,8 +124,43 @@ bool StreamViewer::reconnect() {
 void StreamViewer::update_fps() {
     if (frames % fps_interval == 0 && frames > 0) {
         auto now = std::chrono::steady_clock::now();
-        current_fps = fps_interval / std::chrono::duration<double>(now - start_fps).count();
+        double new_fps = fps_interval / std::chrono::duration<double>(now - start_fps).count();
+        
+        // Detectar cambios bruscos de FPS
+        bool fps_changed_significantly = false;
+        if (current_fps > 0) {
+            double fps_change_ratio = std::abs(new_fps - current_fps) / current_fps;
+            if (fps_change_ratio > 0.3) {  // Cambió más del 30%
+                fps_changed_significantly = true;
+                spdlog::info("cambio significativo de FPS en {}: {:.1f} -> {:.1f}", 
+                            stream_type, current_fps, new_fps);
+            }
+        }
+        
+        current_fps = new_fps;
         start_fps = now;
+        
+        // Actualizar pipeline con latencia adaptativa
+        if (use_adaptive_latency) {
+            auto since_last_update = std::chrono::duration_cast<std::chrono::seconds>(
+                now - last_health_check).count();
+            
+            // Actualizar cada 30 segundos O si hay cambio brusco de FPS
+            if (since_last_update >= 30 || fps_changed_significantly) {
+                spdlog::info("ajustando latencia adaptativa (fps actual: {:.1f})", current_fps);
+                
+                // Regenerar pipeline con nueva latencia
+                std::string new_pipeline = gst_pipeline_adaptive(user, pass, ip, port, stream_type, current_fps);
+                
+                // Solo actualizar si el pipeline cambió significativamente
+                if (new_pipeline != pipeline) {
+                    pipeline = new_pipeline;
+                    spdlog::debug("pipeline actualizado para optimizar latencia");
+                }
+                
+                last_health_check = now;
+            }
+        }
     }
     
     cached_stats.fps = current_fps;
@@ -111,8 +176,17 @@ void StreamViewer::print_stats() {
     if (frames % fps_interval == 0) {
         const auto& s = get_stats();
         std::string rec_status = is_recording() ? " [REC]" : "";
-        spdlog::info("stream: {} | frames: {} | fps: {} | perdidos: {}{}", 
-                     stream_type, s.frames, int(s.fps), s.lost, rec_status);
+        std::string adaptive = use_adaptive_latency ? " [ADAPTIVE]" : "";
+        
+        // Indicador visual de calidad de FPS
+        std::string fps_status;
+        if (current_fps <= 5) fps_status = " ⚠️ FPS CRÍTICO";
+        else if (current_fps <= 10) fps_status = " ⚡ FPS BAJO";
+        else if (current_fps >= 25) fps_status = " ✓ FPS ALTO";
+        else fps_status = "";
+        
+        spdlog::info("stream: {} | frames: {} | fps: {:.1f}{} | perdidos: {} | reconexiones: {}{}{}", 
+                     stream_type, s.frames, s.fps, fps_status, s.lost, reconnect_count, rec_status, adaptive);
     }
 }
 
@@ -124,6 +198,7 @@ void StreamViewer::print_final_stats() {
     spdlog::info("duracion total: {:.2f} s", duration);
     spdlog::info("frames totales: {} | frames perdidos: {}", frames, lost);
     spdlog::info("fps promedio: {:.2f}", frames / duration);
+    spdlog::info("reconexiones totales: {}", reconnect_count);
     
     if (recording_enabled) {
         spdlog::info("archivo grabado: {}", output_filename);
@@ -152,6 +227,9 @@ void StreamViewer::run() {
         cv::moveWindow(window_name, 800, 0);
     }
 
+    int consecutive_fails = 0;
+    const int MAX_CONSECUTIVE_FAILS = 50;  // Reintentar reconectar hasta 50 fallos consecutivos
+
     while (true) {
         if (stop_signal && *stop_signal) break;
         
@@ -162,10 +240,26 @@ void StreamViewer::run() {
         
         if (!cap.read(frame)) {
             lost++;
-            if (!reconnect()) break;
+            consecutive_fails++;
+            
+            if (consecutive_fails >= MAX_CONSECUTIVE_FAILS) {
+                spdlog::error("demasiados fallos consecutivos ({}), abortando stream {}", 
+                             consecutive_fails, stream_type);
+                break;
+            }
+            
+            // Verificar si el stream sigue vivo antes de reconectar
+            if (!verify_stream_health(cap)) {
+                if (!reconnect()) {
+                    spdlog::error("no se pudo reconectar, finalizando stream {}", stream_type);
+                    break;
+                }
+                consecutive_fails = 0;  // Reset en reconexión exitosa
+            }
             continue;
         }
 
+        consecutive_fails = 0;  // Reset en lectura exitosa
         frames++;
         
         if (is_recording()) writer.write(frame);
@@ -176,16 +270,21 @@ void StreamViewer::run() {
         const auto& s = get_stats();
         cv::Scalar color = is_recording() ? cv::Scalar(0, 0, 255) : cv::Scalar(255, 0, 0);
         
-        cv::rectangle(display, cv::Rect(0, 0, display.cols/4 + display.cols/16, display.rows/4 + 20), color, 0.5);
+        cv::rectangle(display, cv::Rect(0, 0, display.cols/4 + display.cols/16, display.rows/4 + 40), color, 0.5);
         
         cv::putText(display, "channel: " + stream_type, cv::Point(10, 20), cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 1);
         cv::putText(display, "frames: " + std::to_string(s.frames), cv::Point(10, 40), cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 1);
         cv::putText(display, "fps: " + std::to_string(int(s.fps)), cv::Point(10, 60), cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 1);
         cv::putText(display, "lost: " + std::to_string(s.lost), cv::Point(10, 80), cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 1);
         cv::putText(display, "resolution: " + std::to_string(frame.cols) + "*" + std::to_string(frame.rows), cv::Point(10, 100), cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 1);
+        cv::putText(display, "reconnects: " + std::to_string(reconnect_count), cv::Point(10, 120), cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 1);
         
         if (is_recording()) {
-            cv::putText(display, "REC", cv::Point(10, 120), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 255), 2);
+            cv::putText(display, "REC", cv::Point(10, 140), cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(0, 0, 255), 2);
+        }
+        
+        if (use_adaptive_latency) {
+            cv::putText(display, "ADAPTIVE", cv::Point(10, 160), cv::FONT_HERSHEY_SIMPLEX, 0.4, cv::Scalar(0, 255, 0), 1);
         }
 
         cv::imshow(window_name, display);

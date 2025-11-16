@@ -23,7 +23,7 @@ private:
 
     int frames, lost;
     double current_fps;
-    std::chrono::steady_clock::time_point start_main, start_fps;
+    std::chrono::steady_clock::time_point start_main, start_fps, last_health_check;
     std::string window_name;
     std::string pipeline;
 
@@ -31,6 +31,8 @@ private:
     std::string output_filename;
     std::atomic<bool>* stop_signal;
     int max_duration;
+    int reconnect_count;
+    bool use_adaptive_latency;
 
     bool reconnect();
     void update_fps();
@@ -50,7 +52,9 @@ public:
     void enable_recording(const std::string& output_dir = "../videos_rtsp");
     void set_max_duration(int seconds);
     void set_stop_signal(std::atomic<bool>* signal);
+    void enable_adaptive_latency(bool enable);
     void run();
     
     bool is_recording() const { return recording_enabled && writer.isOpened(); }
+    int get_reconnect_count() const { return reconnect_count; }
 };
