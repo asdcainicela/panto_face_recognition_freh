@@ -211,36 +211,17 @@ RUN git clone --depth 1 --branch v3.3.0 https://github.com/catchorg/Catch2.git &
     cmake .. && make install && \
     cd /tmp && rm -rf Catch2
 
-# ========================================
-# SECCIÓN PYTHON - ORDEN CORRECTO
-# ========================================
-
-# 1. Instalar Python base y dependencias del sistema
+# Python base (solo lo necesario para OpenCV)
 RUN apt-get update && apt-get install -y \
     python3-pip \
     python3-dev \
     python3-numpy \
     && rm -rf /var/lib/apt/lists/*
 
-# 2. Actualizar pip
 RUN python3 -m pip install --no-cache-dir --upgrade pip
 
-# 3. PRIMERO: Instalar dependencias base con versiones específicas
-RUN pip3 install --no-cache-dir \
-    packaging \
-    setuptools \
-    wheel \
-    "numpy<2.0" \
-    Cython
-
-# 4. DESPUÉS: Instalar ONNX básico (solo para inspección, sin Runtime)
-RUN pip3 install --no-cache-dir \
-    onnx==1.15.0 \
-    protobuf==3.20.3
-
-# ========================================
-# FIN SECCIÓN PYTHON
-# ========================================
+# Solo NumPy para compilar OpenCV
+RUN pip3 install --no-cache-dir packaging setuptools wheel "numpy<2.0" Cython
 
 # Compilar OpenCV con GCC 9
 RUN update-alternatives --set gcc /usr/bin/gcc-9
@@ -298,7 +279,16 @@ RUN update-alternatives --set gcc /usr/bin/gcc-11
 ENV CC=/usr/bin/gcc-11
 ENV CXX=/usr/bin/g++-11
 
-# Paquetes Python adicionales (DESPUÉS de OpenCV)
+# ========================================
+# PAQUETES PYTHON ADICIONALES (AL FINAL)
+# ========================================
+
+# ONNX básico para inspección
+RUN pip3 install --no-cache-dir \
+    onnx==1.15.0 \
+    protobuf==3.20.3
+
+# Paquetes Python adicionales
 RUN pip3 install --no-cache-dir \
     notebook \
     jupyterlab \
