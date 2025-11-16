@@ -1,0 +1,12 @@
+**/.git
+**/.gitignore
+**/.vscode
+**/__pycache__
+**/*.pyc
+**/.DS_Store
+**/build
+**/CMakeFiles
+**/CMakeCache.txt
+**/*.o
+**/*.so
+**/*.a
