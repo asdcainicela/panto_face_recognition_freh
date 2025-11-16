@@ -43,8 +43,18 @@ cv::VideoCapture open_cap(const std::string& pipeline, int retries) {
             bool can_read = cap.read(test_frame);
             
             if (can_read && !test_frame.empty()) {
+                // Obtener información del stream
+                double fps = cap.get(cv::CAP_PROP_FPS);
+                int width = test_frame.cols;
+                int height = test_frame.rows;
+                
                 spdlog::info("✓ conectado exitosamente");
-                spdlog::info("  resolución: {}x{}", test_frame.cols, test_frame.rows);
+                spdlog::info("  resolución: {}x{}", width, height);
+                spdlog::info("  fps reportado: {:.1f}", fps > 0 ? fps : 0.0);
+                
+                // Configurar buffer settings para mejor rendimiento
+                cap.set(cv::CAP_PROP_BUFFERSIZE, 3);
+                
                 return cap;
             } else {
                 spdlog::warn("pipeline abierto pero no puede leer frames");
