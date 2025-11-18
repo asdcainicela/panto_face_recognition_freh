@@ -5,8 +5,7 @@ from tqdm import tqdm
 from pathlib import Path
 
 URLS_FILE = "models_urls.json"
-OUT_DIR = Path("models")
-OUT_DIR.mkdir(exist_ok=True)
+CURRENT_DIR = Path(".")
 
 MIN_SIZES = {
     "scrfd_2.5g_bnkps.onnx": 3_000_000,
@@ -15,9 +14,7 @@ MIN_SIZES = {
     "realesrgan_x4plus.onnx": 40_000_000,
 }
 
-# ==================================================
-# CONFIGURACIÓN DEL LOGGER
-# ==================================================
+# LOGGER
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(message)s",
@@ -28,10 +25,7 @@ logging.basicConfig(
 )
 log = logging.getLogger("model_downloader")
 
-
-# ==================================================
-# Descarga con barra de progreso
-# ==================================================
+# DESCARGA
 def download_with_progress(url, output_path):
     try:
         r = requests.get(url, stream=True, timeout=25)
@@ -62,19 +56,12 @@ def download_with_progress(url, output_path):
 
     return True
 
-
 def file_is_valid(path, min_size):
-    if not path.exists():
-        return False
-    size = path.stat().st_size
-    return size >= min_size
+    return path.exists() and path.stat().st_size >= min_size
 
-
-# ==================================================
 # MAIN
-# ==================================================
 def main():
-    log.info("Cargando archivo JSON de mirrors...")
+    log.info("Leyendo JSON...")
 
     try:
         urls = json.load(open(URLS_FILE, "r"))
@@ -83,41 +70,37 @@ def main():
         return
 
     for model_name, mirrors in urls.items():
-        out_path = OUT_DIR / model_name
+        out_path = CURRENT_DIR / model_name
         min_size = MIN_SIZES.get(model_name, 1_000)
 
-        log.info(f"========== Procesando {model_name} ==========")
+        log.info(f"========== {model_name} ==========")
 
-        # Ya existe y válido
+        # Si ya está correcto → saltar
         if file_is_valid(out_path, min_size):
             size_mb = out_path.stat().st_size / (1024 * 1024)
-            log.info(f"{model_name} ya existe ({size_mb:.1f} MB). Saltando.")
+            log.info(f"{model_name} ya existe ({size_mb:.1f} MB)")
             continue
 
-        # Probar mirrors
         success = False
         for url in mirrors:
             log.info(f"Intentando mirror: {url}")
 
             if download_with_progress(url, out_path):
                 if file_is_valid(out_path, min_size):
-                    log.info(f"{model_name} descargado correctamente.")
+                    log.info(f"{model_name} listo ✔")
                     success = True
                     break
                 else:
-                    log.error(f"{model_name} descargado pero corrupto. Eliminando...")
+                    log.error("Archivo corrupto, borrando…")
                     out_path.unlink(missing_ok=True)
+
             else:
-                log.warning(f"Fallo al descargar desde {url}")
+                log.warning("Fallo la descarga.")
 
         if not success:
-            log.error(f"No se pudo descargar {model_name} desde ningún mirror.")
-        else:
-            log.info(f"[OK] {model_name} listo.")
+            log.error(f"No se pudo descargar {model_name} ❌")
 
-    log.info("=========== FIN DEL PROCESO ===========")
-
-
+    log.info(" end")
 
 if __name__ == "__main__":
     main()
