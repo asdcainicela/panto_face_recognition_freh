@@ -34,50 +34,43 @@ download_model() {
     return 1
 }
 
-# ============================================
-# 1. SCRFD - Detector de rostros moderno
-# ============================================
+# ------------------------------------
+# SCRFD: 2.5G y 10G (mirrors verificados)
+# ------------------------------------
+SCRFD_2_5G="scrfd_2.5g_bnkps.onnx"
+SCRFD_10G="scrfd_10g_bnkps.onnx"
 
-SCRFD_URLS=(
-    # GitHub Releases - InsightFace oficial
-    "https://github.com/deepinsight/insightface/releases/download/v0.7/scrfd_2.5g_bnkps.onnx"
-    "https://github.com/deepinsight/insightface/releases/download/v0.7/scrfd_10g_bnkps.onnx"
-    "https://github.com/deepinsight/insightface/releases/download/v0.7/scrfd_500m_bnkps.onnx"
-    
-    # HuggingFace - Mirrors oficiales
-    "https://huggingface.co/public-data/insightface/resolve/main/models/scrfd_2.5g_bnkps.onnx"
-    "https://huggingface.co/public-data/insightface/resolve/main/models/scrfd_10g_bnkps.onnx"
-    
-    # HuggingFace - Repositorios populares
-    "https://huggingface.co/DIAMONIK7777/scrfd/resolve/main/scrfd_2.5g_bnkps.onnx"
-    "https://huggingface.co/MonsterMMORPG/insightface/resolve/main/models/scrfd_2.5g_bnkps.onnx"
-    
-    # ModelScope (Alibaba Cloud)
-    "https://modelscope.cn/models/iic/cv_scrfd_face-detection/resolve/master/scrfd_2.5g_bnkps.onnx"
+SCRFD_2_5G_URLS=(
+  "https://huggingface.co/MonsterMMORPG/files1/resolve/main/scrfd_2.5g_bnkps.onnx"
+  "https://sourceforge.net/projects/insightface.mirror/files/v0.7/scrfd_person_2.5g.onnx/download"
 )
 
-# Descargar SCRFD 2.5G (recomendado)
-if [ ! -f "scrfd_2.5g_bnkps.onnx" ]; then
-    echo "[INFO] Descargando SCRFD 2.5G (recomendado)..."
-    for u in "${SCRFD_URLS[@]}"; do
-        if [[ "$u" == *"2.5g"* ]]; then
-            if download_model "$u" "scrfd_2.5g_bnkps.onnx" 3000000; then
-                break
-            fi
-        fi
-    done
+SCRFD_10G_URLS=(
+  "https://huggingface.co/okaris/antelopev2/resolve/main/scrfd_10g_bnkps.onnx"
+)
+
+# Descargar 2.5G
+if [ ! -f "$SCRFD_2_5G" ]; then
+  echo "[INFO] Descargando SCRFD 2.5G..."
+  for u in "${SCRFD_2_5G_URLS[@]}"; do
+    echo "[INFO] intentando: $u"
+    if download_model "$u" "$SCRFD_2_5G" 3000000; then
+      echo "[OK] SCRFD 2.5G descargado desde: $u"
+      break
+    fi
+  done
 fi
 
-# Descargar SCRFD 10G (opcional - mayor precisión)
-if [ ! -f "scrfd_10g_bnkps.onnx" ]; then
-    echo "[INFO] Descargando SCRFD 10G (opcional - mayor precisión)..."
-    for u in "${SCRFD_URLS[@]}"; do
-        if [[ "$u" == *"10g"* ]]; then
-            if download_model "$u" "scrfd_10g_bnkps.onnx" 15000000; then
-                break
-            fi
-        fi
-    done
+# Descargar 10G (opcional)
+if [ ! -f "$SCRFD_10G" ]; then
+  echo "[INFO] Descargando SCRFD 10G..."
+  for u in "${SCRFD_10G_URLS[@]}"; do
+    echo "[INFO] intentando: $u"
+    if download_model "$u" "$SCRFD_10G" 15000000; then
+      echo "[OK] SCRFD 10G descargado desde: $u"
+      break
+    fi
+  done
 fi
 
 # ============================================
