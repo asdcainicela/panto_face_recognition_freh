@@ -1,17 +1,13 @@
 import json
-import os
+import logging
 import requests
+from tqdm import tqdm
 from pathlib import Path
-
-# ================================
-# Config
-# ================================
 
 URLS_FILE = "models_urls.json"
 OUT_DIR = Path("models")
 OUT_DIR.mkdir(exist_ok=True)
 
-# Tamaños mínimos para validar integridad
 MIN_SIZES = {
     "scrfd_2.5g_bnkps.onnx": 3_000_000,
     "scrfd_10g_bnkps.onnx": 15_000_000,
@@ -19,73 +15,108 @@ MIN_SIZES = {
     "realesrgan_x4plus.onnx": 40_000_000,
 }
 
-# ================================
-# Funciones
-# ================================
+# ==================================================
+# CONFIGURACIÓN DEL LOGGER
+# ==================================================
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(message)s",
+    handlers=[
+        logging.StreamHandler(),
+        logging.FileHandler("download.log", mode="a", encoding="utf-8")
+    ]
+)
+log = logging.getLogger("model_downloader")
 
-def download(url, output_path):
-    """Descarga un archivo con stream."""
+
+# ==================================================
+# Descarga con barra de progreso
+# ==================================================
+def download_with_progress(url, output_path):
     try:
         r = requests.get(url, stream=True, timeout=25)
-    except:
+    except Exception as e:
+        log.error(f"Error conectando a {url}: {e}")
         return False
 
     if r.status_code != 200:
+        log.warning(f"HTTP {r.status_code} en {url}")
         return False
 
-    with open(output_path, "wb") as f:
-        for chunk in r.iter_content(1024):
-            if chunk:
-                f.write(chunk)
+    total = int(r.headers.get("content-length", 0))
+    block = 1024
+
+    log.info(f"Descargando {output_path.name} desde {url}")
+
+    with open(output_path, "wb") as f, tqdm(
+        total=total if total > 0 else None,
+        unit="B",
+        unit_scale=True,
+        desc=output_path.name,
+        ascii=True,
+        ncols=80,
+    ) as t:
+        for data in r.iter_content(block):
+            f.write(data)
+            t.update(len(data))
+
     return True
 
 
 def file_is_valid(path, min_size):
     if not path.exists():
         return False
-    return path.stat().st_size >= min_size
+    size = path.stat().st_size
+    return size >= min_size
 
 
-# ================================
-# Main
-# ================================
-
+# ==================================================
+# MAIN
+# ==================================================
 def main():
-    urls = json.load(open(URLS_FILE))
+    log.info("Cargando archivo JSON de mirrors...")
+
+    try:
+        urls = json.load(open(URLS_FILE, "r"))
+    except Exception as e:
+        log.error(f"No se pudo leer {URLS_FILE}: {e}")
+        return
 
     for model_name, mirrors in urls.items():
         out_path = OUT_DIR / model_name
-        min_size = MIN_SIZES.get(model_name, 1)
+        min_size = MIN_SIZES.get(model_name, 1_000)
 
-        print(f"\n[INFO] Procesando: {model_name}")
+        log.info(f"========== Procesando {model_name} ==========")
 
-        # Si ya existe y es válido → OK
+        # Ya existe y válido
         if file_is_valid(out_path, min_size):
             size_mb = out_path.stat().st_size / (1024 * 1024)
-            print(f"[OK] Ya existe ({size_mb:.1f} MB)")
+            log.info(f"{model_name} ya existe ({size_mb:.1f} MB). Saltando.")
             continue
 
-        # Intentar mirrors
+        # Probar mirrors
+        success = False
         for url in mirrors:
-            print(f"[INFO] Intentando: {url}")
+            log.info(f"Intentando mirror: {url}")
 
-            if download(url, out_path):
+            if download_with_progress(url, out_path):
                 if file_is_valid(out_path, min_size):
-                    size_mb = out_path.stat().st_size / (1024 * 1024)
-                    print(f"[OK] Descargado ({size_mb:.1f} MB)")
+                    log.info(f"{model_name} descargado correctamente.")
+                    success = True
                     break
                 else:
-                    print("[ERR] Archivo incompleto. Borrando y reintentando...")
+                    log.error(f"{model_name} descargado pero corrupto. Eliminando...")
                     out_path.unlink(missing_ok=True)
             else:
-                print("[WARN] Falló este mirror")
+                log.warning(f"Fallo al descargar desde {url}")
 
-        if not file_is_valid(out_path, min_size):
-            print(f"[ERR] No se pudo descargar {model_name} desde ningún mirror.")
+        if not success:
+            log.error(f"No se pudo descargar {model_name} desde ningún mirror.")
         else:
-            print(f"[SUCCESS] {model_name} listo.")
+            log.info(f"[OK] {model_name} listo.")
 
-    print("\n[FIN] Todos los modelos procesados.")
+    log.info("=========== FIN DEL PROCESO ===========")
+
 
 
 if __name__ == "__main__":
