@@ -1,0 +1,23 @@
+{
+  "scrfd_2.5g_bnkps.onnx": [
+    "https://github.com/deepinsight/insightface/releases/download/v0.7/scrfd_2.5g_bnkps.onnx",
+    "https://huggingface.co/MonsterMMORPG/files1/resolve/main/scrfd_2.5g_bnkps.onnx",
+    "https://sourceforge.net/projects/insightface.mirror/files/v0.7/scrfd_person_2.5g.onnx/download"
+  ],
+
+  "scrfd_10g_bnkps.onnx": [
+    "https://github.com/deepinsight/insightface/releases/download/v0.7/scrfd_10g_bnkps.onnx",
+    "https://huggingface.co/okaris/antelopev2/resolve/main/scrfd_10g_bnkps.onnx"
+  ],
+
+  "arcface_r100.onnx": [
+    "https://huggingface.co/public-data/insightface/resolve/main/models/buffalo_l/w600k_r50.onnx",
+    "https://huggingface.co/MonsterMMORPG/insightface/resolve/main/models/buffalo_l/w600k_r50.onnx",
+    "https://github.com/deepinsight/insightface/releases/download/v0.7/buffalo_l.zip"
+  ],
+
+  "realesrgan_x4plus.onnx": [
+    "https://github.com/xinntao/Real-ESRGAN/releases/download/v0.1.0/RealESRGAN_x4plus.onnx",
+    "https://huggingface.co/rockeycoss/RealESRGAN/resolve/main/RealESRGAN_x4plus.onnx"
+  ]
+}
