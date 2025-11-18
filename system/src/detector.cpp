@@ -10,17 +10,16 @@ constexpr float MIN_ASPECT_RATIO = 0.4f;
 constexpr float MAX_ASPECT_RATIO = 2.5f;
 constexpr float NMS_IOM_THRESHOLD = 0.8f;
 
-static std::vector<std::vector<float>> generate_anchors(int feat_h, int feat_w, int stride) {
+// SCRFD genera anchors de manera diferente que RetinaFace
+static std::vector<std::vector<float>> generate_anchors_scrfd(int feat_h, int feat_w, int stride, int num_anchors) {
     std::vector<std::vector<float>> anchors;
-    std::vector<int> anchor_sizes = {stride * 1, stride * 2};
     
     for (int i = 0; i < feat_h; i++) {
         for (int j = 0; j < feat_w; j++) {
-            float cx = (j + 0.5f) * stride;
-            float cy = (i + 0.5f) * stride;
-            
-            for (int anchor_size : anchor_sizes) {
-                anchors.push_back({cx, cy, static_cast<float>(anchor_size), static_cast<float>(anchor_size)});
+            for (int k = 0; k < num_anchors; k++) {
+                float cx = (j + 0.5f) * stride;
+                float cy = (i + 0.5f) * stride;
+                anchors.push_back({cx, cy, static_cast<float>(stride)});
             }
         }
     }
@@ -28,54 +27,53 @@ static std::vector<std::vector<float>> generate_anchors(int feat_h, int feat_w, 
     return anchors;
 }
 
-static cv::Rect decode_box(const std::vector<float>& anchor, const float* bbox_pred, float scale_x, float scale_y) {
+// Distance2bbox - SCRFD usa coordenadas de distancia
+static cv::Rect distance2bbox(const std::vector<float>& anchor, const float* distance, 
+                              float scale_x, float scale_y) {
     float cx = anchor[0];
     float cy = anchor[1];
-    float w = anchor[2];
-    float h = anchor[3];
     
-    float pred_cx = cx + bbox_pred[0] * w;
-    float pred_cy = cy + bbox_pred[1] * h;
-    float pred_w = std::exp(bbox_pred[2]) * w;
-    float pred_h = std::exp(bbox_pred[3]) * h;
+    float l = distance[0];
+    float t = distance[1];
+    float r = distance[2];
+    float b = distance[3];
     
-    float x1 = (pred_cx - pred_w * 0.5f) * scale_x;
-    float y1 = (pred_cy - pred_h * 0.5f) * scale_y;
-    float x2 = (pred_cx + pred_w * 0.5f) * scale_x;
-    float y2 = (pred_cy + pred_h * 0.5f) * scale_y;
+    float x1 = (cx - l) * scale_x;
+    float y1 = (cy - t) * scale_y;
+    float x2 = (cx + r) * scale_x;
+    float y2 = (cy + b) * scale_y;
     
     return cv::Rect(cv::Point(x1, y1), cv::Point(x2, y2));
 }
 
-static void decode_landmarks(const std::vector<float>& anchor, const float* kpss_pred, 
-                            cv::Point2f* landmarks, float scale_x, float scale_y) {
+// Distance2kps - SCRFD landmarks
+static void distance2kps(const std::vector<float>& anchor, const float* kps_distance, 
+                        cv::Point2f* landmarks, float scale_x, float scale_y) {
     float cx = anchor[0];
     float cy = anchor[1];
-    float w = anchor[2];
-    float h = anchor[3];
     
     for (int i = 0; i < 5; i++) {
-        float lm_x = (cx + kpss_pred[i * 2] * w) * scale_x;
-        float lm_y = (cy + kpss_pred[i * 2 + 1] * h) * scale_y;
-        landmarks[i] = cv::Point2f(lm_x, lm_y);
+        float dx = kps_distance[i * 2];
+        float dy = kps_distance[i * 2 + 1];
+        
+        landmarks[i].x = (cx + dx) * scale_x;
+        landmarks[i].y = (cy + dy) * scale_y;
     }
 }
 
 FaceDetector::FaceDetector(const std::string& engine_path) {
-    spdlog::info("Cargando TensorRT engine: {}", engine_path);
+    spdlog::info("Cargando TensorRT engine SCRFD: {}", engine_path);
     
     if (!loadEngine(engine_path)) {
         throw std::runtime_error("No se pudo cargar TensorRT engine");
     }
     
-    // Crear CUDA stream
     cudaStreamCreate(&stream);
     
-    spdlog::info("Detector TensorRT inicializado correctamente");
+    spdlog::info("Detector SCRFD TensorRT inicializado correctamente");
 }
 
 FaceDetector::~FaceDetector() {
-    // Liberar buffers GPU
     for (int i = 0; i < 10; i++) {
         if (buffers[i]) {
             cudaFree(buffers[i]);
@@ -120,19 +118,16 @@ bool FaceDetector::loadEngine(const std::string& engine_path) {
         return false;
     }
     
-    // Identificar input y outputs
     int nb_bindings = engine->getNbBindings();
-    spdlog::info("Engine tiene {} bindings", nb_bindings);
+    spdlog::info("Engine SCRFD tiene {} bindings", nb_bindings);
     
     for (int i = 0; i < nb_bindings; i++) {
         auto dims = engine->getBindingDimensions(i);
-        auto dtype = engine->getBindingDataType(i);
         bool is_input = engine->bindingIsInput(i);
         
-        spdlog::info("Binding {}: {} [{}] - {}", 
+        spdlog::info("Binding {}: {} [{}]", 
                     i, engine->getBindingName(i),
-                    is_input ? "INPUT" : "OUTPUT",
-                    dims.d[0]);
+                    is_input ? "INPUT" : "OUTPUT");
         
         if (is_input) {
             input_index = i;
@@ -142,7 +137,6 @@ bool FaceDetector::loadEngine(const std::string& engine_path) {
             output_indices.push_back(i);
         }
         
-        // Alocar memoria GPU
         size_t binding_size = 1;
         for (int j = 0; j < dims.nbDims; j++) {
             binding_size *= dims.d[j];
@@ -162,8 +156,17 @@ cv::Mat FaceDetector::preprocess(const cv::Mat& img) {
     cv::Mat resized, normalized;
     cv::resize(img, resized, cv::Size(input_width, input_height));
     resized.convertTo(normalized, CV_32F);
-    cv::cvtColor(normalized, normalized, cv::COLOR_BGR2RGB);
-    normalized = (normalized - 127.5) / 128.0;
+    
+    // SCRFD usa normalización [0, 1]
+    normalized /= 255.0f;
+    
+    // Mean y std de ImageNet
+    cv::Scalar mean(0.485f, 0.456f, 0.406f);
+    cv::Scalar std(0.229f, 0.224f, 0.225f);
+    
+    cv::subtract(normalized, mean, normalized);
+    cv::divide(normalized, std, normalized);
+    
     return normalized;
 }
 
@@ -184,15 +187,15 @@ std::vector<Detection> FaceDetector::detect(const cv::Mat& img) {
                    single_channel_size * sizeof(float));
     }
     
-    // Copiar input a GPU
+    // Copiar a GPU
     cudaMemcpyAsync(buffers[input_index], input_data.data(), 
                     input_data.size() * sizeof(float),
                     cudaMemcpyHostToDevice, stream);
     
-    // Ejecutar inferencia
+    // Inferencia
     context->enqueueV2(buffers, stream, nullptr);
     
-    // Copiar outputs de GPU a CPU
+    // Copiar outputs
     std::vector<std::vector<float>> outputs(output_indices.size());
     
     for (size_t i = 0; i < output_indices.size(); i++) {
@@ -212,15 +215,16 @@ std::vector<Detection> FaceDetector::detect(const cv::Mat& img) {
     
     cudaStreamSynchronize(stream);
     
-    return postprocess(outputs, orig_size);
+    return postprocess_scrfd(outputs, orig_size);
 }
 
-std::vector<Detection> FaceDetector::postprocess(const std::vector<std::vector<float>>& outputs,
-                                                 const cv::Size& orig_size) {
+std::vector<Detection> FaceDetector::postprocess_scrfd(const std::vector<std::vector<float>>& outputs,
+                                                        const cv::Size& orig_size) {
     std::vector<Detection> detections;
     
+    // SCRFD tiene 3 escalas FPN (8, 16, 32) con 3 outputs cada una: score, bbox, kps
     if (outputs.size() != 9) {
-        spdlog::error("Outputs incorrectos: {}", outputs.size());
+        spdlog::error("SCRFD outputs incorrectos: {} (esperados: 9)", outputs.size());
         return detections;
     }
     
@@ -232,37 +236,41 @@ std::vector<Detection> FaceDetector::postprocess(const std::vector<std::vector<f
     };
     
     std::vector<ScaleInfo> scales = {
-        {80, 80, 8},
-        {40, 40, 16},
-        {20, 20, 32}
+        {80, 80, 8},   // Stride 8
+        {40, 40, 16},  // Stride 16
+        {20, 20, 32}   // Stride 32
     };
     
     for (int scale_idx = 0; scale_idx < 3; scale_idx++) {
-        int score_idx = scale_idx;
-        int box_idx = scale_idx + 3;
-        int kpss_idx = scale_idx + 6;
+        int score_idx = scale_idx * 3;
+        int bbox_idx = scale_idx * 3 + 1;
+        int kps_idx = scale_idx * 3 + 2;
         
         const float* scores_data = outputs[score_idx].data();
-        const float* boxes_data = outputs[box_idx].data();
-        const float* kpss_data = outputs[kpss_idx].data();
+        const float* bbox_data = outputs[bbox_idx].data();
+        const float* kps_data = outputs[kps_idx].data();
         
-        int num_anchors = static_cast<int>(outputs[score_idx].size());
+        auto anchors = generate_anchors_scrfd(scales[scale_idx].feat_h, 
+                                             scales[scale_idx].feat_w, 
+                                             scales[scale_idx].stride,
+                                             num_anchors);
         
-        auto anchors = generate_anchors(scales[scale_idx].feat_h, 
-                                       scales[scale_idx].feat_w, 
-                                       scales[scale_idx].stride);
+        int num_anchors_total = static_cast<int>(anchors.size());
         
-        if (anchors.size() != static_cast<size_t>(num_anchors)) continue;
-        
-        for (int i = 0; i < num_anchors; i++) {
+        for (int i = 0; i < num_anchors_total; i++) {
             float score = scores_data[i];
             if (score < conf_threshold) continue;
             
             Detection det;
             det.confidence = score;
-            det.box = decode_box(anchors[i], &boxes_data[i * 4], scale_x, scale_y);
-            decode_landmarks(anchors[i], &kpss_data[i * 10], det.landmarks, scale_x, scale_y);
             
+            // SCRFD usa distance2bbox
+            det.box = distance2bbox(anchors[i], &bbox_data[i * 4], scale_x, scale_y);
+            
+            // SCRFD usa distance2kps
+            distance2kps(anchors[i], &kps_data[i * 10], det.landmarks, scale_x, scale_y);
+            
+            // Filtros de validación
             if (det.box.width < MIN_FACE_SIZE || det.box.height < MIN_FACE_SIZE) continue;
             if (det.box.width > orig_size.width * MAX_FACE_RATIO || 
                 det.box.height > orig_size.height * MAX_FACE_RATIO) continue;

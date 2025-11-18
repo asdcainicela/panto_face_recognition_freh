@@ -16,12 +16,12 @@ width = 960
 height = 540
 
 [detection]
-model = "retinaface"
-model_path = "models/retinaface_mobilenet.onnx"
-backend = "onnx"
+model = "scrfd"
+model_path = "models/engines/scrfd_2.5g.engine"  # O scrfd_10g.engine
+backend = "tensorrt"
 use_gpu = true
-min_face_size = 60
-confidence_threshold = 0.65
+min_face_size = 40
+confidence_threshold = 0.50  # SCRFD es más preciso, puede usar threshold más bajo
 nms_threshold = 0.4
 
 [tracking]

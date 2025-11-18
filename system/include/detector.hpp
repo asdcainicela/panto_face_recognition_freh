@@ -32,20 +32,24 @@ private:
     std::unique_ptr<nvinfer1::IExecutionContext> context;
     
     // Buffers GPU
-    void* buffers[10];  // input + outputs
+    void* buffers[10];
     cudaStream_t stream;
     
     int input_width = 640;
     int input_height = 640;
-    float conf_threshold = 0.6f;
+    float conf_threshold = 0.5f;
     float nms_threshold = 0.4f;
     
     int input_index = -1;
     std::vector<int> output_indices;
     
+    // SCRFD usa diferentes strides que RetinaFace
+    std::vector<int> feat_stride_fpn = {8, 16, 32};
+    int num_anchors = 2;  // SCRFD usa 2 anchors por ubicación
+    
     cv::Mat preprocess(const cv::Mat& img);
-    std::vector<Detection> postprocess(const std::vector<std::vector<float>>& outputs,
-                                      const cv::Size& orig_size);
+    std::vector<Detection> postprocess_scrfd(const std::vector<std::vector<float>>& outputs,
+                                             const cv::Size& orig_size);
     void nms(std::vector<Detection>& detections);
     
     bool loadEngine(const std::string& engine_path);
