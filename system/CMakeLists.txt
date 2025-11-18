@@ -16,12 +16,10 @@ set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
 find_package(OpenCV REQUIRED)
 find_package(spdlog REQUIRED)
-
 find_package(CUDA REQUIRED)
-message(STATUS "CUDA found: ${CUDA_VERSION}")
+
 include_directories(${CUDA_INCLUDE_DIRS})
 
-# Buscar TensorRT
 find_path(TENSORRT_INCLUDE_DIR NvInfer.h
     HINTS
     /usr/include/aarch64-linux-gnu
@@ -46,17 +44,13 @@ find_library(TENSORRT_PLUGIN_LIBRARY nvinfer_plugin
     /opt/tensorrt/lib
 )
 
-if(NOT TENSORRT_INCLUDE_DIR OR NOT TENSORRT_LIBRARY)
-    message(FATAL_ERROR "TensorRT not found\n"
-        "  Headers searched in: /usr/include/aarch64-linux-gnu, /usr/include\n"
-        "  Library searched in: /usr/lib/aarch64-linux-gnu, /usr/lib\n"
-        "  Found headers: ${TENSORRT_INCLUDE_DIR}\n"
-        "  Found library: ${TENSORRT_LIBRARY}")
-endif()
-
-message(STATUS "TensorRT Include: ${TENSORRT_INCLUDE_DIR}")
-message(STATUS "TensorRT Library: ${TENSORRT_LIBRARY}")
-message(STATUS "TensorRT Plugin: ${TENSORRT_PLUGIN_LIBRARY}")
+find_library(TENSORRT_ONNX nvonnxparser
+    HINTS
+    /usr/lib/aarch64-linux-gnu
+    /usr/lib
+    /usr/local/lib
+    /opt/tensorrt/lib
+)
 
 include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${CMAKE_SOURCE_DIR}/include)
@@ -106,11 +100,35 @@ target_link_libraries(panto_detector
     ${OpenCV_LIBS}
     ${TENSORRT_LIBRARY}
     ${TENSORRT_PLUGIN_LIBRARY}
+    ${TENSORRT_ONNX}
     ${CUDA_LIBRARIES}
     cudart
     spdlog::spdlog
 )
 set_target_properties(panto_detector PROPERTIES
+    POSITION_INDEPENDENT_CODE ON
+    VERSION 1.0.0
+    SOVERSION 1
+)
+
+set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} -O3 -Xcompiler -fPIC -gencode arch=compute_75,code=sm_75)
+
+cuda_add_library(panto_detector_opt SHARED
+    src/detector_optimized.cpp
+    CUDA_OPTIONS -Xcompiler -fPIC
+)
+
+target_link_libraries(panto_detector_opt
+    ${OpenCV_LIBS}
+    ${CUDA_LIBRARIES}
+    ${CUDA_CUBLAS_LIBRARIES}
+    ${TENSORRT_LIBRARY}
+    ${TENSORRT_PLUGIN_LIBRARY}
+    ${TENSORRT_ONNX}
+    spdlog::spdlog
+)
+
+set_target_properties(panto_detector_opt PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     VERSION 1.0.0
     SOVERSION 1
@@ -158,22 +176,41 @@ target_link_libraries(test_detector_video
     spdlog::spdlog
 )
 
-install(TARGETS panto_utils panto_draw panto_stream panto_detector
+add_executable(benchmark_detector
+    test/benchmark_detector.cpp
+)
+
+target_link_libraries(benchmark_detector
+    panto_detector
+    panto_detector_opt
+    ${OpenCV_LIBS}
+    spdlog::spdlog
+)
+
+add_executable(test_detector_video_opt
+    test/test_detector_video.cpp
+)
+
+target_compile_definitions(test_detector_video_opt PRIVATE USE_OPTIMIZED_DETECTOR)
+
+target_link_libraries(test_detector_video_opt
+    panto_detector_opt
+    ${OpenCV_LIBS}
+    spdlog::spdlog
+)
+
+install(TARGETS panto_utils panto_draw panto_stream panto_detector panto_detector_opt
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
 )
 
-install(TARGETS record view record_view panto test_detector test_detector_video
+install(TARGETS record view record_view panto test_detector test_detector_video benchmark_detector test_detector_video_opt
     RUNTIME DESTINATION bin
 )
 
 install(DIRECTORY configs/ DESTINATION configs)
 install(FILES config.toml DESTINATION .)
 
-message(STATUS "========================================")
-message(STATUS "PANTO Build Configuration")
-message(STATUS "========================================")
 message(STATUS "OpenCV: ${OpenCV_VERSION}")
 message(STATUS "CUDA: ${CUDA_VERSION}")
 message(STATUS "TensorRT: ${TENSORRT_LIBRARY}")
-message(STATUS "========================================")
