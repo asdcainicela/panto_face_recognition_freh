@@ -1,6 +1,4 @@
 #include "stream_capture.hpp"
-#include "utils.hpp"
-#include "config.hpp"
 #include "draw_utils.hpp"
 #include <spdlog/spdlog.h>
 #include <thread>
@@ -15,7 +13,7 @@ StreamCapture::StreamCapture(const std::string& user, const std::string& pass,
       reconnect_count(0), frames_recorded(0),
       current_fps(0.0), recording_enabled(false), recording_paused(false),
       viewing_enabled(false), use_adaptive_latency(true), display_size(640, 480),
-      stop_signal(nullptr), max_duration(0), fps_interval(Config::DEFAULT_FPS_INTERVAL) {
+      stop_signal(nullptr), max_duration(0), fps_interval(30) {
     
     pipeline = gst_pipeline(user, pass, ip, port, stream_type);
     window_name = "rtsp " + ip + "/" + stream_type + " " + std::to_string(port) + " stream";

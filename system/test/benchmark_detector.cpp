@@ -1,6 +1,4 @@
 // ============= test/benchmark_detector.cpp =============
-// ESTE ES UN ARCHIVO NUEVO - Guardarlo en system/test/
-#include "detector.hpp"
 #include "detector_optimized.hpp"
 #include <spdlog/spdlog.h>
 #include <opencv2/opencv.hpp>
