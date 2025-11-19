@@ -166,7 +166,14 @@ int main(int argc, char* argv[]) {
             spdlog::info("✓ Detector cargado (GPU preproc: {})", gpu_preproc);
 
             // Inicializar tracker
-            tracker = std::make_unique<FaceTracker>(0.3f, 30, 3);
+            tracker = std::make_unique<FaceTracker>(0.25f, 60, 2);
+            /*
+            tracker = std::make_unique<FaceTracker>(
+                0.25f,  // ← Más tolerante al movimiento
+                60,     // ← Aguanta 2 segundos sin detección
+                2       // ← Confirma más rápido
+            );
+                */
             spdlog::info("✓ Tracker inicializado");
 
         } catch (const std::exception& e) {
