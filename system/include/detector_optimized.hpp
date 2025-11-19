@@ -1,8 +1,8 @@
 // ============= include/detector_optimized.hpp =============
-// ESTE ES UN ARCHIVO NUEVO - Guardarlo en system/include/
 #pragma once
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/cuda.hpp>
+#include <opencv2/core/cuda_stream_accessor.hpp>
 #include <opencv2/cudaimgproc.hpp>
 #include <opencv2/cudawarping.hpp>
 #include <vector>
@@ -39,7 +39,8 @@ private:
     void* buffers[10];
     void* d_input_buffer;      // Input tensor en GPU
     void* d_resized_buffer;    // Imagen resized temporal
-    cudaStream_t stream;
+    cudaStream_t stream;       // CUDA stream nativo (para TensorRT)
+    cv::cuda::Stream cv_stream; // OpenCV CUDA stream wrapper
     
     // GPU preprocessing buffers
     cv::cuda::GpuMat gpu_input;
@@ -86,7 +87,3 @@ public:
     };
     ProfileStats last_profile;
 };
-
-// CUDA kernel wrapper (implementado en .cpp)
-void cuda_normalize_imagenet(const unsigned char* d_input, float* d_output,
-                             int width, int height, cudaStream_t stream);

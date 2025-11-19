@@ -1,7 +1,6 @@
 // ============= src/detector_optimized.cpp =============
-// GUARDAR COMO: system/src/detector_optimized.cpp
 #include "detector_optimized.hpp"
-#include "cuda_kernels.h"  // <-- Kernels CUDA externos (.cu)
+#include "cuda_kernels.h"
 #include <spdlog/spdlog.h>
 #include <algorithm>
 #include <cmath>
@@ -80,10 +79,13 @@ FaceDetectorOptimized::FaceDetectorOptimized(const std::string& engine_path,
         throw std::runtime_error("No se pudo cargar TensorRT engine");
     }
     
-    // Crear stream de alta prioridad
+    // Crear stream CUDA nativo
     int leastPriority, greatestPriority;
     cudaDeviceGetStreamPriorityRange(&leastPriority, &greatestPriority);
     cudaStreamCreateWithPriority(&stream, cudaStreamNonBlocking, greatestPriority);
+    
+    // Crear cv::cuda::Stream wrapper para OpenCV
+    cv_stream = cv::cuda::StreamAccessor::wrapStream(stream);
     
     if (use_gpu_preprocessing) {
         // Pre-allocar buffers GPU
@@ -137,13 +139,14 @@ bool FaceDetectorOptimized::loadEngine(const std::string& engine_path) {
     context.reset(engine->createExecutionContext());
     if (!context) return false;
     
-    int nb_bindings = engine->getNbBindings();
+    int nb_bindings = engine->getNbIOTensors();
     
     for (int i = 0; i < nb_bindings; i++) {
-        auto dims = engine->getBindingDimensions(i);
-        bool is_input = engine->bindingIsInput(i);
+        const char* name = engine->getIOTensorName(i);
+        auto mode = engine->getTensorIOMode(name);
+        auto dims = engine->getTensorShape(name);
         
-        if (is_input) {
+        if (mode == nvinfer1::TensorIOMode::kINPUT) {
             input_index = i;
             input_height = dims.d[2];
             input_width = dims.d[3];
@@ -158,6 +161,7 @@ bool FaceDetectorOptimized::loadEngine(const std::string& engine_path) {
         binding_size *= sizeof(float);
         
         cudaMalloc(&buffers[i], binding_size);
+        context->setTensorAddress(name, buffers[i]);
     }
     
     spdlog::info("   Engine: {}x{}, {} outputs", 
@@ -182,27 +186,30 @@ cv::Mat FaceDetectorOptimized::preprocess_cpu(const cv::Mat& img) {
 }
 
 void FaceDetectorOptimized::preprocess_gpu(const cv::Mat& img) {
-    // Upload to GPU
-    gpu_input.upload(img, stream);
+    // Upload to GPU usando cv::cuda::Stream
+    gpu_input.upload(img, cv_stream);
     
-    // Resize en GPU (MUCHO más rápido que CPU)
+    // Resize en GPU (usa cv::cuda::Stream)
     cv::cuda::resize(gpu_input, gpu_resized, 
                      cv::Size(input_width, input_height), 
-                     0, 0, cv::INTER_LINEAR, stream);
+                     0, 0, cv::INTER_LINEAR, cv_stream);
+    
+    // Sincronizar para obtener puntero raw
+    cv_stream.waitForCompletion();
     
     // Copiar datos a buffer temporal
     cudaMemcpyAsync(d_resized_buffer, gpu_resized.data, 
                    input_width * input_height * 3,
                    cudaMemcpyDeviceToDevice, stream);
     
-    // Normalización custom en GPU (BGR->RGB + ImageNet normalize)
-    // Esta función está implementada en cuda_kernels.cu
+    // Normalización custom en GPU usando cudaStream_t nativo
     cuda_normalize_imagenet(
         static_cast<const unsigned char*>(d_resized_buffer), 
         static_cast<float*>(buffers[input_index]),
         input_width, input_height, stream
     );
 }
+
 
 // ==================== DETECTION ====================
 
@@ -239,7 +246,7 @@ std::vector<Detection> FaceDetectorOptimized::detect(const cv::Mat& img) {
         std::chrono::duration<double, std::milli>(t1 - t0).count();
     
     // === INFERENCE ===
-    context->enqueueV2(buffers, stream, nullptr);
+    context->enqueueV3(stream);
     cudaStreamSynchronize(stream);
     
     auto t2 = std::chrono::high_resolution_clock::now();
@@ -251,7 +258,8 @@ std::vector<Detection> FaceDetectorOptimized::detect(const cv::Mat& img) {
     
     for (size_t i = 0; i < output_indices.size(); i++) {
         int idx = output_indices[i];
-        auto dims = engine->getBindingDimensions(idx);
+        const char* name = engine->getIOTensorName(idx);
+        auto dims = engine->getTensorShape(name);
         
         size_t size = 1;
         for (int j = 0; j < dims.nbDims; j++) size *= dims.d[j];

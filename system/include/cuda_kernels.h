@@ -1,5 +1,4 @@
 // ============= include/cuda_kernels.h =============
-// GUARDAR COMO: system/include/cuda_kernels.h
 #pragma once
 
 #include <cuda_runtime.h>
