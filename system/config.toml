@@ -1,5 +1,10 @@
 # ============= config.toml =============
 # Configuración principal del sistema PANTO
+[mode]
+detect = false # si queremos usar el modelo
+record = false # si queremos grabar el video procesado
+display = true # si queremos mostrar el video procesado en pantalla
+
 
 [camera]
 user = "admin"
