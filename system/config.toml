@@ -18,10 +18,12 @@ port = 554
 # Opciones: "main", "sub", o ruta a video como "videos/test.mp4"
 #source = "main"
 # source = "sub"
+#source = "video2.mp4"
 source = "video1.mp4"
 
+
 [detector]
-model_path = "models/scrfd_10g_bnkps.engine"
+model_path = "models/scrfd_2.5g_bnkps.engine"
 #conf_threshold = 0.5
 conf_threshold = 0.3
 nms_threshold = 0.4
