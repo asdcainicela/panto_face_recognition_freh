@@ -171,7 +171,7 @@ bool FaceDetectorOptimized::loadEngine(const std::string& engine_path) {
 }
 
 // ==================== PREPROCESSING ====================
-
+/*
 cv::Mat FaceDetectorOptimized::preprocess_cpu(const cv::Mat& img) {
     cv::Mat resized, normalized;
     cv::resize(img, resized, cv::Size(input_width, input_height));
@@ -181,6 +181,44 @@ cv::Mat FaceDetectorOptimized::preprocess_cpu(const cv::Mat& img) {
     cv::Scalar std(0.229f, 0.224f, 0.225f);
     cv::subtract(normalized, mean, normalized);
     cv::divide(normalized, std, normalized);
+    
+    return normalized;
+}
+
+cv::Mat FaceDetectorOptimized::preprocess_cpu(const cv::Mat& img) {
+    cv::Mat resized, normalized;
+    cv::resize(img, resized, cv::Size(input_width, input_height));
+    resized.convertTo(normalized, CV_32F, 1.0f / 255.0f);
+    
+    // Normalización ImageNet (RGB)
+    cv::cvtColor(normalized, normalized, cv::COLOR_BGR2RGB);  // ← AÑADIR ESTO
+    
+    cv::Scalar mean(0.485f, 0.456f, 0.406f);
+    cv::Scalar std(0.229f, 0.224f, 0.225f);
+    cv::subtract(normalized, mean, normalized);
+    cv::divide(normalized, std, normalized);
+    
+    return normalized;
+}
+
+cv::Mat FaceDetectorOptimized::preprocess_cpu(const cv::Mat& img) {
+    cv::Mat resized, normalized;
+    cv::resize(img, resized, cv::Size(input_width, input_height));
+    
+    // SCRFD espera RGB normalizado [0, 1] sin mean/std
+    cv::cvtColor(resized, normalized, cv::COLOR_BGR2RGB);
+    normalized.convertTo(normalized, CV_32F, 1.0f / 255.0f);
+    
+    return normalized;
+}
+*/
+cv::Mat FaceDetectorOptimized::preprocess_cpu(const cv::Mat& img) {
+    cv::Mat resized, normalized;
+    cv::resize(img, resized, cv::Size(input_width, input_height));
+    
+    // SCRFD InsightFace usa: (pixel - 127.5) / 128.0
+    resized.convertTo(normalized, CV_32F);
+    normalized = (normalized - 127.5f) / 128.0f;
     
     return normalized;
 }
@@ -310,31 +348,45 @@ std::vector<Detection> FaceDetectorOptimized::postprocess_scrfd(
     };
     
     for (int scale_idx = 0; scale_idx < 3; scale_idx++) {
-        int score_idx = scale_idx * 3;
-        int bbox_idx = scale_idx * 3 + 1;
-        int kps_idx = scale_idx * 3 + 2;
+    int score_idx = scale_idx * 3;
+    int bbox_idx = scale_idx * 3 + 1;
+    int kps_idx = scale_idx * 3 + 2;
+    
+    const float* scores_data = outputs[score_idx].data();
+    const float* bbox_data = outputs[bbox_idx].data();
+    const float* kps_data = outputs[kps_idx].data();
+    
+    auto anchors = generate_anchors_scrfd(scales[scale_idx].feat_h, 
+                                         scales[scale_idx].feat_w, 
+                                         scales[scale_idx].stride,
+                                         num_anchors);
+    
+    int num_anchors_total = static_cast<int>(anchors.size());
+    // DEBUG: Ver qué valores vienen
+spdlog::info("Scale {}: scores size={}, bbox size={}, kps size={}",
+            scale_idx, outputs[score_idx].size(), 
+            outputs[bbox_idx].size(), outputs[kps_idx].size());
+
+// Ver primeros scores
+spdlog::info("First 10 scores: {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f} {:.3f}",
+            scores_data[0], scores_data[1], scores_data[2], scores_data[3], scores_data[4],
+            scores_data[5], scores_data[6], scores_data[7], scores_data[8], scores_data[9]);
         
-        const float* scores_data = outputs[score_idx].data();
-        const float* bbox_data = outputs[bbox_idx].data();
-        const float* kps_data = outputs[kps_idx].data();
-        
-        auto anchors = generate_anchors_scrfd(scales[scale_idx].feat_h, 
-                                             scales[scale_idx].feat_w, 
-                                             scales[scale_idx].stride,
-                                             num_anchors);
-        
-        int num_anchors_total = static_cast<int>(anchors.size());
-        
-        for (int i = 0; i < num_anchors_total; i++) {
-            float score = scores_data[i];
+    // CRÍTICO: Los outputs vienen en formato [N, C] no [1, C, H, W]
+    for (int i = 0; i < num_anchors_total; i++) {
+        // Para cada anchor, iterar por los num_anchors (2)
+        for (int a = 0; a < num_anchors; a++) {
+            int idx = i * num_anchors + a;  // ← CAMBIO AQUÍ
+            
+            float score = scores_data[idx];
             if (score < conf_threshold) continue;
             
             Detection det;
             det.confidence = score;
-            det.box = distance2bbox(anchors[i], &bbox_data[i * 4], scale_x, scale_y);
-            distance2kps(anchors[i], &kps_data[i * 10], det.landmarks, scale_x, scale_y);
+            det.box = distance2bbox(anchors[i], &bbox_data[idx * 4], scale_x, scale_y);
+            distance2kps(anchors[i], &kps_data[idx * 10], det.landmarks, scale_x, scale_y);
             
-            // Validación
+            // Validación...
             if (det.box.width < MIN_FACE_SIZE || det.box.height < MIN_FACE_SIZE) continue;
             if (det.box.width > orig_size.width * MAX_FACE_RATIO || 
                 det.box.height > orig_size.height * MAX_FACE_RATIO) continue;
@@ -348,6 +400,7 @@ std::vector<Detection> FaceDetectorOptimized::postprocess_scrfd(
             detections.push_back(det);
         }
     }
+}
     
     if (!detections.empty()) {
         nms(detections);
