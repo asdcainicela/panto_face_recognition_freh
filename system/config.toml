@@ -1,7 +1,7 @@
 # Configuración del sistema de reconocimiento facial Panto
 [mode]
 # si queremos usar el modelo
-detect = false
+detect = true
 # si queremos grabar el video procesado
 record = false
 # si queremos mostrar el video procesado en pantalla
@@ -16,12 +16,12 @@ port = 554
 
 [input]
 # Opciones: "main", "sub", o ruta a video como "videos/test.mp4"
-source = "main"
+#source = "main"
 # source = "sub"
-# source = "videos/recording_main_20241118.mp4"
+source = "video1.mp4"
 
 [detector]
-model_path = "models/scrfd_10g_bnkps.engine"
+model_path = "models/engines/scrfd_10g.engine"
 conf_threshold = 0.5
 nms_threshold = 0.4
 use_gpu_preprocessing = true  # CUDA preprocessing (más rápido)
