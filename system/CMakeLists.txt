@@ -20,6 +20,7 @@ find_package(CUDA REQUIRED)
 
 include_directories(${CUDA_INCLUDE_DIRS})
 
+# TensorRT paths
 find_path(TENSORRT_INCLUDE_DIR NvInfer.h
     HINTS
     /usr/include/aarch64-linux-gnu
@@ -55,6 +56,8 @@ find_library(TENSORRT_ONNX nvonnxparser
 include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${CMAKE_SOURCE_DIR}/include)
 include_directories(${TENSORRT_INCLUDE_DIR})
+
+# ========== LIBRARIES BÁSICAS ==========
 
 add_library(panto_utils SHARED src/utils.cpp)
 target_link_libraries(panto_utils 
@@ -95,6 +98,8 @@ set_target_properties(panto_stream PROPERTIES
     SOVERSION 1
 )
 
+# ========== DETECTOR ORIGINAL ==========
+
 add_library(panto_detector SHARED src/detector.cpp)
 target_link_libraries(panto_detector 
     ${OpenCV_LIBS}
@@ -111,20 +116,42 @@ set_target_properties(panto_detector PROPERTIES
     SOVERSION 1
 )
 
-set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} -O3 -Xcompiler -fPIC -gencode arch=compute_75,code=sm_75)
+# ========== CUDA KERNELS ==========
 
-cuda_add_library(panto_detector_opt SHARED
+# IMPORTANTE: Configurar CUDA para Jetson Orin (compute capability 8.7)
+set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS} 
+    -O3 
+    -Xcompiler -fPIC 
+    -gencode arch=compute_87,code=sm_87  # Orin específico
+    --expt-relaxed-constexpr             # Para features modernas de C++
+)
+
+# Compilar kernels CUDA (.cu)
+cuda_add_library(panto_cuda_kernels STATIC
+    src/cuda_kernels.cu
+    OPTIONS -Xcompiler -fPIC
+)
+
+# ========== DETECTOR OPTIMIZADO ==========
+
+# Detector optimizado (C++ que usa kernels CUDA)
+add_library(panto_detector_opt SHARED 
     src/detector_optimized.cpp
-    CUDA_OPTIONS -Xcompiler -fPIC
+)
+
+target_include_directories(panto_detector_opt PRIVATE
+    ${CMAKE_SOURCE_DIR}/include
+    ${CUDA_INCLUDE_DIRS}
 )
 
 target_link_libraries(panto_detector_opt
     ${OpenCV_LIBS}
     ${CUDA_LIBRARIES}
-    ${CUDA_CUBLAS_LIBRARIES}
+    ${CUDA_CUBLAS_LIBRARIES}    # CRÍTICO: necesario para operaciones GPU
     ${TENSORRT_LIBRARY}
     ${TENSORRT_PLUGIN_LIBRARY}
     ${TENSORRT_ONNX}
+    cudart
     spdlog::spdlog
 )
 
@@ -132,7 +159,10 @@ set_target_properties(panto_detector_opt PROPERTIES
     POSITION_INDEPENDENT_CODE ON
     VERSION 1.0.0
     SOVERSION 1
+    CUDA_SEPARABLE_COMPILATION ON
 )
+
+# ========== EXECUTABLES ==========
 
 add_executable(record test/record.cpp)
 target_link_libraries(record 
@@ -176,6 +206,8 @@ target_link_libraries(test_detector_video
     spdlog::spdlog
 )
 
+# ========== BENCHMARK (USA DETECTOR OPTIMIZADO) ==========
+
 add_executable(benchmark_detector
     test/benchmark_detector.cpp
 )
@@ -199,6 +231,8 @@ target_link_libraries(test_detector_video_opt
     spdlog::spdlog
 )
 
+# ========== INSTALL ==========
+
 install(TARGETS panto_utils panto_draw panto_stream panto_detector panto_detector_opt
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
@@ -211,6 +245,10 @@ install(TARGETS record view record_view panto test_detector test_detector_video 
 install(DIRECTORY configs/ DESTINATION configs)
 install(FILES config.toml DESTINATION .)
 
+# ========== STATUS ==========
+
 message(STATUS "OpenCV: ${OpenCV_VERSION}")
 message(STATUS "CUDA: ${CUDA_VERSION}")
+message(STATUS "CUDA Arch: sm_87 (Jetson Orin)")
 message(STATUS "TensorRT: ${TENSORRT_LIBRARY}")
+message(STATUS "cuBLAS: ${CUDA_CUBLAS_LIBRARIES}")
