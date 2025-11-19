@@ -1,8 +1,12 @@
 # Configuración del sistema de reconocimiento facial Panto
 [mode]
+# Si queremos usar el detector
 detect = true
+# Si queremos grabar el video procesado
 record = false
+# Si queremos mostrar el video procesado en pantalla
 display = true
+# Si queremos reconocer rostros (ArcFace)
 recognize = true
 
 [camera]
@@ -18,22 +22,24 @@ port = 554
 #source = "video2.mp4"
 source = "video1.mp4"
 
-
 [detector]
 model_path = "models/scrfd_2.5g_bnkps.engine"
 conf_threshold = 0.3
 nms_threshold = 0.4
-use_gpu_preprocessing = true
+use_gpu_preprocessing = true  # CUDA preprocessing (más rápido)
 
-# ===== NUEVO: Configuración ArcFace =====
+# ===== RECONOCIMIENTO FACIAL (ArcFace) =====
 [recognizer]
 model_path = "models/arcface_r100.engine"
 embedding_size = 512
-threshold = 0.6  # Similitud mínima para reconocer (0.0-1.0)
+use_gpu_preprocessing = true
+# Umbral de similitud para reconocer (0.0-1.0)
+# 0.6 = default, 0.7 = más estricto, 0.5 = más permisivo
+threshold = 0.6
 
 [database]
 path = "database/faces.db"
-# Opciones: "sqlite" o "json"
+# Backend: "sqlite"
 backend = "sqlite"
 
 [output]
@@ -43,39 +49,11 @@ display_height = 720
 draw_fps = true
 draw_detections = true
 draw_landmarks = true
-draw_names = true
+draw_names = true           # Mostrar nombres reconocidos
 save_output = false
 output_dir = "videos/output"
 
 [performance]
-max_fps = 30
-skip_frames = 0
-```
-
----
-
-## **Estructura de archivos que necesitarás:**
-```
-system/
-├── models/
-│   ├── scrfd_2.5g_bnkps.engine  ✅ (ya lo tienes)
-│   └── arcface_r100.engine      ← Crear este
-│
-├── database/
-│   └── faces.db                 ← Se crea automático
-│
-├── include/
-│   ├── detector_optimized.hpp   ✅
-│   ├── tracker.hpp              ✅
-│   ├── recognizer.hpp           ← CREAR
-│   └── face_database.hpp        ← CREAR
-│
-├── src/
-│   ├── detector_optimized.cpp   ✅
-│   ├── tracker.cpp              ✅
-│   ├── recognizer.cpp           ← CREAR
-│   └── face_database.cpp        ← CREAR
-│
-├── main.cpp                     ← MODIFICAR
-├── CMakeLists.txt               ← MODIFICAR
-└── config.toml                  ← MODIFICAR
+# Ajustes automáticos para Jetson Orin
+max_fps = 30                  # FPS objetivo (0 = sin límite)
+skip_frames = 0               # Procesar 1 de cada N frames (0 = todos)

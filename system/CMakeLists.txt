@@ -96,6 +96,35 @@ target_link_libraries(panto_tracker
     spdlog::spdlog
 )
 
+# ========== RECOGNIZER (ArcFace) ==========
+add_library(panto_recognizer SHARED 
+    src/recognizer.cpp
+)
+
+target_link_libraries(panto_recognizer
+    panto_cuda_kernels
+    ${OpenCV_LIBS}
+    ${CUDA_LIBRARIES}
+    ${TENSORRT_LIBRARY}
+    ${TENSORRT_PLUGIN_LIBRARY}
+    ${TENSORRT_ONNX}
+    cudart
+    spdlog::spdlog
+)
+
+# ========== FACE DATABASE ==========
+find_package(SQLite3 REQUIRED)
+include_directories(${SQLite3_INCLUDE_DIRS})
+
+add_library(panto_database SHARED 
+    src/face_database.cpp
+)
+
+target_link_libraries(panto_database
+    ${SQLite3_LIBRARIES}
+    spdlog::spdlog
+)
+
 # ========== EXECUTABLES ==========
 
 # Main App (hace todo)
