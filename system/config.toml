@@ -1,9 +1,11 @@
-# ============= config.toml =============
-# Configuración principal del sistema PANTO
+# Configuración del sistema de reconocimiento facial Panto
 [mode]
-detect = false # si queremos usar el modelo
-record = false # si queremos grabar el video procesado
-display = true # si queremos mostrar el video procesado en pantalla
+# si queremos usar el modelo
+detect = false
+# si queremos grabar el video procesado
+record = false
+# si queremos mostrar el video procesado en pantalla
+display = true
 
 
 [camera]
