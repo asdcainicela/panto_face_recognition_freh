@@ -341,6 +341,14 @@ std::vector<Detection> FaceDetectorOptimized::postprocess_scrfd(
         
         int total_anchors = static_cast<int>(anchors.size());
         
+        // DEBUG: Log de este stride
+        int count_over_threshold = 0;
+        for (int i = 0; i < total_anchors; i++) {
+            if (scores_data[i] >= conf_threshold) count_over_threshold++;
+        }
+        spdlog::debug("Stride {}: anchors={}, scores>threshold={}", 
+                     cfg.stride, total_anchors, count_over_threshold);
+        
         // CRÍTICO: Los outputs vienen en formato [N, C] no [1, C, H, W]
         // Cada posición espacial tiene num_anchors (2) detecciones
         for (int i = 0; i < total_anchors; i++) {
