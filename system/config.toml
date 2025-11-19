@@ -22,7 +22,8 @@ source = "video1.mp4"
 
 [detector]
 model_path = "models/scrfd_10g_bnkps.engine"
-conf_threshold = 0.5
+#conf_threshold = 0.5
+conf_threshold = 0.3
 nms_threshold = 0.4
 use_gpu_preprocessing = true  # CUDA preprocessing (más rápido)
 

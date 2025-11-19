@@ -379,6 +379,7 @@ std::vector<Detection> FaceDetectorOptimized::postprocess_scrfd(
             detections.push_back(det);
         }
     }
+}
     
     // Aplicar NMS
     if (!detections.empty()) {
