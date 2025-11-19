@@ -144,6 +144,13 @@ target_link_libraries(benchmark
     ${OpenCV_LIBS}
     spdlog::spdlog
 )
+# --------- Test Recognizer ---------
+add_executable(test_recognizer test/test_recognizer.cpp)
+target_link_libraries(test_recognizer
+    panto_recognizer
+    ${OpenCV_LIBS}
+    spdlog::spdlog
+)
 
 # ========== INSTALL ==========
 install(TARGETS panto_utils panto_draw panto_stream panto_detector_opt panto_cuda_kernels

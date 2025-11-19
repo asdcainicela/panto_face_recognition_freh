@@ -4,6 +4,7 @@
 #include <spdlog/spdlog.h>
 #include <fstream>
 #include <cmath>
+#include <iostream>  // <-- para debug
 
 void Logger::log(Severity severity, const char* msg) noexcept {
     if (severity <= Severity::kWARNING) {
@@ -26,8 +27,8 @@ FaceRecognizer::FaceRecognizer(const std::string& engine_path, bool gpu_preproc)
     
     // Create CUDA stream
     cudaStreamCreate(&stream);
-    cv_stream = cv::cuda::StreamAccessor::wrapStream(stream);
     
+    // Allocate GPU buffers
     // Allocate GPU buffers
     size_t input_size = 1 * 3 * input_height * input_width * sizeof(float);
     size_t output_size = 1 * embedding_size * sizeof(float);
@@ -35,10 +36,15 @@ FaceRecognizer::FaceRecognizer(const std::string& engine_path, bool gpu_preproc)
     cudaMalloc(&d_input, input_size);
     cudaMalloc(&d_output, output_size);
     
+    // ---------- LIGAR TENSORES DESPUÉS DE ALLOCAR ----------
+    context->setTensorAddress("input.1", d_input);
+    context->setTensorAddress("683", d_output);
+    // --------------------------------------------------------
+    
     if (use_gpu_preprocessing) {
         size_t resized_size = input_height * input_width * 3;
         cudaMalloc(&d_resized, resized_size);
-        
+    
         spdlog::info("   GPU buffers: input={:.1f}KB, output={:.1f}KB",
                     input_size / 1024.0, output_size / 1024.0);
     }
@@ -79,9 +85,6 @@ bool FaceRecognizer::loadEngine(const std::string& engine_path) {
     context.reset(engine->createExecutionContext());
     if (!context) return false;
     
-    // Set tensor addresses
-    context->setTensorAddress("input.1", d_input);
-    context->setTensorAddress("683", d_output);
     
     spdlog::info("   Engine loaded: {}x{} -> {}", 
                 input_width, input_height, embedding_size);
@@ -115,8 +118,6 @@ void FaceRecognizer::preprocess_gpu(const cv::Mat& face) {
     cv::cuda::resize(gpu_input, gpu_resized, 
                      cv::Size(input_width, input_height),
                      0, 0, cv::INTER_LINEAR, cv_stream);
-    
-    cv_stream.waitForCompletion();
     
     // Copy to temporary buffer
     cudaMemcpyAsync(d_resized, gpu_resized.data, 
@@ -167,6 +168,21 @@ std::vector<float> FaceRecognizer::extract_embedding(const cv::Mat& face) {
     auto t1 = std::chrono::high_resolution_clock::now();
     last_profile.preprocess_ms = 
         std::chrono::duration<double, std::milli>(t1 - t0).count();
+    
+    // ---------- DEBUG: ANTES DE ENQUEUE ----------
+    std::cout << "[DEBUG] d_input: " << d_input << std::endl;
+    std::cout << "[DEBUG] d_output: " << d_output << std::endl;
+    std::cout << "[DEBUG] stream: " << stream << std::endl;
+
+    int nb = engine->getNbIOTensors();
+    for (int i = 0; i < nb; ++i) {
+        const char* name = engine->getIOTensorName(i);
+        //void* ptr = context->getTensorAddress(name);
+        const void* ptr = context->getTensorAddress(name);
+        //std::cout << "[DEBUG] Tensor '" << name << "' -> " << ptr << std::endl;
+        std::cout << "[DEBUG] Tensor '" << name << "' -> " << ptr << std::endl;
+    }
+    // ---------------------------------------------
     
     // Inference
     context->enqueueV3(stream);
