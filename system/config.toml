@@ -1,0 +1,35 @@
+# ============= config.toml =============
+# Configuración principal del sistema PANTO
+
+[camera]
+user = "admin"
+pass = "Panto2025"
+ip = "192.168.0.101"
+port = 554
+
+[input]
+# Opciones: "main", "sub", o ruta a video como "videos/test.mp4"
+source = "main"
+# source = "sub"
+# source = "videos/recording_main_20241118.mp4"
+
+[detector]
+model_path = "models/scrfd_10g_bnkps.engine"
+conf_threshold = 0.5
+nms_threshold = 0.4
+use_gpu_preprocessing = true  # CUDA preprocessing (más rápido)
+
+[output]
+display_enabled = true        # Ver procesamiento en tiempo real
+display_width = 1280
+display_height = 720
+draw_fps = true
+draw_detections = true
+draw_landmarks = true
+save_output = false           # Guardar video procesado
+output_dir = "videos/output"
+
+[performance]
+# Ajustes automáticos para Jetson Orin
+max_fps = 30                  # FPS objetivo (0 = sin límite)
+skip_frames = 0               # Procesar 1 de cada N frames (0 = todos)
