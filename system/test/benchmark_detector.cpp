@@ -127,19 +127,9 @@ int main(int argc, char* argv[]) {
     spdlog::info("GPU Preprocessing: {}", gpu_preproc ? "ENABLED" : "DISABLED");
     
     try {
-        // ========== TEST 1: Detector Original ==========
-        spdlog::info("\n🔵 TEST 1: Detector Original (baseline)");
-        FaceDetector detector_original(engine_path);
-        detector_original.set_conf_threshold(0.5f);
-        
+        // ========== TEST: Detector Optimizado ==========
         cv::Mat test_1080p;
         cv::resize(img, test_1080p, cv::Size(1920, 1080));
-        
-        auto baseline = benchmark_detector(detector_original, test_1080p, 10, 50);
-        auto baseline_dets = detector_original.detect(test_1080p);
-        
-        spdlog::info("✓ Baseline: {:.2f}ms ({:.1f} FPS) - {} rostros detectados",
-                    baseline.avg_ms, baseline.fps, baseline_dets.size());
         
         // ========== TEST 2: Detector Optimizado ==========
         spdlog::info("\n🚀 TEST 2: Detector Optimizado");
@@ -157,28 +147,6 @@ int main(int argc, char* argv[]) {
             spdlog::info("   └─ Preprocessing: {:.2f}ms", optimized.avg_preprocess_ms);
             spdlog::info("   └─ Inference:     {:.2f}ms", optimized.avg_inference_ms);
             spdlog::info("   └─ Postprocess:   {:.2f}ms", optimized.avg_postprocess_ms);
-        }
-        
-        // ========== SPEEDUP ==========
-        double speedup = baseline.avg_ms / optimized.avg_ms;
-        std::cout << "\n";
-        std::cout << "╔════════════════════════════════════════════════════════════╗" << std::endl;
-        std::cout << "║                    RESULTADOS FINALES                      ║" << std::endl;
-        std::cout << "╚════════════════════════════════════════════════════════════╝" << std::endl;
-        printf("  Original:    %6.2f ms  (%5.1f FPS)\n", baseline.avg_ms, baseline.fps);
-        printf("  Optimizado:  %6.2f ms  (%5.1f FPS)\n", optimized.avg_ms, optimized.fps);
-        printf("  ───────────────────────────────────────\n");
-        printf("  Speedup:     %.2fx\n", speedup);
-        printf("  Ganancia:    %.1f ms ahorrados por frame\n", baseline.avg_ms - optimized.avg_ms);
-        std::cout << "\n";
-        
-        if (speedup < 1.2) {
-            spdlog::warn("⚠️  Speedup bajo. Posibles causas:");
-            spdlog::warn("   - OpenCV no compilado con CUDA");
-            spdlog::warn("   - Engine no optimizado (FP32 en lugar de FP16)");
-            spdlog::warn("   - GPU compartida con otras tareas");
-        } else {
-            spdlog::info("✓ Optimización exitosa! {:.1f}x más rápido", speedup);
         }
         
         // ========== TEST 3: Múltiples Resoluciones ==========

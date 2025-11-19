@@ -1,6 +1,7 @@
 #include "stream_capture.hpp"
 #include "draw_utils.hpp"
 #include <spdlog/spdlog.h>
+#include "utils.hpp"        
 #include <thread>
 #include <iomanip>
 #include <sstream>
