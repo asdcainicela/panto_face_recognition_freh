@@ -86,6 +86,16 @@ target_link_libraries(panto_detector_opt
     spdlog::spdlog
 )
 
+# ========== TRACKER ==========
+add_library(panto_tracker SHARED 
+    src/tracker.cpp
+)
+
+target_link_libraries(panto_tracker
+    ${OpenCV_LIBS}
+    spdlog::spdlog
+)
+
 # ========== EXECUTABLES ==========
 
 # Main App (hace todo)
@@ -95,6 +105,7 @@ target_link_libraries(panto
     panto_utils
     panto_draw
     panto_detector_opt
+    panto_tracker  # <-- AGREGAR ESTO
 )
 
 # Benchmark (solo para tests)
