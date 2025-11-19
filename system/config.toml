@@ -1,12 +1,9 @@
 # Configuración del sistema de reconocimiento facial Panto
 [mode]
-# si queremos usar el modelo
 detect = true
-# si queremos grabar el video procesado
 record = false
-# si queremos mostrar el video procesado en pantalla
 display = true
-
+recognize = true
 
 [camera]
 user = "admin"
@@ -24,22 +21,61 @@ source = "video1.mp4"
 
 [detector]
 model_path = "models/scrfd_2.5g_bnkps.engine"
-#conf_threshold = 0.5
 conf_threshold = 0.3
 nms_threshold = 0.4
-use_gpu_preprocessing = true  # CUDA preprocessing (más rápido)
+use_gpu_preprocessing = true
+
+# ===== NUEVO: Configuración ArcFace =====
+[recognizer]
+model_path = "models/arcface_r100.engine"
+embedding_size = 512
+threshold = 0.6  # Similitud mínima para reconocer (0.0-1.0)
+
+[database]
+path = "database/faces.db"
+# Opciones: "sqlite" o "json"
+backend = "sqlite"
 
 [output]
-display_enabled = true        # Ver procesamiento en tiempo real
+display_enabled = true
 display_width = 1280
 display_height = 720
 draw_fps = true
 draw_detections = true
 draw_landmarks = true
-save_output = false           # Guardar video procesado
+draw_names = true
+save_output = false
 output_dir = "videos/output"
 
 [performance]
-# Ajustes automáticos para Jetson Orin
-max_fps = 30                  # FPS objetivo (0 = sin límite)
-skip_frames = 0               # Procesar 1 de cada N frames (0 = todos)
+max_fps = 30
+skip_frames = 0
+```
+
+---
+
+## **Estructura de archivos que necesitarás:**
+```
+system/
+├── models/
+│   ├── scrfd_2.5g_bnkps.engine  ✅ (ya lo tienes)
+│   └── arcface_r100.engine      ← Crear este
+│
+├── database/
+│   └── faces.db                 ← Se crea automático
+│
+├── include/
+│   ├── detector_optimized.hpp   ✅
+│   ├── tracker.hpp              ✅
+│   ├── recognizer.hpp           ← CREAR
+│   └── face_database.hpp        ← CREAR
+│
+├── src/
+│   ├── detector_optimized.cpp   ✅
+│   ├── tracker.cpp              ✅
+│   ├── recognizer.cpp           ← CREAR
+│   └── face_database.cpp        ← CREAR
+│
+├── main.cpp                     ← MODIFICAR
+├── CMakeLists.txt               ← MODIFICAR
+└── config.toml                  ← MODIFICAR
