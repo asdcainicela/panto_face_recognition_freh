@@ -1,4 +1,3 @@
-// ============= main.cpp =============
 #include "detector_optimized.hpp"
 #include "stream_capture.hpp"
 #include "utils.hpp"
@@ -9,6 +8,7 @@
 #include <csignal>
 #include <atomic>
 #include <filesystem>
+#include <thread>
 
 // ==================== TOML PARSER ====================
 class SimpleToml {
