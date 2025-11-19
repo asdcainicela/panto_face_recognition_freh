@@ -3,6 +3,7 @@
 #include "detector_optimized.hpp"
 #include <spdlog/spdlog.h>
 #include <algorithm>
+#include <numeric>  // <-- AGREGAR ESTE INCLUDE para std::iota
 
 // ==================== TrackedFace ====================
 
