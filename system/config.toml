@@ -3,11 +3,25 @@
 # Si queremos usar el detector
 detect = true
 # Si queremos grabar el video procesado
-record = true
+record = false
 # Si queremos mostrar el video procesado en pantalla
 display = true
 # Si queremos reconocer rostros (ArcFace)
 recognize = true
+
+# ===== ANÁLISIS DE EMOCIONES (FER+) =====
+[emotion]
+model_path = "models/emotion_ferplus.engine"
+enabled = true
+# Analizar cada N frames (para reducir overhead)
+analyze_interval = 5
+
+# ===== PREDICCIÓN DE EDAD Y GÉNERO =====
+[age_gender]
+model_path = "models/age_gender.engine"
+enabled = true
+# Analizar cada N frames
+analyze_interval = 10
 
 [camera]
 user = "admin"

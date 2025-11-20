@@ -105,6 +105,7 @@ add_library(panto_recognizer SHARED
     src/recognizer.cpp
 )
 
+
 target_link_libraries(panto_recognizer
     panto_cuda_kernels
     ${OpenCV_LIBS}
@@ -116,6 +117,35 @@ target_link_libraries(panto_recognizer
     spdlog::spdlog
 )
 
+# ========== EMOTION RECOGNIZER (FER+) ==========
+add_library(panto_emotion SHARED 
+    src/emotion_recognizer.cpp
+)
+
+target_link_libraries(panto_emotion
+    ${OpenCV_LIBS}
+    ${CUDA_LIBRARIES}
+    ${TENSORRT_LIBRARY}
+    ${TENSORRT_PLUGIN_LIBRARY}
+    ${TENSORRT_ONNX}
+    cudart
+    spdlog::spdlog
+)
+
+# ========== AGE-GENDER PREDICTOR ==========
+add_library(panto_age_gender SHARED 
+    src/age_gender_predictor.cpp
+)
+
+target_link_libraries(panto_age_gender
+    ${OpenCV_LIBS}
+    ${CUDA_LIBRARIES}
+    ${TENSORRT_LIBRARY}
+    ${TENSORRT_PLUGIN_LIBRARY}
+    ${TENSORRT_ONNX}
+    cudart
+    spdlog::spdlog
+)
 # ========== FACE DATABASE ==========
 add_library(panto_database SHARED 
     src/face_database.cpp
@@ -128,7 +158,8 @@ target_link_libraries(panto_database
 
 # ========== EXECUTABLES ==========
 
-# Main App (SCRFD + Tracker + ArcFace + Database)
+
+# Main App (SCRFD + Tracker + ArcFace + Emotion + Age/Gender + Database)
 add_executable(panto main.cpp)
 target_link_libraries(panto 
     panto_stream
@@ -136,8 +167,10 @@ target_link_libraries(panto
     panto_draw
     panto_detector_opt
     panto_tracker
-    panto_recognizer      # <- AGREGADO
-    panto_database        # <- AGREGADO
+    panto_recognizer
+    panto_emotion
+    panto_age_gender
+    panto_database
 )
 
 # Benchmark (solo para tests)
@@ -174,6 +207,8 @@ install(TARGETS
     panto_detector_opt 
     panto_tracker
     panto_recognizer
+    panto_emotion
+    panto_age_gender
     panto_database
     panto_cuda_kernels
     LIBRARY DESTINATION lib
