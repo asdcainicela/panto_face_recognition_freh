@@ -37,13 +37,12 @@
 #include <NvInferRuntime.h>
 #include <cuda_runtime_api.h>
 
-class Logger : public nvinfer1::ILogger {
-    void log(Severity severity, const char* msg) noexcept override;
-};
+
+#include "tensorrt_logger.hpp"
 
 class FaceRecognizer {
 private:
-    Logger logger;
+    panto::TensorRTLogger logger;  // en vez de Logger logger;
     std::unique_ptr<nvinfer1::IRuntime> runtime;
     std::unique_ptr<nvinfer1::ICudaEngine> engine;
     std::unique_ptr<nvinfer1::IExecutionContext> context;

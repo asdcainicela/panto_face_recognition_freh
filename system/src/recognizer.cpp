@@ -6,11 +6,6 @@
 #include <cmath>
 #include <iostream>  // <-- para debug
 
-void Logger::log(Severity severity, const char* msg) noexcept {
-    if (severity <= Severity::kWARNING) {
-        spdlog::warn("[TensorRT] {}", msg);
-    }
-}
 
 // ==================== CONSTRUCTOR/DESTRUCTOR ====================
 

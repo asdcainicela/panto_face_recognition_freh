@@ -1,5 +1,7 @@
 #include "detector_optimized.hpp"
 #include "tracker.hpp"
+#include "recognizer.hpp"
+#include "face_database.hpp"
 #include "stream_capture.hpp"
 #include "utils.hpp"
 #include "draw_utils.hpp"
@@ -121,6 +123,7 @@ int main(int argc, char* argv[]) {
     bool mode_detect = config.get_bool("mode.detect", true);
     bool mode_record = config.get_bool("mode.record", false);
     bool mode_display = config.get_bool("mode.display", true);
+    bool mode_recognize = config.get_bool("mode.recognize", true);
 
     // Detector
     std::string model_path = config.get("detector.model_path", "models/scrfd_10g_bnkps.engine");
@@ -128,12 +131,22 @@ int main(int argc, char* argv[]) {
     float nms_thr = config.get_float("detector.nms_threshold", 0.4f);
     bool gpu_preproc = config.get_bool("detector.use_gpu_preprocessing", true);
 
+    // Recognizer
+    std::string recognizer_path = config.get("recognizer.model_path", "models/arcface_r100.engine");
+    int embedding_size = config.get_int("recognizer.embedding_size", 512);
+    bool recog_gpu_preproc = config.get_bool("recognizer.use_gpu_preprocessing", true);
+    float recog_threshold = config.get_float("recognizer.threshold", 0.6f);
+
+    // Database
+    std::string db_path = config.get("database.path", "database/faces.db");
+
     // Output
     int disp_w = config.get_int("output.display_width", 1280);
     int disp_h = config.get_int("output.display_height", 720);
     bool draw_fps = config.get_bool("output.draw_fps", true);
     bool draw_dets = config.get_bool("output.draw_detections", true);
     bool draw_lands = config.get_bool("output.draw_landmarks", true);
+    bool draw_names = config.get_bool("output.draw_names", true);
     std::string output_dir = config.get("output.output_dir", "videos");
     std::string video_codec = config.get("output.video_codec", "H264");
     double video_fps = config.get_double("output.video_fps", 25.0);
@@ -150,12 +163,14 @@ int main(int argc, char* argv[]) {
     spdlog::info("╚════════════════════════════════════════╝");
     spdlog::info("Config: {}", config_file);
     spdlog::info("Input: {}", source);
-    spdlog::info("Modes: detect={} record={} display={}",
-                mode_detect, mode_record, mode_display);
+    spdlog::info("Modes: detect={} record={} display={} recognize={}",
+                mode_detect, mode_record, mode_display, mode_recognize);
 
-    // ========== CARGAR DETECTOR Y TRACKER ==========
+    // ========== CARGAR DETECTOR, TRACKER Y RECOGNIZER ==========
     std::unique_ptr<FaceDetectorOptimized> detector;
     std::unique_ptr<FaceTracker> tracker;
+    std::unique_ptr<FaceRecognizer> recognizer;
+    std::unique_ptr<FaceDatabase> database;
 
     if (mode_detect) {
         try {
@@ -167,17 +182,23 @@ int main(int argc, char* argv[]) {
 
             // Inicializar tracker
             tracker = std::make_unique<FaceTracker>(0.25f, 60, 2);
-            /*
-            tracker = std::make_unique<FaceTracker>(
-                0.25f,  // ← Más tolerante al movimiento
-                60,     // ← Aguanta 2 segundos sin detección
-                2       // ← Confirma más rápido
-            );
-                */
             spdlog::info("✓ Tracker inicializado");
 
+            // Inicializar reconocedor si está habilitado
+            if (mode_recognize) {
+                spdlog::info("Cargando recognizer: {}", recognizer_path);
+                recognizer = std::make_unique<FaceRecognizer>(recognizer_path, recog_gpu_preproc);
+                spdlog::info("✓ Recognizer cargado (embedding: {}, GPU preproc: {})", 
+                            embedding_size, recog_gpu_preproc);
+
+                // Inicializar base de datos
+                database = std::make_unique<FaceDatabase>(db_path, embedding_size, recog_threshold);
+                spdlog::info("✓ Database inicializada ({} personas registradas)", 
+                            database->count_persons());
+            }
+
         } catch (const std::exception& e) {
-            spdlog::error("❌ Error cargando detector: {}", e.what());
+            spdlog::error("❌ Error cargando componentes: {}", e.what());
             return 1;
         }
     }
@@ -247,7 +268,9 @@ int main(int argc, char* argv[]) {
     int frame_count = 0;
     double total_det_ms = 0;
     double total_track_ms = 0;
+    double total_recog_ms = 0;
     int total_tracked = 0;
+    int total_recognized = 0;
 
     auto start_time = std::chrono::steady_clock::now();
 
@@ -264,7 +287,7 @@ int main(int argc, char* argv[]) {
 
         // ========== DETECTION + TRACKING ==========
         std::vector<TrackedFace> tracked_faces;
-        double det_ms = 0, track_ms = 0;
+        double det_ms = 0, track_ms = 0, recog_ms = 0;
 
         if (mode_detect && detector && tracker) {
             auto t1 = std::chrono::high_resolution_clock::now();
@@ -279,6 +302,42 @@ int main(int argc, char* argv[]) {
             total_det_ms += det_ms;
             total_track_ms += track_ms;
             total_tracked += tracked_faces.size();
+
+            // ========== RECOGNITION ==========
+            if (mode_recognize && recognizer && database && !tracked_faces.empty()) {
+                auto t4 = std::chrono::high_resolution_clock::now();
+                
+                for (auto& face : tracked_faces) {
+                    // Solo reconocer si es un track confirmado y no está ya reconocido
+                    if (face.hits >= 3 && !face.is_recognized) {
+                        // Extraer ROI del rostro
+                        cv::Rect safe_box = face.box & cv::Rect(0, 0, frame.cols, frame.rows);
+                        if (safe_box.area() > 0) {
+                            cv::Mat face_roi = frame(safe_box);
+                            
+                            // Extraer embedding
+                            auto embedding = recognizer->extract_embedding(face_roi);
+                            
+                            // Buscar en base de datos
+                            auto result = database->recognize(embedding);
+                            
+                            if (result.recognized) {
+                                face.is_recognized = true;
+                                face.name = result.name;
+                                face.embedding = embedding;
+                                total_recognized++;
+                                
+                                spdlog::info("✓ Reconocido: {} (ID:{}, sim:{:.3f})",
+                                           result.name, face.id, result.similarity);
+                            }
+                        }
+                    }
+                }
+                
+                auto t5 = std::chrono::high_resolution_clock::now();
+                recog_ms = std::chrono::duration<double, std::milli>(t5 - t4).count();
+                total_recog_ms += recog_ms;
+            }
         }
 
         // ========== RECORDING ==========
@@ -302,19 +361,21 @@ int main(int argc, char* argv[]) {
                         face.box.height * scale_y
                     );
 
+                    // Color según estado
                     cv::Scalar color;
                     if (face.is_recognized) {
-                        color = cv::Scalar(0, 255, 0);
+                        color = cv::Scalar(0, 255, 0);  // Verde = reconocido
                     } else if (face.hits < 3) {
-                        color = cv::Scalar(0, 255, 255);
+                        color = cv::Scalar(0, 255, 255);  // Amarillo = tracking inicial
                     } else {
-                        color = cv::Scalar(255, 0, 0);
+                        color = cv::Scalar(255, 0, 0);  // Azul = tracking confirmado
                     }
 
                     cv::rectangle(display, box_scaled, color, 2);
 
+                    // Label con ID y nombre
                     std::string label = cv::format("ID:%d", face.id);
-                    if (face.is_recognized) {
+                    if (face.is_recognized && draw_names) {
                         label += " - " + face.name;
                     }
                     label += cv::format(" (%.2f)", face.confidence);
@@ -323,11 +384,13 @@ int main(int argc, char* argv[]) {
                                cv::Point(box_scaled.x, box_scaled.y - 5),
                                cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 2);
 
+                    // Info adicional
                     std::string info = cv::format("Age:%d Hits:%d", face.age, face.hits);
                     cv::putText(display, info,
                                cv::Point(box_scaled.x, box_scaled.y + box_scaled.height + 15),
                                cv::FONT_HERSHEY_SIMPLEX, 0.4, color, 1);
 
+                    // Landmarks
                     if (draw_lands) {
                         for (int i = 0; i < 5; i++) {
                             cv::Point2f pt(
@@ -340,8 +403,9 @@ int main(int argc, char* argv[]) {
                 }
             }
 
+            // Panel de información
             cv::Mat overlay = display.clone();
-            int panel_h = mode_detect ? 150 : 80;
+            int panel_h = mode_recognize ? 180 : 150;
             cv::rectangle(overlay, cv::Point(0, 0), cv::Point(450, panel_h),
                          cv::Scalar(0, 0, 0), -1);
             cv::addWeighted(overlay, 0.7, display, 0.3, 0, display);
@@ -368,6 +432,13 @@ int main(int argc, char* argv[]) {
                            cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
                            0.6, cv::Scalar(0, 255, 0), 2);
                 y += 25;
+
+                if (mode_recognize) {
+                    cv::putText(display, cv::format("Recognition: %.1fms", recog_ms),
+                               cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
+                               0.6, cv::Scalar(0, 255, 0), 2);
+                    y += 25;
+                }
 
                 cv::putText(display, cv::format("Tracked: %d", (int)tracked_faces.size()),
                            cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
@@ -400,10 +471,11 @@ int main(int argc, char* argv[]) {
         if (frame_count % fps_interval == 0) {
             double avg_det_ms = mode_detect ? total_det_ms / frame_count : 0;
             double avg_track_ms = mode_detect ? total_track_ms / frame_count : 0;
+            double avg_recog_ms = mode_recognize ? total_recog_ms / frame_count : 0;
 
             if (mode_detect) {
-                spdlog::info("Frame {} | Det: {:.1f}ms | Track: {:.1f}ms | Rostros: {:.1f}/frame",
-                            frame_count, avg_det_ms, avg_track_ms,
+                spdlog::info("Frame {} | Det: {:.1f}ms | Track: {:.1f}ms | Recog: {:.1f}ms | Rostros: {:.1f}/frame",
+                            frame_count, avg_det_ms, avg_track_ms, avg_recog_ms,
                             (double)total_tracked / frame_count);
             } else {
                 spdlog::info("Frame {}", frame_count);
@@ -432,9 +504,20 @@ int main(int argc, char* argv[]) {
         spdlog::info("Detección promedio: {:.1f}ms ({:.1f} FPS)",
                     avg_det_ms, 1000.0 / avg_det_ms);
         spdlog::info("Tracking promedio: {:.1f}ms", avg_track_ms);
-        spdlog::info("Total pipeline: {:.1f}ms ({:.1f} FPS)",
-                    avg_det_ms + avg_track_ms,
-                    1000.0 / (avg_det_ms + avg_track_ms));
+        
+        if (mode_recognize) {
+            double avg_recog_ms = total_recog_ms / frame_count;
+            spdlog::info("Reconocimiento promedio: {:.1f}ms", avg_recog_ms);
+            spdlog::info("Total pipeline: {:.1f}ms ({:.1f} FPS)",
+                        avg_det_ms + avg_track_ms + avg_recog_ms,
+                        1000.0 / (avg_det_ms + avg_track_ms + avg_recog_ms));
+            spdlog::info("Rostros reconocidos: {} únicos", total_recognized);
+        } else {
+            spdlog::info("Total pipeline: {:.1f}ms ({:.1f} FPS)",
+                        avg_det_ms + avg_track_ms,
+                        1000.0 / (avg_det_ms + avg_track_ms));
+        }
+        
         spdlog::info("Rostros rastreados: {} ({:.2f}/frame)",
                     total_tracked, (double)total_tracked / frame_count);
 

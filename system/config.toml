@@ -3,7 +3,7 @@
 # Si queremos usar el detector
 detect = true
 # Si queremos grabar el video procesado
-record = false
+record = true
 # Si queremos mostrar el video procesado en pantalla
 display = true
 # Si queremos reconocer rostros (ArcFace)
@@ -18,12 +18,12 @@ port = 554
 [input]
 # Opciones: "main", "sub", o ruta a video como "videos/test.mp4"
 #source = "main"
-# source = "sub"
+source = "sub"
 #source = "video2.mp4"
-source = "video1.mp4"
+#source = "video1.mp4"
 
 [detector]
-model_path = "models/scrfd_2.5g_bnkps.engine"
+model_path = "models/scrfd_10g_bnkps.engine"
 conf_threshold = 0.3
 nms_threshold = 0.4
 use_gpu_preprocessing = true  # CUDA preprocessing (más rápido)

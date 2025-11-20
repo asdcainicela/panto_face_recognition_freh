@@ -35,6 +35,10 @@ find_library(TENSORRT_ONNX nvonnxparser
     HINTS /usr/lib/aarch64-linux-gnu /usr/lib /usr/local/lib /opt/tensorrt/lib
 )
 
+# SQLite3
+find_package(SQLite3 REQUIRED)
+include_directories(${SQLite3_INCLUDE_DIRS})
+
 include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${CMAKE_SOURCE_DIR}/include)
 include_directories(${TENSORRT_INCLUDE_DIR})
@@ -113,9 +117,6 @@ target_link_libraries(panto_recognizer
 )
 
 # ========== FACE DATABASE ==========
-find_package(SQLite3 REQUIRED)
-include_directories(${SQLite3_INCLUDE_DIRS})
-
 add_library(panto_database SHARED 
     src/face_database.cpp
 )
@@ -127,14 +128,16 @@ target_link_libraries(panto_database
 
 # ========== EXECUTABLES ==========
 
-# Main App (hace todo)
+# Main App (SCRFD + Tracker + ArcFace + Database)
 add_executable(panto main.cpp)
 target_link_libraries(panto 
     panto_stream
     panto_utils
     panto_draw
     panto_detector_opt
-    panto_tracker  # <-- AGREGAR ESTO
+    panto_tracker
+    panto_recognizer      # <- AGREGADO
+    panto_database        # <- AGREGADO
 )
 
 # Benchmark (solo para tests)
@@ -144,7 +147,8 @@ target_link_libraries(benchmark
     ${OpenCV_LIBS}
     spdlog::spdlog
 )
-# --------- Test Recognizer ---------
+
+# Test Recognizer
 add_executable(test_recognizer test/test_recognizer.cpp)
 target_link_libraries(test_recognizer
     panto_recognizer
@@ -152,13 +156,31 @@ target_link_libraries(test_recognizer
     spdlog::spdlog
 )
 
+# ========== REGISTER FACE TOOL ==========
+add_executable(register_face register_face.cpp)
+target_link_libraries(register_face
+    panto_detector_opt
+    panto_recognizer
+    panto_database
+    ${OpenCV_LIBS}
+    spdlog::spdlog
+)
+
 # ========== INSTALL ==========
-install(TARGETS panto_utils panto_draw panto_stream panto_detector_opt panto_cuda_kernels
+install(TARGETS 
+    panto_utils 
+    panto_draw 
+    panto_stream 
+    panto_detector_opt 
+    panto_tracker
+    panto_recognizer
+    panto_database
+    panto_cuda_kernels
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
 )
 
-install(TARGETS panto benchmark
+install(TARGETS panto benchmark test_recognizer
     RUNTIME DESTINATION bin
 )
 
@@ -169,3 +191,4 @@ message(STATUS "OpenCV: ${OpenCV_VERSION}")
 message(STATUS "CUDA: ${CUDA_VERSION} (sm_87)")
 message(STATUS "TensorRT: ${TENSORRT_LIBRARY}")
 message(STATUS "cuBLAS: ${CUDA_CUBLAS_LIBRARIES}")
+message(STATUS "SQLite3: ${SQLite3_LIBRARIES}")
