@@ -1,4 +1,4 @@
-// ============= src/age_gender_predictor.cpp =============
+// ============= src/age_gender_predictor.cpp - FIXED =============
 #include "age_gender_predictor.hpp"
 #include <spdlog/spdlog.h>
 #include <fstream>
@@ -29,7 +29,7 @@ AgeGenderPredictor::AgeGenderPredictor(const std::string& engine_path, bool gpu_
     }
     
     cudaStreamCreate(&stream);
-    cv_stream = cv::cuda::StreamAccessor::wrapStream(stream);
+    // NO usar cv::cuda::Stream - trabajar directamente con cudaStream_t
     
     // Allocate GPU buffers
     size_t input_size = 1 * 3 * input_height * input_width * sizeof(float);
@@ -116,28 +116,33 @@ cv::Mat AgeGenderPredictor::preprocess_cpu(const cv::Mat& face) {
 }
 
 void AgeGenderPredictor::preprocess_gpu(const cv::Mat& face) {
-    // Upload to GPU
-    gpu_input.upload(face, cv_stream);
+    // Upload to GPU (usando default stream)
+    gpu_input.upload(face);
     
-    // Resize
+    // Resize (síncrono por defecto)
     cv::cuda::resize(gpu_input, gpu_resized, 
                      cv::Size(input_width, input_height),
-                     0, 0, cv::INTER_LINEAR, cv_stream);
+                     0, 0, cv::INTER_LINEAR);
     
-    // Copy to temporary buffer
+    // Download data to temporary buffer
+    gpu_resized.download(std::vector<unsigned char>(
+        reinterpret_cast<unsigned char*>(gpu_resized.data),
+        reinterpret_cast<unsigned char*>(gpu_resized.data) + input_width * input_height * 3
+    ).data());
+    
+    // Copy to d_resized
     cudaMemcpyAsync(d_resized, gpu_resized.data, 
                    input_width * input_height * 3,
                    cudaMemcpyDeviceToDevice, stream);
     
-    // Normalize using custom kernel (BGR -> RGB + ImageNet normalize)
-    // For now, do it on CPU (later optimize with kernel)
+    // Normalize (CPU for now - later optimize with kernel)
     std::vector<unsigned char> temp(input_width * input_height * 3);
     cudaMemcpyAsync(temp.data(), d_resized,
                    input_width * input_height * 3,
                    cudaMemcpyDeviceToHost, stream);
     cudaStreamSynchronize(stream);
     
-    // BGR -> RGB + normalize
+    // BGR -> RGB + normalize ImageNet
     std::vector<float> normalized(input_width * input_height * 3);
     float mean[3] = {0.485f, 0.456f, 0.406f};
     float std[3] = {0.229f, 0.224f, 0.225f};
@@ -244,7 +249,6 @@ AgeGenderResult AgeGenderPredictor::postprocess(const std::vector<float>& logits
     float gender_confidence = std::max(female_prob, male_prob);
     
     // Age: siguientes clases (usualmente ~100 clases para 0-100 años)
-    // Encontrar la clase de edad con mayor probabilidad
     int age_start_idx = 2;
     int max_age_idx = age_start_idx;
     float max_age_prob = probs[age_start_idx];

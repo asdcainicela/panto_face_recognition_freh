@@ -1,4 +1,4 @@
-// ============= src/emotion_recognizer.cpp =============
+// ============= src/emotion_recognizer.cpp - FIXED =============
 #include "emotion_recognizer.hpp"
 #include <spdlog/spdlog.h>
 #include <fstream>
@@ -102,13 +102,8 @@ bool EmotionRecognizer::loadEngine(const std::string& engine_path) {
 cv::Mat EmotionRecognizer::preprocess_cpu(const cv::Mat& face) {
     cv::Mat gray, resized, normalized;
     
-    // Convert to grayscale
     cv::cvtColor(face, gray, cv::COLOR_BGR2GRAY);
-    
-    // Resize to 64x64
     cv::resize(gray, resized, cv::Size(input_width, input_height));
-    
-    // Normalize [0, 1]
     resized.convertTo(normalized, CV_32F, 1.0 / 255.0);
     
     return normalized;
@@ -126,13 +121,12 @@ void EmotionRecognizer::preprocess_gpu(const cv::Mat& face) {
                      cv::Size(input_width, input_height),
                      0, 0, cv::INTER_LINEAR);
     
-    // Download to d_resized (as uchar)
+    // Copy to d_resized
     cudaMemcpyAsync(d_resized, gpu_resized.data, 
                    input_width * input_height,
                    cudaMemcpyDeviceToDevice, stream);
     
-    // Normalize to [0, 1] using custom kernel (simple divide by 255)
-    // For now, do it on CPU (later optimize with kernel)
+    // Normalize to [0, 1]
     std::vector<unsigned char> temp(input_width * input_height);
     cudaMemcpyAsync(temp.data(), d_resized,
                    input_width * input_height,
@@ -157,12 +151,10 @@ EmotionResult EmotionRecognizer::predict(const cv::Mat& face) {
     
     auto t0 = std::chrono::high_resolution_clock::now();
     
-    // Preprocessing
     if (use_gpu_preprocessing) {
         preprocess_gpu(face);
     } else {
         cv::Mat input_blob = preprocess_cpu(face);
-        
         cudaMemcpyAsync(d_input, input_blob.data,
                        input_width * input_height * sizeof(float),
                        cudaMemcpyHostToDevice, stream);
@@ -172,7 +164,6 @@ EmotionResult EmotionRecognizer::predict(const cv::Mat& face) {
     last_profile.preprocess_ms = 
         std::chrono::duration<double, std::milli>(t1 - t0).count();
     
-    // Inference
     context->enqueueV3(stream);
     cudaStreamSynchronize(stream);
     
@@ -180,7 +171,6 @@ EmotionResult EmotionRecognizer::predict(const cv::Mat& face) {
     last_profile.inference_ms = 
         std::chrono::duration<double, std::milli>(t2 - t1).count();
     
-    // Get output
     std::vector<float> logits(num_classes);
     cudaMemcpyAsync(logits.data(), d_output,
                    num_classes * sizeof(float),
@@ -193,7 +183,6 @@ EmotionResult EmotionRecognizer::predict(const cv::Mat& face) {
 }
 
 EmotionResult EmotionRecognizer::postprocess(const std::vector<float>& logits) {
-    // Softmax
     std::vector<float> exp_vals(logits.size());
     float max_logit = *std::max_element(logits.begin(), logits.end());
     float sum_exp = 0.0f;
@@ -208,7 +197,6 @@ EmotionResult EmotionRecognizer::postprocess(const std::vector<float>& logits) {
         probs[i] = exp_vals[i] / sum_exp;
     }
     
-    // Find max
     int max_idx = std::distance(probs.begin(), 
                                std::max_element(probs.begin(), probs.end()));
     
