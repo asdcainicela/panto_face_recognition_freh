@@ -1,61 +1,62 @@
-# Configuración del sistema de reconocimiento facial Panto
+# ============= config.toml - PANTO COMPLETO =============
+
 [mode]
-# Si queremos usar el detector
-detect = true
-# Si queremos grabar el video procesado
-record = false
-# Si queremos mostrar el video procesado en pantalla
-display = true
-# Si queremos reconocer rostros (ArcFace)
-recognize = true
+# Modos de operación
+detect = true      # Detección de rostros
+record = false     # Grabar video (sin implementar aún)
+display = true     # Mostrar en pantalla
+recognize = true   # Reconocimiento facial (ArcFace)
 
-# ===== ANÁLISIS DE EMOCIONES (FER+) =====
-[emotion]
-model_path = "models/emotion_ferplus.engine"
-enabled = true
-# Analizar cada N frames (para reducir overhead)
-analyze_interval = 5
-
-# ===== PREDICCIÓN DE EDAD Y GÉNERO =====
-[age_gender]
-model_path = "models/age_gender.engine"
-enabled = true
-# Analizar cada N frames
-analyze_interval = 10
-
+# ===== CÁMARA =====
 [camera]
 user = "admin"
 pass = "Panto2025"
 ip = "192.168.0.101"
 port = 554
 
+# ===== INPUT =====
 [input]
-# Opciones: "main", "sub", o ruta a video como "videos/test.mp4"
-#source = "main"
+# Opciones: "main", "sub", o ruta a video "videos/test.mp4"
 source = "sub"
-#source = "video2.mp4"
-#source = "video1.mp4"
+# source = "main"
+# source = "video1.mp4"
 
+# ===== DETECTOR (SCRFD) =====
 [detector]
 model_path = "models/scrfd_10g_bnkps.engine"
 conf_threshold = 0.3
 nms_threshold = 0.4
 use_gpu_preprocessing = true  # CUDA preprocessing (más rápido)
 
-# ===== RECONOCIMIENTO FACIAL (ArcFace) =====
+# ===== RECOGNIZER (ArcFace) =====
 [recognizer]
 model_path = "models/arcface_r100.engine"
 embedding_size = 512
 use_gpu_preprocessing = true
-# Umbral de similitud para reconocer (0.0-1.0)
-# 0.6 = default, 0.7 = más estricto, 0.5 = más permisivo
+# Umbral de similitud (0.0-1.0)
+# 0.5 = permisivo, 0.6 = default, 0.7 = estricto
 threshold = 0.6
 
+# ===== ✅ ANÁLISIS DE EMOCIONES (FER+) =====
+[emotion]
+enabled = true  # ✅ HABILITADO
+model_path = "models/emotion_ferplus.engine"
+# Analizar cada N frames (para reducir overhead)
+analyze_interval = 5
+
+# ===== ✅ PREDICCIÓN DE EDAD Y GÉNERO =====
+[age_gender]
+enabled = true  # ✅ HABILITADO
+model_path = "models/age_gender.engine"
+# Analizar cada N frames
+analyze_interval = 10
+
+# ===== DATABASE =====
 [database]
 path = "database/faces.db"
-# Backend: "sqlite"
 backend = "sqlite"
 
+# ===== OUTPUT =====
 [output]
 display_enabled = true
 display_width = 1280
@@ -66,8 +67,19 @@ draw_landmarks = true
 draw_names = true           # Mostrar nombres reconocidos
 save_output = false
 output_dir = "videos/output"
+video_codec = "H264"
+video_fps = 25.0
 
+# ===== PERFORMANCE =====
 [performance]
-# Ajustes automáticos para Jetson Orin
 max_fps = 30                  # FPS objetivo (0 = sin límite)
 skip_frames = 0               # Procesar 1 de cada N frames (0 = todos)
+fps_interval = 30             # Intervalo de log
+
+# ===== ✅ CAPTURE THREAD =====
+[capture]
+# Configuración del thread de captura exclusivo
+queue_size = 3                # Máximo de frames en queue
+max_errors_before_reconnect = 30  # Errores antes de reconectar
+max_consecutive_fails = 100   # Máximo de fallos antes de abortar
+reconnect_threshold = 10      # Fallos consecutivos para reconectar
