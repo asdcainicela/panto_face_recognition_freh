@@ -1,4 +1,4 @@
-// ============= include/detector_optimized.hpp - FIXED =============
+// ============= include/detector_optimized.hpp =============
 #pragma once
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/cuda.hpp>
@@ -33,8 +33,8 @@ private:
     
     // GPU buffers
     void* buffers[10];
-    void* d_input_buffer;      // Input tensor en GPU
-    void* d_resized_buffer;    // ✅ AÑADIDO: Buffer para imagen resized
+    void* d_input_buffer;      // Input tensor en GPU (float)
+    void* d_resized_buffer;    // Buffer para imagen resized (unsigned char)
     cudaStream_t stream;       // CUDA stream nativo (para TensorRT)
     cv::cuda::Stream cv_stream; // OpenCV CUDA stream wrapper
     

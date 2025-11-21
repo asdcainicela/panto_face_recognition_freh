@@ -159,13 +159,12 @@ FaceDetectorOptimized::FaceDetectorOptimized(const std::string& engine_path,
         size_t input_size = input_width * input_height * 3 * sizeof(float);
         cudaMalloc(&d_input_buffer, input_size);
         
-        // ✅ AÑADIDO: Allocate d_resized_buffer (unsigned char, no float)
-        size_t resized_size = input_width * input_height * 3;  // 640*640*3 bytes
+        size_t resized_size = input_width * input_height * 3;
         cudaMalloc(&d_resized_buffer, resized_size);
         
         spdlog::info("   GPU buffers allocated:");
-        spdlog::info("     - d_input_buffer: {:.1f}MB", input_size / 1024.0 / 1024.0);
-        spdlog::info("     - d_resized_buffer: {:.1f}MB", resized_size / 1024.0 / 1024.0);
+        spdlog::info("     - input={:.1f}MB", input_size / 1024.0 / 1024.0);
+        spdlog::info("     - resized={:.1f}MB", resized_size / 1024.0 / 1024.0);
     }
     
     spdlog::info("✓ [OPT] Detector optimizado listo");
@@ -176,10 +175,9 @@ FaceDetectorOptimized::~FaceDetectorOptimized() {
         if (buffers[i]) cudaFree(buffers[i]);
     }
     if (d_input_buffer) cudaFree(d_input_buffer);
-    if (d_resized_buffer) cudaFree(d_resized_buffer);  // ✅ AÑADIDO
+    if (d_resized_buffer) cudaFree(d_resized_buffer);
     if (stream) cudaStreamDestroy(stream);
 }
-
 
 // ==================== LOAD ENGINE ====================
 
@@ -251,8 +249,6 @@ cv::Mat FaceDetectorOptimized::preprocess_cpu(const cv::Mat& img) {
     return normalized;
 }
 
-
-// ==================== PREPROCESS GPU - FIXED ====================
 void FaceDetectorOptimized::preprocess_gpu(const cv::Mat& img) {
     // 1. Upload to GPU (OpenCV stream)
     gpu_input.upload(img, cv_stream);
@@ -273,9 +269,9 @@ void FaceDetectorOptimized::preprocess_gpu(const cv::Mat& img) {
     
     // 3. Copy resized image to d_resized_buffer (CUDA stream nativo)
     cudaError_t copy_err = cudaMemcpyAsync(
-        d_resized_buffer,  // ✅ CORREGIDO: usar d_resized_buffer
+        d_resized_buffer, 
         gpu_resized.data, 
-        input_width * input_height * 3,  // 640*640*3 bytes
+        input_width * input_height * 3,
         cudaMemcpyDeviceToDevice, 
         stream
     );
@@ -290,7 +286,7 @@ void FaceDetectorOptimized::preprocess_gpu(const cv::Mat& img) {
     
     // 4. Normalize using CUDA kernel
     cuda_normalize_imagenet(
-        static_cast<const unsigned char*>(d_resized),
+        static_cast<const unsigned char*>(d_resized_buffer),
         static_cast<float*>(buffers[input_index]),
         input_width, 
         input_height, 
@@ -319,12 +315,10 @@ void FaceDetectorOptimized::preprocess_gpu(const cv::Mat& img) {
         
         spdlog::info("🔍 Tensor normalizado: min={:.4f}, max={:.4f}", min_val, max_val);
         
-        // ✅ Valores esperados: [-1.0, +1.0] aproximadamente
         if (min_val < -2.0f || max_val > 2.0f) {
             spdlog::error("❌ Valores fuera de rango esperado [-1, +1]!");
         }
         
-        // Mostrar primeros 10 valores
         spdlog::info("🔍 Primeros 10 valores:");
         for (int i = 0; i < 10; i++) {
             spdlog::info("  [{}] = {:.4f}", i, debug_data[i]);
@@ -422,9 +416,9 @@ std::vector<Detection> FaceDetectorOptimized::postprocess_scrfd(
     };
     
     std::vector<StrideConfig> strides = {
-        {80, 80, 8,  0, 1, 2},   // Stride 8:  outputs[0,1,2] (scores, bbox, kps)
-        {40, 40, 16, 3, 4, 5},   // Stride 16: outputs[3,4,5]
-        {20, 20, 32, 6, 7, 8}    // Stride 32: outputs[6,7,8]
+        {80, 80, 8,  0, 1, 2},
+        {40, 40, 16, 3, 4, 5},
+        {20, 20, 32, 6, 7, 8}
     };
     
     for (const auto& cfg : strides) {
