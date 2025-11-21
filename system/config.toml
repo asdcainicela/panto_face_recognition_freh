@@ -1,94 +1,113 @@
-# ============= config.toml - PANTO COMPLETO =============
+# ============= config.toml ============
 
 [mode]
-# Modos de operación
-# Detección de rostros
+# Activar detección de rostros
 detect = true
-# Grabar video (sin implementar aún)
+# Activar grabación de video
 record = false
-# Mostrar en pantalla
+# Mostrar ventana de visualización
 display = true
-# Reconocimiento facial (ArcFace)
+# Activar reconocimiento facial
 recognize = true
 
-# ===== CÁMARA =====
 [camera]
+# Usuario de la cámara RTSP
 user = "admin"
+# Contraseña de la cámara RTSP
 pass = "Panto2025"
+# IP de la cámara
 ip = "192.168.0.101"
+# Puerto RTSP
 port = 554
 
-# ===== INPUT =====
 [input]
-# Opciones: "main", "sub", o ruta a video "videos/test.mp4"
+# Fuente: "main", "sub" o ruta a archivo
 #source = "sub"
 #source = "main"
 source = "videos/output/output_main_20251120_170436.mp4"
-
-# Backend de captura para RTSP: "ffmpeg" (recomendado) o "gstreamer"
+# Backend de captura: "ffmpeg" o "gstreamer"
 #capture_backend = "ffmpeg"
 capture_backend = "gstreamer"
 
-
-# ===== DETECTOR (SCRFD) =====
 [detector]
+# Modelo SCRFD optimizado
 model_path = "models/scrfd_10g_bnkps.engine"
+# Umbral de confianza
 conf_threshold = 0.3
-nms_threshold = 0.4
-use_gpu_preprocessing = true  # CUDA preprocessing (más rápido)
-
-# ===== RECOGNIZER (ArcFace) =====
-[recognizer]
-model_path = "models/arcface_r100.engine"
-embedding_size = 512
+# Umbral NMS
+nms_threshold = 0.5
+# Preprocesamiento en GPU
 use_gpu_preprocessing = true
-# Umbral de similitud (0.0-1.0)
-# 0.5 = permisivo, 0.6 = default, 0.7 = estricto
+
+[recognizer]
+# Modelo ArcFace
+model_path = "models/arcface_r100.engine"
+# Dimensión del embedding
+embedding_size = 512
+# Preprocesamiento en GPU
+use_gpu_preprocessing = true
+# Umbral de similitud
 threshold = 0.6
 
-# ===== ✅ ANÁLISIS DE EMOCIONES (FER+) =====
 [emotion]
+# Habilitar análisis de emociones
 enabled = true
+# Modelo FER+
 model_path = "models/emotion_ferplus.engine"
-# Analizar cada N frames (para reducir overhead)
+# Analizar cada N frames
 analyze_interval = 5
 
-# ===== ✅ PREDICCIÓN DE EDAD Y GÉNERO =====
 [age_gender]
+# Habilitar predicción de edad y género
 enabled = true
+# Modelo de edad/género
 model_path = "models/age_gender.engine"
 # Analizar cada N frames
 analyze_interval = 10
 
-# ===== DATABASE =====
 [database]
+# Ruta a la base de datos SQLite
 path = "database/faces.db"
+# Backend de base de datos
 backend = "sqlite"
 
-# ===== OUTPUT =====
 [output]
+# Mostrar en pantalla
 display_enabled = true
+# Resolución de salida
 display_width = 1280
 display_height = 720
+# Dibujar FPS
 draw_fps = true
+# Dibujar detecciones
 draw_detections = true
+# Dibujar landmarks
 draw_landmarks = true
-draw_names = true           # Mostrar nombres reconocidos
+# Mostrar nombres
+draw_names = true
+# Guardar video de salida
 save_output = false
+# Carpeta de salida
 output_dir = "videos/output"
+# Códec de video
 video_codec = "H264"
+# FPS del video de salida
 video_fps = 25.0
 
-# ===== PERFORMANCE =====
 [performance]
-max_fps = 30                  # FPS objetivo (0 = sin límite)
-skip_frames = 0               # Procesar 1 de cada N frames (0 = todos)
-fps_interval = 30             # Intervalo de log
+# FPS objetivo
+max_fps = 30
+# Saltar frames (0 = ninguno)
+skip_frames = 0
+# Intervalo del log de FPS
+fps_interval = 30
 
-# ===== ✅ CAPTURE THREAD =====
 [capture]
-# Configuración del thread de captura exclusivo
-queue_size = 3                # Máximo de frames en queue
-max_errors_before_reconnect = 30  # Errores antes de reconectar
-max_consecutive_fails = 100   # Máximo de fallos antes de abortar
-reconnect_threshold = 10      # Fallos consecutivos para reconectar
+# Tamaño máximo de la cola de captura
+queue_size = 3
+# Errores antes de reconectar
+max_errors_before_reconnect = 30
+# Fallos consecutivos máximos
+max_consecutive_fails = 100
+# Umbral para forzar reconexión
+reconnect_threshold = 10
