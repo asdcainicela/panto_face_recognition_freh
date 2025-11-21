@@ -2,10 +2,14 @@
 
 [mode]
 # Modos de operación
-detect = true      # Detección de rostros
-record = false     # Grabar video (sin implementar aún)
-display = true     # Mostrar en pantalla
-recognize = true   # Reconocimiento facial (ArcFace)
+# Detección de rostros
+detect = true
+# Grabar video (sin implementar aún)
+record = false
+# Mostrar en pantalla
+display = true
+# Reconocimiento facial (ArcFace)
+recognize = true
 
 # ===== CÁMARA =====
 [camera]

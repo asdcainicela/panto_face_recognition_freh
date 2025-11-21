@@ -213,10 +213,10 @@ bool StreamCapture::open() {
     capture_thread->start();
     
     // Esperar primer frame con timeout más largo
-    spdlog::info("⏳ Esperando primer frame (timeout: 20s)...");
+    spdlog::info("⏳ Esperando primer frame (timeout: 15s)...");
     cv::Mat test_frame;
-    if (!frame_queue.pop(test_frame, 20000)) {  // 20s timeout (conexión puede tardar)
-        spdlog::error("❌ No se recibió frame inicial después de 20s");
+    if (!frame_queue.pop(test_frame, 15000)) {  // 15s timeout (conexión puede tardar)
+        spdlog::error("❌ No se recibió frame inicial después de 15s");
         return false;
     }
     

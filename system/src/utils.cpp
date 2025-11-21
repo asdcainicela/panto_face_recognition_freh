@@ -5,27 +5,29 @@
 
 std::string gst_pipeline(const std::string& user, const std::string& pass, 
                         const std::string& ip, int port, const std::string& stream_type) {
-    // Pipeline robusto optimizado (de test/rtsp)
+    // Pipeline ultra-robusto con timeouts largos
     return "rtspsrc location=rtsp://" + user + ":" + pass + "@" + ip + ":" + 
            std::to_string(port) + "/" + stream_type + 
-           " latency=200"                    // Buffer medio para estabilidad
+           " latency=300"                    // Buffer más grande para estabilidad
            " protocols=tcp"
-           " buffer-mode=4"                  // Slave mode: sincroniza con cámara
-           " ntp-sync=true"                  // Sincronización temporal
-           " timeout=20000000"               // 20 segundos timeout
-           " tcp-timeout=20000000"
-           " do-rtcp=true"                   // Control de calidad
-           " retry=10"                       // Más reintentos
-           " drop-on-latency=false ! "       // NO descartar frames
-           "queue max-size-buffers=20 max-size-time=0 max-size-bytes=0 ! "
+           " buffer-mode=4"                  // Slave mode
+           " ntp-sync=true"
+           " timeout=60000000"               // 60 segundos timeout (era 20)
+           " tcp-timeout=60000000"           // 60 segundos tcp timeout
+           " do-rtcp=true"
+           " retry=20"                       // Más reintentos (era 10)
+           " drop-on-latency=false"
+           " is-live=true"                   // Indicar que es stream en vivo
+           " ! queue max-size-buffers=30 max-size-time=0 max-size-bytes=0 leaky=downstream ! "  // Más buffer
            "rtph264depay ! "
-           "h264parse config-interval=-1 ! " // Enviar headers regularmente
+           "h264parse config-interval=-1 ! "
            "nvv4l2decoder enable-max-performance=1 drop-frame-interval=0 ! "
+           "queue max-size-buffers=10 leaky=downstream ! "  // Buffer intermedio
            "nvvidconv ! "
            "video/x-raw,format=BGRx ! "
            "videoconvert ! "
            "video/x-raw,format=BGR ! "
-           "appsink drop=false max-buffers=15 sync=false";
+           "appsink drop=false max-buffers=20 sync=false";  // Más buffers en appsink
 }
 
 std::string gst_pipeline_adaptive(const std::string& user, const std::string& pass, 
