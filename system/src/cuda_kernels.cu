@@ -30,12 +30,12 @@ __global__ void normalize_imagenet_kernel(
     float r = static_cast<float>(r_raw);
     
     // ✅ DEBUG: Primer pixel (solo thread 0,0)
-    if (x == 0 && y == 0) {
+    /*if (x == 0 && y == 0) {
         printf("🔍 [CUDA Kernel] Primer pixel BGR: (%u, %u, %u)\n", 
                b_raw, g_raw, r_raw);
         printf("🔍 [CUDA Kernel] Normalizado antes: (%.2f, %.2f, %.2f)\n", 
                b, g, r);
-    }
+    }*/
     
     // ✅ Normalizar: (pixel - mean) / std
     float r_norm = (r - mean_r) / std_r;
@@ -43,12 +43,14 @@ __global__ void normalize_imagenet_kernel(
     float b_norm = (b - mean_b) / std_b;
     
     // ✅ DEBUG: Verificar rangos
+    /*
     if (x == 0 && y == 0) {
         printf("🔍 [CUDA Kernel] Normalizado después: (%.4f, %.4f, %.4f)\n", 
                r_norm, g_norm, b_norm);
         printf("🔍 [CUDA Kernel] Rangos esperados: [-1.0, +1.0]\n");
     }
-    
+    */
+   
     // ✅ Escribir en formato CHW (Channel, Height, Width)
     int plane_size = width * height;
     output[0 * plane_size + idx] = r_norm;  // R channel
