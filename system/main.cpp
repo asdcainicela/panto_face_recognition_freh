@@ -360,9 +360,8 @@ int main(int argc, char* argv[]) {
             }
 
             // ========== ✅ EMOTION ANALYSIS ==========
-            emotion_ms = 0;  // ✅ RESET en cada frame
+            emotion_ms = 0;
             if (emotion_enabled && emotion_recognizer && !tracked_faces.empty()) {
-                // ✅ EJECUTAR SOLO cada emotion_interval frames
                 if (frame_count % emotion_interval == 0) {
                     auto t6 = std::chrono::high_resolution_clock::now();
                     
@@ -375,10 +374,14 @@ int main(int argc, char* argv[]) {
                                 auto emotion_result = emotion_recognizer->predict(face_roi);
                                 emotions_analyzed++;
                                 
+                                // ✅ GUARDAR en el TrackedFace
+                                face.emotion = emotion_to_string(emotion_result.emotion);
+                                face.emotion_confidence = emotion_result.confidence;
+                                
                                 spdlog::debug("ID:{} Emotion: {} ({:.1f}%)", 
                                             face.id, 
-                                            emotion_result.to_string(),
-                                            emotion_result.confidence * 100);
+                                            face.emotion,
+                                            face.emotion_confidence * 100);
                             }
                         }
                     }
@@ -395,9 +398,8 @@ int main(int argc, char* argv[]) {
             }
 
             // ========== ✅ AGE/GENDER PREDICTION ==========
-            age_gender_ms = 0;  // ✅ RESET en cada frame
+            age_gender_ms = 0;
             if (age_gender_enabled && age_gender_predictor && !tracked_faces.empty()) {
-                // ✅ EJECUTAR SOLO cada age_gender_interval frames
                 if (frame_count % age_gender_interval == 0) {
                     auto t8 = std::chrono::high_resolution_clock::now();
                     
@@ -410,11 +412,16 @@ int main(int argc, char* argv[]) {
                                 auto ag_result = age_gender_predictor->predict(face_roi);
                                 age_gender_analyzed++;
                                 
+                                // ✅ GUARDAR en el TrackedFace
+                                face.age_years = ag_result.age;
+                                face.gender = gender_to_string(ag_result.gender);
+                                face.gender_confidence = ag_result.gender_confidence;
+                                
                                 spdlog::debug("ID:{} Age: {} years, Gender: {} ({:.1f}%)", 
                                             face.id,
-                                            ag_result.age,
-                                            gender_to_string(ag_result.gender),
-                                            ag_result.gender_confidence * 100);
+                                            face.age_years,
+                                            face.gender,
+                                            face.gender_confidence * 100);
                             }
                         }
                     }
@@ -429,7 +436,6 @@ int main(int argc, char* argv[]) {
                     }
                 }
             }
-        }
 
         // ========== DISPLAY ==========
         if (mode_display) {
@@ -451,17 +457,59 @@ int main(int argc, char* argv[]) {
                     cv::Scalar color = face.is_recognized ? 
                         cv::Scalar(0, 255, 0) : cv::Scalar(255, 0, 0);
 
+                    // Dibujar rectángulo
                     cv::rectangle(display, box_scaled, color, 2);
 
-                    std::string label = cv::format("ID:%d", face.id);
+                    // ✅ CONSTRUIR LABEL CON TODA LA INFORMACIÓN
+                    int y_offset = box_scaled.y - 10;
+                    
+                    // Línea 1: ID y Nombre (si está reconocido)
+                    std::string line1 = cv::format("ID:%d", face.id);
                     if (face.is_recognized && draw_names) {
-                        label += " - " + face.name;
+                        line1 += " - " + face.name;
+                    }
+                    cv::putText(display, line1,
+                            cv::Point(box_scaled.x, y_offset),
+                            cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 2);
+                    y_offset += 20;
+                    
+                    // Línea 2: Edad y Género (si están disponibles)
+                    if (age_gender_enabled && face.age_years > 0) {
+                        std::string line2 = cv::format("%d years, %s", 
+                                                      face.age_years, 
+                                                      face.gender.c_str());
+                        cv::putText(display, line2,
+                                cv::Point(box_scaled.x, y_offset),
+                                cv::FONT_HERSHEY_SIMPLEX, 0.45, 
+                                cv::Scalar(255, 255, 0), 1);  // Cyan
+                        y_offset += 18;
+                    }
+                    
+                    // Línea 3: Emoción (si está disponible)
+                    if (emotion_enabled && face.emotion != "Unknown") {
+                        // Color según emoción
+                        cv::Scalar emotion_color;
+                        if (face.emotion == "Happy" || face.emotion == "Happiness") {
+                            emotion_color = cv::Scalar(0, 255, 0);  // Verde
+                        } else if (face.emotion == "Sad" || face.emotion == "Sadness") {
+                            emotion_color = cv::Scalar(255, 0, 0);  // Azul
+                        } else if (face.emotion == "Angry" || face.emotion == "Anger") {
+                            emotion_color = cv::Scalar(0, 0, 255);  // Rojo
+                        } else if (face.emotion == "Surprised" || face.emotion == "Surprise") {
+                            emotion_color = cv::Scalar(0, 255, 255);  // Amarillo
+                        } else {
+                            emotion_color = cv::Scalar(255, 255, 255);  // Blanco
+                        }
+                        
+                        std::string line3 = face.emotion;
+                        cv::putText(display, line3,
+                                cv::Point(box_scaled.x, y_offset),
+                                cv::FONT_HERSHEY_SIMPLEX, 0.45, 
+                                emotion_color, 1);
+                        y_offset += 18;
                     }
 
-                    cv::putText(display, label,
-                            cv::Point(box_scaled.x, box_scaled.y - 5),
-                            cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 2);
-
+                    // Dibujar landmarks (si está habilitado)
                     if (draw_lands) {
                         for (int i = 0; i < 5; i++) {
                             cv::Point2f pt(

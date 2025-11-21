@@ -49,6 +49,14 @@ struct TrackedFace {
     bool is_recognized;
     std::string name;
     std::vector<float> embedding;
+
+    std::string emotion;           // "Happy", "Sad", "Angry", etc.
+    float emotion_confidence;      // 0.0 - 1.0
+    
+    int age_years;                 // 25, 30, etc.
+    std::string gender;            // "Male" o "Female"
+    float gender_confidence;       // 0.0 - 1.0
+    
     
     TrackedFace();
     void init_kalman();
