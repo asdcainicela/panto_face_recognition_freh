@@ -91,8 +91,8 @@ extern "C" void cuda_normalize_imagenet(
     const float std_g = 128.0f;
     const float std_b = 128.0f;
     
-    printf("🚀 [CUDA] Lanzando kernel: %dx%d grid=(%d,%d) block=(%d,%d)\n",
-           width, height, grid.x, grid.y, block.x, block.y);
+    //printf("🚀 [CUDA] Lanzando kernel: %dx%d grid=(%d,%d) block=(%d,%d)\n",
+    //       width, height, grid.x, grid.y, block.x, block.y);
     
     normalize_imagenet_kernel<<<grid, block, 0, stream>>>(
         d_input, d_output, width, height,
@@ -107,12 +107,13 @@ extern "C" void cuda_normalize_imagenet(
     }
     
     // ✅ Sincronizar para capturar errores de ejecución
+    /*
     cudaError_t exec_err = cudaStreamSynchronize(stream);
     if (exec_err != cudaSuccess) {
         printf("❌ [CUDA] Kernel execution error: %s\n", cudaGetErrorString(exec_err));
     } else {
         printf("✅ [CUDA] Kernel completado exitosamente\n");
-    }
+    }*/
 }
 
 // ==================== KERNEL AGE/GENDER (sin cambios) ====================
