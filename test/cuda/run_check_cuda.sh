@@ -1,0 +1,1 @@
+g++ check_cuda.cpp -o check_cuda `pkg-config --cflags --libs opencv4` && ./check_cuda
