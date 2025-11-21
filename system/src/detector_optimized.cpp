@@ -267,6 +267,20 @@ void FaceDetectorOptimized::preprocess_gpu(const cv::Mat& img) {
         static_cast<float*>(buffers[input_index]),
         input_width, input_height, stream
     );
+
+    // DEBUG: Verificar valores del tensor
+    std::vector<float> debug_data(100);
+    cudaMemcpyAsync(debug_data.data(), buffers[input_index], 
+                   100 * sizeof(float), cudaMemcpyDeviceToHost, stream);
+    cudaStreamSynchronize(stream);
+    
+    static int debug_count = 0;
+    if (debug_count++ < 1) {  // Solo primera vez
+        spdlog::info("🔍 Primeros 10 valores del tensor normalizado:");
+        for (int i = 0; i < 10; i++) {
+            spdlog::info("  [{}] = {:.4f}", i, debug_data[i]);
+        }
+    }
 }
 
 // ==================== DETECTION ====================
