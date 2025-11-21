@@ -187,7 +187,10 @@ target_link_libraries(benchmark
 )
 
 target_link_libraries(test_validator
-    ${NVINFER}
+    ${TENSORRT_LIBRARY}           # ✅ Correcto
+    ${TENSORRT_PLUGIN_LIBRARY}    # ✅ Plugins TensorRT
+    ${CUDA_LIBRARIES}             # ✅ CUDA runtime
+    cudart                        # ✅ CUDA runtime adicional
     spdlog::spdlog
 )
 
