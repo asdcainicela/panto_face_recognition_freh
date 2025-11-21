@@ -250,58 +250,84 @@ cv::Mat FaceDetectorOptimized::preprocess_cpu(const cv::Mat& img) {
 }
 
 void FaceDetectorOptimized::preprocess_gpu(const cv::Mat& img) {
+    // 1. Upload to GPU (OpenCV stream)
     gpu_input.upload(img, cv_stream);
     
+    // 2. Resize (OpenCV stream)
     cv::cuda::resize(gpu_input, gpu_resized, 
                      cv::Size(input_width, input_height), 
                      0, 0, cv::INTER_LINEAR, cv_stream);
     
+    // ✅ FIX 1: Sincronizar OpenCV stream ANTES de usar CUDA nativo
     cv_stream.waitForCompletion();
     
-    // ✅ DEBUG: Verificar que gpu_resized tiene datos
-    static int debug_once = 0;
-    if (debug_once++ == 0) {
-        cv::Mat cpu_resized;
-        gpu_resized.download(cpu_resized);
-        
-        spdlog::info("🖼️ Frame resized: {}x{}, type={}", 
-                     cpu_resized.cols, cpu_resized.rows, cpu_resized.type());
-        
-        // Verificar primeros píxeles
-        cv::Vec3b pixel = cpu_resized.at<cv::Vec3b>(0, 0);
-        spdlog::info("🎨 Primer pixel BGR: ({}, {}, {})", 
-                     pixel[0], pixel[1], pixel[2]);
-        
-        // Calcular promedio
-        cv::Scalar mean = cv::mean(cpu_resized);
-        spdlog::info("📊 Mean BGR: ({:.1f}, {:.1f}, {:.1f})", 
-                     mean[0], mean[1], mean[2]);
+    // ✅ FIX 2: Verificar que gpu_resized tiene datos válidos
+    if (gpu_resized.empty() || gpu_resized.cols != input_width || gpu_resized.rows != input_height) {
+        spdlog::error("❌ GPU resize failed: {}x{}", gpu_resized.cols, gpu_resized.rows);
+        throw std::runtime_error("GPU resize produced invalid output");
     }
     
-    cudaMemcpyAsync(d_resized_buffer, gpu_resized.data, 
-                   input_width * input_height * 3,
-                   cudaMemcpyDeviceToDevice, stream);
-    
-    cuda_normalize_imagenet(
-        static_cast<const unsigned char*>(d_resized_buffer), 
-        static_cast<float*>(buffers[input_index]),
-        input_width, input_height, stream
+    // 3. Copy resized image to d_resized buffer (CUDA stream nativo)
+    cudaError_t copy_err = cudaMemcpyAsync(
+        d_resized, 
+        gpu_resized.data, 
+        input_width * input_height * 3,  // 640*640*3 bytes
+        cudaMemcpyDeviceToDevice, 
+        stream
     );
-
-    // Debug tensor normalizado
-    std::vector<float> debug_data(100);
-    cudaMemcpyAsync(debug_data.data(), buffers[input_index], 
-                   100 * sizeof(float), cudaMemcpyDeviceToHost, stream);
+    
+    if (copy_err != cudaSuccess) {
+        spdlog::error("❌ cudaMemcpy failed: {}", cudaGetErrorString(copy_err));
+        throw std::runtime_error("GPU memory copy failed");
+    }
+    
+    // ✅ FIX 3: Sincronizar ANTES del kernel (crítico)
     cudaStreamSynchronize(stream);
     
-    static int debug_count = 0;
-    if (debug_count++ < 1) {
-        spdlog::info("🔍 Primeros 10 valores del tensor normalizado:");
+    // 4. Normalize using CUDA kernel
+    cuda_normalize_imagenet(
+        static_cast<const unsigned char*>(d_resized),
+        static_cast<float*>(buffers[input_index]),
+        input_width, 
+        input_height, 
+        stream
+    );
+    
+    // ✅ FIX 4: Verificar errores del kernel
+    cudaError_t kernel_err = cudaGetLastError();
+    if (kernel_err != cudaSuccess) {
+        spdlog::error("❌ Kernel launch failed: {}", cudaGetErrorString(kernel_err));
+        throw std::runtime_error("CUDA kernel failed");
+    }
+    
+    // ✅ FIX 5: Sincronizar después del kernel
+    cudaStreamSynchronize(stream);
+    
+    // ✅ FIX 6 (OPCIONAL): Verificar output del kernel (solo para debug)
+    static int verify_count = 0;
+    if (verify_count++ < 1) {
+        std::vector<float> debug_data(100);
+        cudaMemcpy(debug_data.data(), buffers[input_index], 
+                   100 * sizeof(float), cudaMemcpyDeviceToHost);
+        
+        float min_val = *std::min_element(debug_data.begin(), debug_data.end());
+        float max_val = *std::max_element(debug_data.begin(), debug_data.end());
+        
+        spdlog::info("🔍 Tensor normalizado: min={:.4f}, max={:.4f}", min_val, max_val);
+        
+        // ✅ Valores esperados: [-1.0, +1.0] aproximadamente
+        if (min_val < -2.0f || max_val > 2.0f) {
+            spdlog::error("❌ Valores fuera de rango esperado [-1, +1]!");
+        }
+        
+        // Mostrar primeros 10 valores
+        spdlog::info("🔍 Primeros 10 valores:");
         for (int i = 0; i < 10; i++) {
             spdlog::info("  [{}] = {:.4f}", i, debug_data[i]);
         }
     }
 }
+
 // ==================== DETECTION ====================
 
 std::vector<Detection> FaceDetectorOptimized::detect(const cv::Mat& img) {
