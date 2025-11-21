@@ -48,14 +48,14 @@ threshold = 0.6
 
 # ===== ✅ ANÁLISIS DE EMOCIONES (FER+) =====
 [emotion]
-enabled = true  # ✅ HABILITADO
+enabled = true
 model_path = "models/emotion_ferplus.engine"
 # Analizar cada N frames (para reducir overhead)
 analyze_interval = 5
 
 # ===== ✅ PREDICCIÓN DE EDAD Y GÉNERO =====
 [age_gender]
-enabled = true  # ✅ HABILITADO
+enabled = true
 model_path = "models/age_gender.engine"
 # Analizar cada N frames
 analyze_interval = 10

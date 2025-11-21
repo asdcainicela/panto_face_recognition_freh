@@ -621,6 +621,9 @@ int main(int argc, char* argv[]) {
     if (mode_display) cv::destroyWindow(window_name);
     if (stream_capture) stream_capture->release();
 
+    auto elapsed = std::chrono::steady_clock::now() - start_time;
+    double total_sec = std::chrono::duration<double>(elapsed).count();
+
     // ========== STATS FINALES ==========
     spdlog::info("╔════════════════════════════════════════╗");
     spdlog::info("║        ESTADÍSTICAS FINALES            ║");
