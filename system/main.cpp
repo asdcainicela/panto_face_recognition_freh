@@ -447,7 +447,7 @@ int main(int argc, char* argv[]) {
 
             int y = 25;
             int line_spacing = 22;  // Espaciado entre líneas
-            cv::Scalar color_green(0, 255, 0);
+            cv::Scalar color_text(255, 0, 0); // green 0, 255, 0, blue 255,0,0
             cv::Scalar color_yellow(0, 255, 255);
             cv::Scalar color_cyan(0, 255, 255);
             double font_scale = 0.55;
@@ -456,19 +456,19 @@ int main(int argc, char* argv[]) {
             // Header
             cv::putText(display, "=== PANTO SYSTEM ===",
                     cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
-                    0.6, color_green, 2);
+                    0.6, color_text, 2);
             y += line_spacing + 5;
 
             // FPS
             cv::putText(display, cv::format("FPS: %.1f", proc_fps),
                     cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
-                    font_scale, color_green, thickness);
+                    font_scale, color_text, thickness);
             y += line_spacing;
 
             // Frames procesados
             cv::putText(display, cv::format("Frames: %d", frame_count),
                     cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
-                    font_scale, color_green, thickness);
+                    font_scale, color_text, thickness);
             y += line_spacing;
 
             // Detector tiempo
@@ -481,14 +481,14 @@ int main(int argc, char* argv[]) {
                 // Detector tiempo
                 cv::putText(display, cv::format("Detector: %.1fms", det_ms),
                         cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
-                        font_scale, color_green, thickness);
+                        font_scale, color_text, thickness);
                 y += line_spacing;
 
                 // Reconocimiento
                 if (mode_recognize && recog_ms > 0) {
                     cv::putText(display, cv::format("Recognition: %.1fms", recog_ms),
                             cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
-                            font_scale, color_green, thickness);
+                            font_scale, color_text, thickness);
                     y += line_spacing;
                 }
 
@@ -496,7 +496,7 @@ int main(int argc, char* argv[]) {
                 if (emotion_enabled && emotion_ms > 0) {
                     cv::putText(display, cv::format("Emotion: %.1fms", emotion_ms),
                             cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
-                            font_scale, color_green, thickness);
+                            font_scale, color_text, thickness);
                     y += line_spacing;
                 }
 
@@ -504,7 +504,7 @@ int main(int argc, char* argv[]) {
                 if (age_gender_enabled && age_gender_ms > 0) {
                     cv::putText(display, cv::format("Age/Gender: %.1fms", age_gender_ms),
                             cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
-                            font_scale, color_green, thickness);
+                            font_scale, color_text, thickness);
                     y += line_spacing;
                 }
             }
@@ -533,7 +533,7 @@ int main(int argc, char* argv[]) {
                 // Stream FPS
                 cv::putText(display, cv::format("Stream FPS: %.1f", stats.fps),
                         cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
-                        font_scale, color_green, thickness);
+                        font_scale, color_text, thickness);
             }
 
             cv::imshow(window_name, display);

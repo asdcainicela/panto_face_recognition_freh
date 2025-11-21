@@ -22,11 +22,12 @@ port = 554
 [input]
 # Opciones: "main", "sub", o ruta a video "videos/test.mp4"
 #source = "sub"
-source = "main"
-# source = "video1.mp4"
+#source = "main"
+source = "videos/output/output_main_20251120_170436.mp4"
 
 # Backend de captura para RTSP: "ffmpeg" (recomendado) o "gstreamer"
-capture_backend = "ffmpeg"
+#capture_backend = "ffmpeg"
+capture_backend = "gstreamer"
 
 
 # ===== DETECTOR (SCRFD) =====
