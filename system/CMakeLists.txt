@@ -174,7 +174,7 @@ target_link_libraries(panto
 )
 
 add_executable(test_validator
-    tests/test_validator.cpp
+    test/test_validator.cpp
 )
 
 
