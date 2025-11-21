@@ -4,7 +4,7 @@
 # Modos de operación
 # Detección de rostros
 detect = true
-# Grabar video (sin implementar aún)
+# Grabar video
 record = false
 # Mostrar en pantalla
 display = true
@@ -35,7 +35,8 @@ capture_backend = "gstreamer"
 model_path = "models/scrfd_10g_bnkps.engine"
 conf_threshold = 0.3
 nms_threshold = 0.4
-use_gpu_preprocessing = true  # CUDA preprocessing (más rápido)
+  # CUDA preprocessing (más rápido)
+use_gpu_preprocessing = true
 
 # ===== RECOGNIZER (ArcFace) =====
 [recognizer]
@@ -46,14 +47,14 @@ use_gpu_preprocessing = true
 # 0.5 = permisivo, 0.6 = default, 0.7 = estricto
 threshold = 0.6
 
-# ===== ✅ ANÁLISIS DE EMOCIONES (FER+) =====
+# ===== ? ANÁLISIS DE EMOCIONES (FER+) =====
 [emotion]
 enabled = true
 model_path = "models/emotion_ferplus.engine"
 # Analizar cada N frames (para reducir overhead)
 analyze_interval = 5
 
-# ===== ✅ PREDICCIÓN DE EDAD Y GÉNERO =====
+# ===== ? PREDICCIÓN DE EDAD Y GÉNERO =====
 [age_gender]
 enabled = true
 model_path = "models/age_gender.engine"
@@ -73,7 +74,8 @@ display_height = 720
 draw_fps = true
 draw_detections = true
 draw_landmarks = true
-draw_names = true           # Mostrar nombres reconocidos
+# Mostrar nombres reconocidos
+draw_names = true
 save_output = false
 output_dir = "videos/output"
 video_codec = "H264"
@@ -81,14 +83,21 @@ video_fps = 25.0
 
 # ===== PERFORMANCE =====
 [performance]
-max_fps = 30                  # FPS objetivo (0 = sin límite)
-skip_frames = 0               # Procesar 1 de cada N frames (0 = todos)
-fps_interval = 30             # Intervalo de log
+max_fps = 30
+# FPS objetivo (0 = sin límite)
+skip_frames = 0
+# Procesar 1 de cada N frames (0 = todos)
+fps_interval = 30
+# Intervalo de log
 
-# ===== ✅ CAPTURE THREAD =====
+# ===== ? CAPTURE THREAD =====
 [capture]
 # Configuración del thread de captura exclusivo
-queue_size = 3                # Máximo de frames en queue
-max_errors_before_reconnect = 30  # Errores antes de reconectar
-max_consecutive_fails = 100   # Máximo de fallos antes de abortar
-reconnect_threshold = 10      # Fallos consecutivos para reconectar
+# Máximo de frames en queue
+queue_size = 3
+# Errores antes de reconectar
+max_errors_before_reconnect = 30
+# Máximo de fallos antes de abortar 
+max_consecutive_fails = 100
+# Fallos consecutivos para reconectar
+reconnect_threshold = 10   
