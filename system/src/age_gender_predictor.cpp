@@ -124,51 +124,32 @@ void AgeGenderPredictor::preprocess_gpu(const cv::Mat& face) {
         throw std::runtime_error("empty face for gpu preprocess");
     }
 
-    cv::cuda::GpuMat d_src;
-    d_src.upload(face);
-
-    cv::cuda::GpuMat d_resized_uc;
-    d_resized_uc.create(input_height, input_width, CV_8UC3);
-    cv::cuda::resize(d_src, d_resized_uc, cv::Size(input_width, input_height), 0, 0, cv::INTER_LINEAR);
-
-    cv::cuda::GpuMat d_rgb_uc;
-    d_rgb_uc.create(input_height, input_width, CV_8UC3);
-    cv::cuda::cvtColor(d_resized_uc, d_rgb_uc, cv::COLOR_BGR2RGB);
-
-    cv::cuda::GpuMat d_rgb_f;
-    d_rgb_f.create(input_height, input_width, CV_32FC3);
-    d_rgb_uc.convertTo(d_rgb_f, CV_32F, 1.0 / 255.0);
-
-    std::vector<cv::cuda::GpuMat> channels;
-    cv::cuda::split(d_rgb_f, channels); // channels: R,G,B each CV_32F
-
-    float mean_vals[3] = {0.485f, 0.456f, 0.406f};
-    float std_vals[3]  = {0.229f, 0.224f, 0.225f};
-
-    for (int c = 0; c < 3; ++c) {
-        cv::cuda::GpuMat tmp;
-        cv::cuda::multiply(channels[c], cv::Scalar(1.0f / std_vals[c]), tmp);
-        cv::cuda::subtract(tmp, cv::Scalar(mean_vals[c] / std_vals[c]), channels[c]);
-    }
-
-    // download HWC float to host
-    cv::Mat host_hwc(input_height, input_width, CV_32FC3);
-    d_rgb_f.upload(cv::Mat()); // noop to keep API usage consistent
-    cv::cuda::GpuMat d_merged;
-    cv::cuda::merge(channels, d_merged);
-    d_merged.download(host_hwc);
-
-    // reorder HWC -> CHW on host
-    size_t plane = static_cast<size_t>(input_height) * input_width;
-    std::vector<float> host_chw(3 * plane);
-    std::vector<cv::Mat> host_channels(3);
-    cv::split(host_hwc, host_channels);
-    for (int c = 0; c < 3; ++c) {
-        std::memcpy(host_chw.data() + c * plane, host_channels[c].data, plane * sizeof(float));
-    }
-
-    // upload to device
-    CUDA_CHECK(cudaMemcpyAsync(d_input, host_chw.data(), host_chw.size() * sizeof(float), cudaMemcpyHostToDevice, stream));
+    // 1. Upload to GPU
+    gpu_input.upload(face);
+    
+    // 2. Resize 224x224 (GPU)
+    cv::cuda::resize(gpu_input, gpu_resized, 
+                     cv::Size(input_width, input_height), 
+                     0, 0, cv::INTER_LINEAR);
+    
+    // 3. Copy resized image to d_resized buffer
+    CUDA_CHECK(cudaMemcpyAsync(
+        d_resized, 
+        gpu_resized.data, 
+        input_width * input_height * 3,
+        cudaMemcpyDeviceToDevice, 
+        stream
+    ));
+    
+    // 4. ✅ KERNEL CUDA CUSTOM: BGR->RGB + ImageNet normalize + HWC->CHW (TODO EN 1 PASO)
+    cuda_normalize_age_gender(
+        static_cast<const unsigned char*>(d_resized),
+        static_cast<float*>(d_input),
+        input_width, 
+        input_height, 
+        stream
+    );
+    
     CUDA_CHECK(cudaStreamSynchronize(stream));
 }
 

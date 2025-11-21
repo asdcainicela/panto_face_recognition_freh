@@ -12,6 +12,7 @@
 #include <cuda_runtime_api.h>
 
 #include "tensorrt_logger.hpp"
+#include "cuda_kernels.h"
 
 enum class Gender {
     FEMALE = 0,

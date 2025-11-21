@@ -6,13 +6,22 @@
 extern "C" {
 #endif
 
-// Normalización ImageNet en GPU (BGR -> RGB + normalize)
+// Normalización ImageNet en GPU (BGR -> RGB + normalize) - SCRFD
 void cuda_normalize_imagenet(
-    const unsigned char* d_input,  // Imagen BGR en GPU
-    float* d_output,               // Tensor CHW normalizado en GPU
-    int width,                     // Ancho de la imagen
-    int height,                    // Alto de la imagen
-    cudaStream_t stream            // Stream CUDA para async
+    const unsigned char* d_input,
+    float* d_output,
+    int width,
+    int height,
+    cudaStream_t stream
+);
+
+// Normalización Age/Gender (ImageNet normalization)
+void cuda_normalize_age_gender(
+    const unsigned char* d_input,
+    float* d_output,
+    int width,
+    int height,
+    cudaStream_t stream
 );
 
 #ifdef __cplusplus
