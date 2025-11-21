@@ -3,31 +3,27 @@
 #include <thread>
 #include <chrono>
 
+// ==================== FFMPEG PIPELINE (MÁS ESTABLE) ====================
+std::string ffmpeg_rtsp_url(const std::string& user, const std::string& pass, 
+                            const std::string& ip, int port, const std::string& stream_type) {
+    return "rtsp://" + user + ":" + pass + "@" + ip + ":" + 
+           std::to_string(port) + "/" + stream_type;
+}
+
+// Legacy GStreamer pipeline (mantener por compatibilidad)
 std::string gst_pipeline(const std::string& user, const std::string& pass, 
                         const std::string& ip, int port, const std::string& stream_type) {
-    // Pipeline ultra-robusto con timeouts largos
     return "rtspsrc location=rtsp://" + user + ":" + pass + "@" + ip + ":" + 
            std::to_string(port) + "/" + stream_type + 
-           " latency=300"                    // Buffer más grande para estabilidad
-           " protocols=tcp"
-           " buffer-mode=4"                  // Slave mode
-           " ntp-sync=true"
-           " timeout=60000000"               // 60 segundos timeout (era 20)
-           " tcp-timeout=60000000"           // 60 segundos tcp timeout
-           " do-rtcp=true"
-           " retry=20"                       // Más reintentos (era 10)
-           " drop-on-latency=false"
-           " is-live=true"                   // Indicar que es stream en vivo
-           " ! queue max-size-buffers=30 max-size-time=0 max-size-bytes=0 leaky=downstream ! "  // Más buffer
-           "rtph264depay ! "
-           "h264parse config-interval=-1 ! "
+           " latency=300 protocols=tcp buffer-mode=4 ntp-sync=true"
+           " timeout=60000000 tcp-timeout=60000000 do-rtcp=true retry=20"
+           " drop-on-latency=false is-live=true"
+           " ! queue max-size-buffers=30 max-size-time=0 max-size-bytes=0 leaky=downstream ! "
+           "rtph264depay ! h264parse config-interval=-1 ! "
            "nvv4l2decoder enable-max-performance=1 drop-frame-interval=0 ! "
-           "queue max-size-buffers=10 leaky=downstream ! "  // Buffer intermedio
-           "nvvidconv ! "
-           "video/x-raw,format=BGRx ! "
-           "videoconvert ! "
-           "video/x-raw,format=BGR ! "
-           "appsink drop=false max-buffers=20 sync=false";  // Más buffers en appsink
+           "queue max-size-buffers=10 leaky=downstream ! nvvidconv ! "
+           "video/x-raw,format=BGRx ! videoconvert ! video/x-raw,format=BGR ! "
+           "appsink drop=false max-buffers=20 sync=false";
 }
 
 std::string gst_pipeline_adaptive(const std::string& user, const std::string& pass, 
@@ -83,19 +79,23 @@ cv::VideoCapture open_cap(const std::string& pipeline, int retries) {
     cv::VideoCapture cap;
     
     spdlog::info("intentando conectar...");
-    spdlog::debug("pipeline: {}", pipeline);
     
     for (int i = 0; i < retries; ++i) {
         spdlog::info("intento {}/{}...", i+1, retries);
         
-        cap.open(pipeline, cv::CAP_GSTREAMER);
+        // Usar FFMPEG con opciones robustas
+        cap.open(pipeline, cv::CAP_FFMPEG, {
+            cv::CAP_PROP_OPEN_TIMEOUT_MSEC, 20000,        // 20s timeout
+            cv::CAP_PROP_READ_TIMEOUT_MSEC, 20000,        // 20s read timeout
+            cv::CAP_PROP_BUFFERSIZE, 1                    // Buffer mínimo (como Python)
+        });
         
         if (cap.isOpened()) {
             cv::Mat test_frame;
             int read_attempts = 0;
             bool can_read = false;
             
-            // Dar más tiempo para estabilizar
+            // Dar tiempo para estabilizar
             while (read_attempts < 5 && !can_read) {
                 can_read = cap.read(test_frame);
                 if (!can_read) {
@@ -112,9 +112,6 @@ cv::VideoCapture open_cap(const std::string& pipeline, int retries) {
                 spdlog::info("✓ conectado exitosamente");
                 spdlog::info("  resolución: {}x{}", width, height);
                 spdlog::info("  fps reportado: {:.1f}", fps > 0 ? fps : 0.0);
-                
-                // Buffer mínimo para tiempo real
-                cap.set(cv::CAP_PROP_BUFFERSIZE, 1);
                 
                 return cap;
             } else {
