@@ -1,4 +1,4 @@
-// ============= main.cpp - VERSION COMPLETA =============
+// ============= main.cpp - FIXED VISUALIZATION =============
 #include "detector_optimized.hpp"
 #include "tracker.hpp"
 #include "recognizer.hpp"
@@ -252,12 +252,6 @@ int main(int argc, char* argv[]) {
 
         std::vector<TrackedFace> tracked_faces;
 
-
-
-
-
-
-
         if (mode_detect) {
             auto t1 = std::chrono::high_resolution_clock::now();
             auto dets = detector->detect(frame);
@@ -277,6 +271,50 @@ int main(int argc, char* argv[]) {
                 spdlog::info("🎯 Tracked faces: {}", tracked_faces.size());
             }
 
+            // ✅ AGE/GENDER - PRIMERO (más importante, actualizar cada N frames)
+            if (age_gender_enabled && frame_count % age_gender_interval == 0) {
+                auto t6 = std::chrono::high_resolution_clock::now();
+                for (auto& f : tracked_faces) {
+                    if (f.hits < 3) continue;
+
+                    cv::Rect safe = f.box & cv::Rect(0, 0, frame.cols, frame.rows);
+                    if (safe.area() <= 0) continue;
+
+                    try {
+                        auto r = age_gender_predictor->predict(frame(safe));
+                        f.age_years = r.age;
+                        f.gender = gender_to_string(r.gender);
+                        f.gender_confidence = r.gender_confidence;
+                    } catch (const std::exception& e) {
+                        spdlog::warn("Age/Gender prediction failed: {}", e.what());
+                    }
+                }
+                auto t7 = std::chrono::high_resolution_clock::now();
+                age_gender_ms = std::chrono::duration<double, std::milli>(t7 - t6).count();
+            }
+
+            // ✅ EMOTION - SEGUNDO (actualizar cada N frames)
+            if (emotion_enabled && frame_count % emotion_interval == 0) {
+                auto t8 = std::chrono::high_resolution_clock::now();
+                for (auto& f : tracked_faces) {
+                    if (f.hits < 3) continue;
+
+                    cv::Rect safe = f.box & cv::Rect(0, 0, frame.cols, frame.rows);
+                    if (safe.area() <= 0) continue;
+
+                    try {
+                        auto r = emotion_recognizer->predict(frame(safe));
+                        f.emotion = emotion_to_string(r.emotion);
+                        f.emotion_confidence = r.confidence;
+                    } catch (const std::exception& e) {
+                        spdlog::warn("Emotion prediction failed: {}", e.what());
+                    }
+                }
+                auto t9 = std::chrono::high_resolution_clock::now();
+                emotion_ms = std::chrono::duration<double, std::milli>(t9 - t8).count();
+            }
+
+            // ✅ RECOGNITION - TERCERO (solo una vez por track)
             if (mode_recognize) {
                 auto t4 = std::chrono::high_resolution_clock::now();
 
@@ -298,39 +336,6 @@ int main(int argc, char* argv[]) {
                 auto t5 = std::chrono::high_resolution_clock::now();
                 recog_ms = std::chrono::duration<double, std::milli>(t5 - t4).count();
             }
-
-            if (emotion_enabled && frame_count % emotion_interval == 0) {
-                auto t6 = std::chrono::high_resolution_clock::now();
-                for (auto& f : tracked_faces) {
-                    if (f.hits < 3) continue;
-
-                    cv::Rect safe = f.box & cv::Rect(0, 0, frame.cols, frame.rows);
-                    if (safe.area() <= 0) continue;
-
-                    auto r = emotion_recognizer->predict(frame(safe));
-                    f.emotion = emotion_to_string(r.emotion);
-                    f.emotion_confidence = r.confidence;
-                }
-                auto t7 = std::chrono::high_resolution_clock::now();
-                emotion_ms = std::chrono::duration<double, std::milli>(t7 - t6).count();
-            }
-
-            if (age_gender_enabled && frame_count % age_gender_interval == 0) {
-                auto t8 = std::chrono::high_resolution_clock::now();
-                for (auto& f : tracked_faces) {
-                    if (f.hits < 3) continue;
-
-                    cv::Rect safe = f.box & cv::Rect(0, 0, frame.cols, frame.rows);
-                    if (safe.area() <= 0) continue;
-
-                    auto r = age_gender_predictor->predict(frame(safe));
-                    f.age_years = r.age;
-                    f.gender = gender_to_string(r.gender);
-                    f.gender_confidence = r.gender_confidence;
-                }
-                auto t9 = std::chrono::high_resolution_clock::now();
-                age_gender_ms = std::chrono::duration<double, std::milli>(t9 - t8).count();
-            }
         }
 
         if (mode_display) {
@@ -346,42 +351,53 @@ int main(int argc, char* argv[]) {
                     f.box.height * sy
                 );
 
+                // ✅ BOUNDING BOX (verde si reconocido, azul si no)
                 cv::rectangle(display, box,
                     f.is_recognized ? cv::Scalar(0,255,0) : cv::Scalar(255,0,0),
                     2
                 );
 
                 int y = box.y - 10;
+                int line_height = 18;
+
+                // ✅ LÍNEA 1: ID + NOMBRE (si está reconocido)
                 std::string line = "ID:" + std::to_string(f.id);
-                if (f.is_recognized && draw_names) line += " - " + f.name;
+                if (f.is_recognized && draw_names) {
+                    line += " - " + f.name;
+                }
 
                 cv::putText(display, line, cv::Point(box.x, y),
                     cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255,255,255), 1
                 );
 
-                y += 18;
+                y += line_height;
+
+                // ✅ LÍNEA 2: EDAD + GÉNERO (amarillo/cyan)
                 if (age_gender_enabled && f.age_years > 0) {
+                    std::string age_gender_text = std::to_string(f.age_years) + " years, " + f.gender;
                     cv::putText(display,
-                        std::to_string(f.age_years) + " years, " + f.gender,
+                        age_gender_text,
                         cv::Point(box.x, y),
-                        cv::FONT_HERSHEY_SIMPLEX, 0.45,
-                        cv::Scalar(255,255,0),
+                        cv::FONT_HERSHEY_SIMPLEX, 0.5,
+                        cv::Scalar(0,255,255),  // Amarillo (BGR)
                         1
                     );
-                    y += 18;
+                    y += line_height;
                 }
 
+                // ✅ LÍNEA 3: EMOCIÓN (ROJO) - ⚠️ SOLO SI NO ES "Unknown"
                 if (emotion_enabled && !f.emotion.empty() && f.emotion != "Unknown") {
                     cv::putText(
                         display, f.emotion,
                         cv::Point(box.x, y),
-                        cv::FONT_HERSHEY_SIMPLEX, 0.45,
-                        cv::Scalar(0,255,255),
+                        cv::FONT_HERSHEY_SIMPLEX, 0.5,
+                        cv::Scalar(0,0,255),  // ✅ ROJO (BGR)
                         1
                     );
-                    y += 18;
+                    y += line_height;
                 }
 
+                // ✅ LANDMARKS (puntos rojos)
                 if (draw_lands) {
                     for (int i = 0; i < 5; i++) {
                         cv::circle(display,
@@ -392,6 +408,7 @@ int main(int argc, char* argv[]) {
                 }
             }
 
+            // ✅ PANEL DE INFO (semi-transparente)
             auto elapsed = std::chrono::steady_clock::now() - start_time;
             double sec = std::chrono::duration<double>(elapsed).count();
             double fps = frame_count / sec;
