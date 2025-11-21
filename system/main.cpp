@@ -388,6 +388,7 @@ int main(int argc, char* argv[]) {
             float scale_x = (float)disp_w / frame.cols;
             float scale_y = (float)disp_h / frame.rows;
 
+            // ======= DIBUJO DE DETECCIONES =======
             if (mode_detect && draw_dets) {
                 for (const auto& face : tracked_faces) {
                     cv::Rect box_scaled(
@@ -408,8 +409,8 @@ int main(int argc, char* argv[]) {
                     }
 
                     cv::putText(display, label,
-                               cv::Point(box_scaled.x, box_scaled.y - 5),
-                               cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 2);
+                            cv::Point(box_scaled.x, box_scaled.y - 5),
+                            cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 2);
 
                     if (draw_lands) {
                         for (int i = 0; i < 5; i++) {
@@ -423,42 +424,76 @@ int main(int argc, char* argv[]) {
                 }
             }
 
-            // Panel de información
+            // ======= PANEL DE INFORMACIÓN TRANSPARENTE =======
             auto elapsed = std::chrono::steady_clock::now() - start_time;
             double sec = std::chrono::duration<double>(elapsed).count();
             double proc_fps = frame_count / sec;
 
-            int y = 25;
-            cv::putText(display, cv::format("FPS: %.1f", proc_fps),
-                       cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
-                       0.7, cv::Scalar(0, 255, 0), 2);
-            y += 30;
+            int panel_width = 280;
+            int panel_height = 180;
 
+            cv::Mat overlay = display.clone();
+            cv::rectangle(overlay, cv::Rect(0, 0, panel_width, panel_height),
+                        cv::Scalar(0, 0, 0), -1);
+
+            // Transparencia
+            cv::addWeighted(display, 0.7, overlay, 0.3, 0, display);
+
+            // Borde del panel
+            cv::rectangle(display, cv::Rect(0, 0, panel_width, panel_height),
+                        cv::Scalar(0, 255, 0), 2);
+
+            int y = 25;
+            cv::Scalar color_green(0, 255, 0);
+            cv::Scalar color_yellow(0, 255, 255);
+
+            // FPS
+            cv::putText(display, cv::format("FPS: %.1f", proc_fps),
+                    cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
+                    0.6, color_green, 2);
+            y += 25;
+
+            // Detector tiempo
             if (mode_detect) {
                 cv::putText(display, cv::format("Detector: %.1fms", det_ms),
-                           cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
-                           0.6, cv::Scalar(0, 255, 0), 2);
-                y += 25;
+                        cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
+                        0.5, color_green, 1);
+                y += 20;
 
                 if (emotion_enabled && emotion_ms > 0) {
                     cv::putText(display, cv::format("Emotion: %.1fms", emotion_ms),
-                               cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
-                               0.6, cv::Scalar(0, 255, 0), 2);
-                    y += 25;
+                            cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
+                            0.5, color_green, 1);
+                    y += 20;
                 }
 
                 if (age_gender_enabled && age_gender_ms > 0) {
                     cv::putText(display, cv::format("Age/Gender: %.1fms", age_gender_ms),
-                               cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
-                               0.6, cv::Scalar(0, 255, 0), 2);
-                    y += 25;
+                            cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
+                            0.5, color_green, 1);
+                    y += 20;
                 }
+            }
+
+            // Estado de conexión RTSP
+            if (is_rtsp && stream_capture) {
+                auto stats = stream_capture->get_stats();
+                cv::Scalar conn_color = (stats.reconnects == 0) ?
+                    cv::Scalar(0, 255, 0) : cv::Scalar(0, 255, 255);
+
+                std::string conn_status = (stats.reconnects == 0) ?
+                    "CONECTADO" : cv::format("RECONEXIONES: %d", stats.reconnects);
+
+                cv::putText(display, conn_status,
+                        cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
+                        0.5, conn_color, 1);
             }
 
             cv::imshow(window_name, display);
 
             if (cv::waitKey(1) == 27) break;
         }
+
 
         if (max_fps > 0) {
             std::this_thread::sleep_for(std::chrono::milliseconds(1000 / max_fps));
