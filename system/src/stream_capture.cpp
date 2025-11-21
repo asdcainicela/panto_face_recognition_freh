@@ -175,14 +175,23 @@ void CaptureThread::stop() {
 
 StreamCapture::StreamCapture(const std::string& user, const std::string& pass,
                              const std::string& ip, int port, 
-                             const std::string& stream_type)
+                             const std::string& stream_type,
+                             const std::string& backend)
     : user(user), pass(pass), ip(ip), port(port), stream_type(stream_type),
-      frame_queue(3),  // Max 3 frames en queue
+      capture_backend(backend), frame_queue(3),
       frames_displayed(0), current_fps(0.0),
       viewing_enabled(false), display_size(640, 480),
       stop_signal(nullptr), fps_interval(30)
 {
-    pipeline = gst_pipeline(user, pass, ip, port, stream_type);
+    // Elegir pipeline según backend
+    if (backend == "ffmpeg") {
+        pipeline = ffmpeg_rtsp_url(user, pass, ip, port, stream_type);
+        spdlog::info("📹 Usando backend FFMPEG (recomendado)");
+    } else {
+        pipeline = gst_pipeline(user, pass, ip, port, stream_type);
+        spdlog::info("📹 Usando backend GStreamer");
+    }
+    
     window_name = "RTSP " + ip + "/" + stream_type;
     
     start_time = std::chrono::steady_clock::now();
@@ -190,6 +199,7 @@ StreamCapture::StreamCapture(const std::string& user, const std::string& pass,
     
     cached_stats = {0.0, 0, 0, cv::Size(0, 0), 0, 0};
 }
+
 
 StreamCapture::~StreamCapture() {
     release();

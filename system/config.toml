@@ -25,6 +25,10 @@ port = 554
 source = "main"
 # source = "video1.mp4"
 
+# Backend de captura para RTSP: "ffmpeg" (recomendado) o "gstreamer"
+capture_backend = "ffmpeg"
+
+
 # ===== DETECTOR (SCRFD) =====
 [detector]
 model_path = "models/scrfd_10g_bnkps.engine"

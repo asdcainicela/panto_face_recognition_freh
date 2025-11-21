@@ -109,11 +109,13 @@ public:
 };
 
 // ==================== STREAM CAPTURE PRINCIPAL ====================
+
 class StreamCapture {
 private:
     std::string user, pass, ip, stream_type;
     int port;
     int fps_interval;
+    std::string capture_backend;  // ✅ NUEVO: "ffmpeg" o "gstreamer"
     
     std::string pipeline;
     std::string window_name;
@@ -137,7 +139,8 @@ private:
 
 public:
     StreamCapture(const std::string& user, const std::string& pass,
-                  const std::string& ip, int port, const std::string& stream_type);
+                  const std::string& ip, int port, const std::string& stream_type,
+                  const std::string& backend = "ffmpeg");  // ✅ FFMPEG por defecto
     ~StreamCapture();
     
     // Configuración

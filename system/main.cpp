@@ -116,6 +116,7 @@ int main(int argc, char* argv[]) {
 
     // Input
     std::string source = config.get("input.source", "main");
+    std::string capture_backend = config.get("input.capture_backend", "ffmpeg");
 
     // Modes
     bool mode_detect = config.get_bool("mode.detect", true);
@@ -224,8 +225,8 @@ int main(int argc, char* argv[]) {
 
     if (is_rtsp) {
         // ✅ USAR NUEVO SISTEMA CON THREAD EXCLUSIVO
-        spdlog::info("🎥 Iniciando captura con thread exclusivo...");
-        stream_capture = std::make_unique<StreamCapture>(user, pass, ip, port, source);
+        spdlog::info("🎥 Iniciando captura con thread exclusivo (backend: {})...", capture_backend);
+        stream_capture = std::make_unique<StreamCapture>(user, pass, ip, port, source, capture_backend);
         stream_capture->set_stop_signal(&stop_signal);
         stream_capture->set_fps_interval(fps_interval);
         
@@ -429,8 +430,9 @@ int main(int argc, char* argv[]) {
             double sec = std::chrono::duration<double>(elapsed).count();
             double proc_fps = frame_count / sec;
 
-            int panel_width = 280;
-            int panel_height = 180;
+            // Panel más grande para acomodar toda la información
+            int panel_width = 300;
+            int panel_height = 260;  // Aumentado para más líneas
 
             cv::Mat overlay = display.clone();
             cv::rectangle(overlay, cv::Rect(0, 0, panel_width, panel_height),
@@ -444,49 +446,94 @@ int main(int argc, char* argv[]) {
                         cv::Scalar(0, 255, 0), 2);
 
             int y = 25;
+            int line_spacing = 22;  // Espaciado entre líneas
             cv::Scalar color_green(0, 255, 0);
             cv::Scalar color_yellow(0, 255, 255);
+            cv::Scalar color_cyan(0, 255, 255);
+            double font_scale = 0.55;
+            int thickness = 1;
+
+            // Header
+            cv::putText(display, "=== PANTO SYSTEM ===",
+                    cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
+                    0.6, color_green, 2);
+            y += line_spacing + 5;
 
             // FPS
             cv::putText(display, cv::format("FPS: %.1f", proc_fps),
                     cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
-                    0.6, color_green, 2);
-            y += 25;
+                    font_scale, color_green, thickness);
+            y += line_spacing;
+
+            // Frames procesados
+            cv::putText(display, cv::format("Frames: %d", frame_count),
+                    cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
+                    font_scale, color_green, thickness);
+            y += line_spacing;
 
             // Detector tiempo
             if (mode_detect) {
+                cv::putText(display, cv::format("Faces: %d", (int)tracked_faces.size()),
+                        cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
+                        font_scale, color_cyan, thickness);
+                y += line_spacing;
+
+                // Detector tiempo
                 cv::putText(display, cv::format("Detector: %.1fms", det_ms),
                         cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
-                        0.5, color_green, 1);
-                y += 20;
+                        font_scale, color_green, thickness);
+                y += line_spacing;
 
+                // Reconocimiento
+                if (mode_recognize && recog_ms > 0) {
+                    cv::putText(display, cv::format("Recognition: %.1fms", recog_ms),
+                            cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
+                            font_scale, color_green, thickness);
+                    y += line_spacing;
+                }
+
+                // Emotion
                 if (emotion_enabled && emotion_ms > 0) {
                     cv::putText(display, cv::format("Emotion: %.1fms", emotion_ms),
                             cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
-                            0.5, color_green, 1);
-                    y += 20;
+                            font_scale, color_green, thickness);
+                    y += line_spacing;
                 }
 
+                // Age/Gender
                 if (age_gender_enabled && age_gender_ms > 0) {
                     cv::putText(display, cv::format("Age/Gender: %.1fms", age_gender_ms),
                             cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
-                            0.5, color_green, 1);
-                    y += 20;
+                            font_scale, color_green, thickness);
+                    y += line_spacing;
                 }
             }
 
-            // Estado de conexión RTSP
+             // Estado de conexión RTSP
             if (is_rtsp && stream_capture) {
+                y += 5;  // Separador
                 auto stats = stream_capture->get_stats();
-                cv::Scalar conn_color = (stats.reconnects == 0) ?
-                    cv::Scalar(0, 255, 0) : cv::Scalar(0, 255, 255);
-
-                std::string conn_status = (stats.reconnects == 0) ?
-                    "CONECTADO" : cv::format("RECONEXIONES: %d", stats.reconnects);
+                
+                std::string conn_status;
+                cv::Scalar conn_color;
+                
+                if (stats.reconnects == 0) {
+                    conn_status = "Status: CONNECTED";
+                    conn_color = cv::Scalar(0, 255, 0);
+                } else {
+                    conn_status = cv::format("Reconnects: %d", stats.reconnects);
+                    conn_color = cv::Scalar(0, 165, 255);  // Naranja
+                }
 
                 cv::putText(display, conn_status,
                         cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
-                        0.5, conn_color, 1);
+                        font_scale, conn_color, thickness);
+                y += line_spacing;
+
+                // Stream FPS
+                cv::putText(display, cv::format("Stream FPS: %.1f", stats.fps),
+                        cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
+                        font_scale, color_green, thickness);
             }
 
             cv::imshow(window_name, display);
