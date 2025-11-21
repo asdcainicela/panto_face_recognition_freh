@@ -163,7 +163,7 @@ std::vector<float> FaceRecognizer::extract_embedding(const cv::Mat& face) {
     auto t1 = std::chrono::high_resolution_clock::now();
     last_profile.preprocess_ms = 
         std::chrono::duration<double, std::milli>(t1 - t0).count();
-    
+    /*
     // ---------- DEBUG: ANTES DE ENQUEUE ----------
     std::cout << "[DEBUG] d_input: " << d_input << std::endl;
     std::cout << "[DEBUG] d_output: " << d_output << std::endl;
@@ -177,6 +177,7 @@ std::vector<float> FaceRecognizer::extract_embedding(const cv::Mat& face) {
         //std::cout << "[DEBUG] Tensor '" << name << "' -> " << ptr << std::endl;
         std::cout << "[DEBUG] Tensor '" << name << "' -> " << ptr << std::endl;
     }
+    */
     // ---------------------------------------------
     
     // Inference

@@ -29,51 +29,6 @@ __global__ void normalize_imagenet_kernel(
     output[2 * plane_size + idx] = (b - mean_b) / std_b;  // B channel
 }
 
-// Wrapper C++ para el kernel
-/*
-extern "C" void cuda_normalize_imagenet(
-    const unsigned char* d_input, 
-    float* d_output,
-    int width, 
-    int height, 
-    cudaStream_t stream) 
-{
-    dim3 block(16, 16);
-    dim3 grid((width + block.x - 1) / block.x,
-              (height + block.y - 1) / block.y);
-    
-    const float mean_r = 0.485f, mean_g = 0.456f, mean_b = 0.406f;
-    const float std_r = 0.229f, std_g = 0.224f, std_b = 0.225f;
-    
-    normalize_imagenet_kernel<<<grid, block, 0, stream>>>(
-        d_input, d_output, width, height,
-        mean_r, mean_g, mean_b, std_r, std_g, std_b
-    );
-}
-
-// Wrapper C++ para el kernel
-extern "C" void cuda_normalize_imagenet(
-    const unsigned char* d_input, 
-    float* d_output,
-    int width, 
-    int height, 
-    cudaStream_t stream) 
-{
-    dim3 block(16, 16);
-    dim3 grid((width + block.x - 1) / block.x,
-              (height + block.y - 1) / block.y);
-    
-    // SCRFD: Solo normalizar [0,1], sin mean/std
-    const float mean_r = 0.0f, mean_g = 0.0f, mean_b = 0.0f;
-    const float std_r = 1.0f, std_g = 1.0f, std_b = 1.0f;
-    
-    normalize_imagenet_kernel<<<grid, block, 0, stream>>>(
-        d_input, d_output, width, height,
-        mean_r, mean_g, mean_b, std_r, std_g, std_b
-    );
-}
-*/
-
 extern "C" void cuda_normalize_imagenet(
     const unsigned char* d_input, 
     float* d_output,
