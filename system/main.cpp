@@ -252,15 +252,30 @@ int main(int argc, char* argv[]) {
 
         std::vector<TrackedFace> tracked_faces;
 
+
+
+
+
+
+
         if (mode_detect) {
             auto t1 = std::chrono::high_resolution_clock::now();
             auto dets = detector->detect(frame);
             auto t2 = std::chrono::high_resolution_clock::now();
             det_ms = std::chrono::duration<double, std::milli>(t2 - t1).count();
 
+            if (frame_count % 30 == 0) {
+                spdlog::info("📊 Frame {}: Detections={}, Det={}ms", 
+                            frame_count, dets.size(), (int)det_ms);
+            }
+
             tracked_faces = tracker->update(dets);
             auto t3 = std::chrono::high_resolution_clock::now();
             track_ms = std::chrono::duration<double, std::milli>(t3 - t2).count();
+
+            if (frame_count % 30 == 0) {
+                spdlog::info("🎯 Tracked faces: {}", tracked_faces.size());
+            }
 
             if (mode_recognize) {
                 auto t4 = std::chrono::high_resolution_clock::now();
