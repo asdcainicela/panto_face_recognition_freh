@@ -173,11 +173,21 @@ target_link_libraries(panto
     panto_database
 )
 
+add_executable(test_validator
+    tests/test_validator.cpp
+)
+
+
 # Benchmark (solo para tests)
 add_executable(benchmark test/benchmark_detector.cpp)
 target_link_libraries(benchmark
     panto_detector_opt
     ${OpenCV_LIBS}
+    spdlog::spdlog
+)
+
+target_link_libraries(test_validator
+    ${NVINFER}
     spdlog::spdlog
 )
 
