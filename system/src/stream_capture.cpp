@@ -212,14 +212,16 @@ bool StreamCapture::open() {
     capture_thread = std::make_unique<CaptureThread>(pipeline, frame_queue);
     capture_thread->start();
     
-    // Esperar primer frame
+    // Esperar primer frame con timeout más largo
+    spdlog::info("⏳ Esperando primer frame (timeout: 20s)...");
     cv::Mat test_frame;
-    if (!frame_queue.pop(test_frame, 5000)) {  // 5s timeout
-        spdlog::error("❌ No se recibió frame inicial");
+    if (!frame_queue.pop(test_frame, 20000)) {  // 20s timeout (conexión puede tardar)
+        spdlog::error("❌ No se recibió frame inicial después de 20s");
         return false;
     }
     
-    spdlog::info("✓ Stream abierto y recibiendo frames");
+    spdlog::info("✓ Stream abierto y recibiendo frames ({}x{})", 
+                test_frame.cols, test_frame.rows);
     return true;
 }
 

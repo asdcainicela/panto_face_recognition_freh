@@ -17,8 +17,8 @@ port = 554
 # ===== INPUT =====
 [input]
 # Opciones: "main", "sub", o ruta a video "videos/test.mp4"
-source = "sub"
-# source = "main"
+#source = "sub"
+source = "main"
 # source = "video1.mp4"
 
 # ===== DETECTOR (SCRFD) =====
