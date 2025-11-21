@@ -142,7 +142,7 @@ FaceDetectorOptimized::FaceDetectorOptimized(const std::string& engine_path,
     : use_gpu_preprocessing(gpu_preproc), d_input_buffer(nullptr), 
       d_resized_buffer(nullptr)
 {
-    spdlog::info(" [OPT] Inicializando SCRFD TensorRT Optimizado");
+    spdlog::info("🔧 [OPT] Inicializando SCRFD TensorRT Optimizado");
     spdlog::info("   GPU Preprocessing: {}", gpu_preproc ? "ENABLED" : "DISABLED");
     
     if (!loadEngine(engine_path)) {
@@ -159,12 +159,13 @@ FaceDetectorOptimized::FaceDetectorOptimized(const std::string& engine_path,
         size_t input_size = input_width * input_height * 3 * sizeof(float);
         cudaMalloc(&d_input_buffer, input_size);
         
-        size_t resized_size = input_width * input_height * 3;
+        // ✅ AÑADIDO: Allocate d_resized_buffer (unsigned char, no float)
+        size_t resized_size = input_width * input_height * 3;  // 640*640*3 bytes
         cudaMalloc(&d_resized_buffer, resized_size);
         
-        spdlog::info("   GPU buffers allocated: input={:.1f}MB, resized={:.1f}MB",
-                    input_size / 1024.0 / 1024.0,
-                    resized_size / 1024.0 / 1024.0);
+        spdlog::info("   GPU buffers allocated:");
+        spdlog::info("     - d_input_buffer: {:.1f}MB", input_size / 1024.0 / 1024.0);
+        spdlog::info("     - d_resized_buffer: {:.1f}MB", resized_size / 1024.0 / 1024.0);
     }
     
     spdlog::info("✓ [OPT] Detector optimizado listo");
@@ -175,9 +176,10 @@ FaceDetectorOptimized::~FaceDetectorOptimized() {
         if (buffers[i]) cudaFree(buffers[i]);
     }
     if (d_input_buffer) cudaFree(d_input_buffer);
-    if (d_resized_buffer) cudaFree(d_resized_buffer);
+    if (d_resized_buffer) cudaFree(d_resized_buffer);  // ✅ AÑADIDO
     if (stream) cudaStreamDestroy(stream);
 }
+
 
 // ==================== LOAD ENGINE ====================
 
@@ -249,6 +251,8 @@ cv::Mat FaceDetectorOptimized::preprocess_cpu(const cv::Mat& img) {
     return normalized;
 }
 
+
+// ==================== PREPROCESS GPU - FIXED ====================
 void FaceDetectorOptimized::preprocess_gpu(const cv::Mat& img) {
     // 1. Upload to GPU (OpenCV stream)
     gpu_input.upload(img, cv_stream);
@@ -267,9 +271,9 @@ void FaceDetectorOptimized::preprocess_gpu(const cv::Mat& img) {
         throw std::runtime_error("GPU resize produced invalid output");
     }
     
-    // 3. Copy resized image to d_resized buffer (CUDA stream nativo)
+    // 3. Copy resized image to d_resized_buffer (CUDA stream nativo)
     cudaError_t copy_err = cudaMemcpyAsync(
-        d_resized, 
+        d_resized_buffer,  // ✅ CORREGIDO: usar d_resized_buffer
         gpu_resized.data, 
         input_width * input_height * 3,  // 640*640*3 bytes
         cudaMemcpyDeviceToDevice, 

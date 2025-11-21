@@ -1,3 +1,4 @@
+// ============= include/detector_optimized.hpp - FIXED =============
 #pragma once
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/cuda.hpp>
@@ -25,7 +26,7 @@ struct Detection {
 
 class FaceDetectorOptimized {
 private:
-    panto::TensorRTLogger logger;  // en vez de Logger logger;
+    panto::TensorRTLogger logger;
     std::unique_ptr<nvinfer1::IRuntime> runtime;
     std::unique_ptr<nvinfer1::ICudaEngine> engine;
     std::unique_ptr<nvinfer1::IExecutionContext> context;
@@ -33,7 +34,7 @@ private:
     // GPU buffers
     void* buffers[10];
     void* d_input_buffer;      // Input tensor en GPU
-    void* d_resized_buffer;    // Imagen resized temporal
+    void* d_resized_buffer;    // ✅ AÑADIDO: Buffer para imagen resized
     cudaStream_t stream;       // CUDA stream nativo (para TensorRT)
     cv::cuda::Stream cv_stream; // OpenCV CUDA stream wrapper
     
