@@ -15,7 +15,7 @@ FaceDatabase::FaceDatabase(const std::string& db_path,
       embedding_size(embedding_size),
       recognition_threshold(threshold)
 {
-    spdlog::info("📚 Inicializando Face Database");
+    spdlog::info(" Inicializando Face Database");
     spdlog::info("   Path: {}", db_path);
     spdlog::info("   Embedding size: {}", embedding_size);
     spdlog::info("   Recognition threshold: {:.2f}", threshold);
@@ -28,7 +28,7 @@ FaceDatabase::FaceDatabase(const std::string& db_path,
         throw std::runtime_error("No se pudo inicializar la base de datos");
     }
     
-    spdlog::info("✓ Database ready ({} persons)", count_persons());
+    spdlog::info(" Database ready ({} persons)", count_persons());
 }
 
 FaceDatabase::~FaceDatabase() {

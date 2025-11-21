@@ -1,4 +1,3 @@
-// ============= include/cuda_kernels.h =============
 #pragma once
 
 #include <cuda_runtime.h>

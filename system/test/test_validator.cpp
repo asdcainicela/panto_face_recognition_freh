@@ -1,13 +1,13 @@
 // ============= tests/test_validator.cpp =============
-/*
- * Test unitario para validar modelos TensorRT
- * 
- * USO:
- * ./test_validator [config.toml]
- * 
- * EJEMPLO:
- * ./test_validator config.toml
- */
+//
+// Test unitario para validar modelos TensorRT
+//
+// USO:
+//   ./test_validator [config.toml]
+//
+// EJEMPLO:
+//   ./test_validator config.toml
+//
 
 #include "model_validator.hpp"
 #include <spdlog/spdlog.h>
@@ -46,7 +46,7 @@ public:
                 std::string key = trim(line.substr(0, eq));
                 std::string val = trim(line.substr(eq + 1));
 
-                if (val.front() == '"' && val.back() == '"') {
+                if (!val.empty() && val.front() == '"' && val.back() == '"') {
                     val = val.substr(1, val.length() - 2);
                 }
 
@@ -70,48 +70,40 @@ public:
 
 // ==================== MAIN ====================
 int main(int argc, char* argv[]) {
-    spdlog::set_pattern("[%H:%M:%S.%e] [%^%l%$] %v");
+    spdlog::set_pattern("[%H:%M:%S] [%l] %v");
     spdlog::set_level(spdlog::level::info);
-    
+
     std::string config_file = argc >= 2 ? argv[1] : "config.toml";
-    
-    spdlog::info("╔════════════════════════════════════════╗");
-    spdlog::info("║   PANTO MODEL VALIDATOR TEST           ║");
-    spdlog::info("╚════════════════════════════════════════╝");
-    spdlog::info("Config: {}", config_file);
-    spdlog::info("");
-    
+
+    spdlog::info("Model Validator Test");
+    spdlog::info("Configuracion: {}", config_file);
+
     // Load config
     SimpleToml config;
     if (!config.load(config_file)) {
-        spdlog::error("❌ No se pudo cargar: {}", config_file);
+        spdlog::error("No se pudo cargar {}", config_file);
         return 1;
     }
-    
+
     // Get model paths
-    std::string detector_path = config.get("detector.model_path", "models/scrfd_10g_bnkps.engine");
-    std::string recognizer_path = config.get("recognizer.model_path", "models/arcface_r100.engine");
-    std::string emotion_path = config.get("emotion.model_path", "models/emotion_ferplus.engine");
-    std::string age_gender_path = config.get("age_gender.model_path", "models/age_gender.engine");
-    
+    std::string detector_path     = config.get("detector.model_path", "models/scrfd_10g_bnkps.engine");
+    std::string recognizer_path   = config.get("recognizer.model_path", "models/arcface_r100.engine");
+    std::string emotion_path      = config.get("emotion.model_path", "models/emotion_ferplus.engine");
+    std::string age_gender_path   = config.get("age_gender.model_path", "models/age_gender.engine");
+
     // Get enabled flags
-    bool mode_recognize = config.get_bool("mode.recognize", true);
-    bool emotion_enabled = config.get_bool("emotion.enabled", false);
+    bool mode_recognize     = config.get_bool("mode.recognize", true);
+    bool emotion_enabled    = config.get_bool("emotion.enabled", false);
     bool age_gender_enabled = config.get_bool("age_gender.enabled", false);
-    
-    spdlog::info("Configuration:");
-    spdlog::info("  Detector: {}", detector_path);
-    spdlog::info("  Recognizer: {} ({})", recognizer_path, 
-                mode_recognize ? "enabled" : "disabled");
-    spdlog::info("  Emotion: {} ({})", emotion_path, 
-                emotion_enabled ? "enabled" : "disabled");
-    spdlog::info("  Age/Gender: {} ({})", age_gender_path, 
-                age_gender_enabled ? "enabled" : "disabled");
-    spdlog::info("");
-    
+
+    spdlog::info("Detector: {}", detector_path);
+    spdlog::info("Recognizer: {} ({})", recognizer_path, mode_recognize ? "enabled" : "disabled");
+    spdlog::info("Emotion: {} ({})", emotion_path, emotion_enabled ? "enabled" : "disabled");
+    spdlog::info("Age/Gender: {} ({})", age_gender_path, age_gender_enabled ? "enabled" : "disabled");
+
     // Validate models
     ModelValidator validator;
-    
+
     bool success = validator.validate_all(
         detector_path,
         recognizer_path,
@@ -121,20 +113,12 @@ int main(int argc, char* argv[]) {
         age_gender_path,
         age_gender_enabled
     );
-    
+
     if (success) {
-        spdlog::info("");
-        spdlog::info("╔════════════════════════════════════════╗");
-        spdlog::info("║  ✓ TEST PASSED                         ║");
-        spdlog::info("║  All models are ready to use           ║");
-        spdlog::info("╚════════════════════════════════════════╝");
+        spdlog::info("Test completado. Modelos validados correctamente.");
         return 0;
     } else {
-        spdlog::error("");
-        spdlog::error("╔════════════════════════════════════════╗");
-        spdlog::error("║  ✗ TEST FAILED                         ║");
-        spdlog::error("║  Please fix model issues               ║");
-        spdlog::error("╚════════════════════════════════════════╝");
+        spdlog::error("Test fallido. Hay problemas con uno o mas modelos.");
         return 1;
     }
 }

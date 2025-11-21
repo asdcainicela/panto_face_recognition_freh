@@ -1,9 +1,3 @@
-// ============= include/stream_capture.hpp =============
-/*
- * MEJORADO: Thread exclusivo para captura + reconexión automática
- * Inspirado en el sistema Python que NO se cae
- */
-
 #pragma once
 #include <opencv2/opencv.hpp>
 #include <string>
@@ -23,7 +17,6 @@ struct StreamStats {
     int latency_warnings;
 };
 
-// ==================== THREAD-SAFE FRAME QUEUE ====================
 class FrameQueue {
 private:
     std::queue<cv::Mat> queue;
@@ -36,21 +29,14 @@ public:
     
     void push(const cv::Mat& frame) {
         std::unique_lock<std::mutex> lock(mutex);
-        
-        // Si está lleno, descartar el más viejo (como Python)
-        if (queue.size() >= max_size) {
-            queue.pop();
-        }
-        
+        if (queue.size() >= max_size) queue.pop();
         queue.push(frame.clone());
         cv.notify_one();
     }
     
     bool pop(cv::Mat& frame, int timeout_ms = 1000) {
         std::unique_lock<std::mutex> lock(mutex);
-        
-        if (cv.wait_for(lock, std::chrono::milliseconds(timeout_ms),
-                       [this] { return !queue.empty(); })) {
+        if (cv.wait_for(lock, std::chrono::milliseconds(timeout_ms), [this] { return !queue.empty(); })) {
             frame = queue.front();
             queue.pop();
             return true;
@@ -69,25 +55,19 @@ public:
     }
 };
 
-// ==================== CAPTURE THREAD (como Python) ====================
 class CaptureThread {
 private:
     std::string pipeline;
     std::atomic<bool> running;
     std::thread thread;
     FrameQueue& frame_queue;
-    
-    // Estadísticas
     std::atomic<int> frames_captured;
     std::atomic<int> frames_lost;
     std::atomic<int> reconnects;
     std::atomic<int> consecutive_fails;
-    
-    // Configuración
-    int max_errors_before_reconnect = 30;  // Más tolerante que los 20 de Python
+    int max_errors_before_reconnect = 30;
     int max_consecutive_fails = 100;
     int reconnect_threshold = 10;
-    
     cv::VideoCapture cap;
     
     bool open_capture(int retries = 5);
@@ -102,29 +82,23 @@ public:
     void stop();
     bool is_running() const { return running.load(); }
     
-    // Estadísticas
     int get_frames() const { return frames_captured.load(); }
     int get_lost() const { return frames_lost.load(); }
     int get_reconnects() const { return reconnects.load(); }
 };
-
-// ==================== STREAM CAPTURE PRINCIPAL ====================
 
 class StreamCapture {
 private:
     std::string user, pass, ip, stream_type;
     int port;
     int fps_interval;
-    std::string capture_backend;  // ✅ NUEVO: "ffmpeg" o "gstreamer"
-    
+    std::string capture_backend;
     std::string pipeline;
     std::string window_name;
     
-    // Thread de captura
     FrameQueue frame_queue;
     std::unique_ptr<CaptureThread> capture_thread;
     
-    // Display
     int frames_displayed;
     double current_fps;
     std::chrono::steady_clock::time_point start_time, start_fps;
@@ -140,28 +114,25 @@ private:
 public:
     StreamCapture(const std::string& user, const std::string& pass,
                   const std::string& ip, int port, const std::string& stream_type,
-                  const std::string& backend = "ffmpeg");  // ✅ FFMPEG por defecto
+                  const std::string& backend = "ffmpeg"); //"ffmpeg" o "gstreamer"
     ~StreamCapture();
     
-    // Configuración
     void enable_viewing(const cv::Size& size = cv::Size(640, 480));
     void set_stop_signal(std::atomic<bool>* signal);
     void set_fps_interval(int interval);
     
-    // Operaciones
     bool open();
     bool read(cv::Mat& frame);  // Thread-safe read
     void release();
     
-    // Display loop (ahora en thread principal)
+    // Display loop en thread principal
     void run();
     
-    // Stats
     const StreamStats& get_stats();
     void print_stats() const;
     void print_final_stats() const;
     
-    bool is_capturing() const { 
-        return capture_thread && capture_thread->is_running(); 
+    bool is_capturing() const {
+        return capture_thread && capture_thread->is_running();
     }
 };

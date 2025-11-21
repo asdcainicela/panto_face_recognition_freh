@@ -1,5 +1,3 @@
-// ./convert_onnx_auto arcface_r100.onnx engines/arcface_r100.onx
-
 #include <NvInfer.h>
 #include <NvOnnxParser.h>
 #include <cuda_runtime_api.h>

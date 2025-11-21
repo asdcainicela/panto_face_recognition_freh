@@ -1,4 +1,3 @@
-// ============= src/cuda_kernels.cu =============
 #include <cuda_runtime.h>
 
 // Kernel optimizado para normalización ImageNet (BGR -> RGB + normalize)

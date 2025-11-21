@@ -32,7 +32,7 @@ EmotionRecognizer::EmotionRecognizer(const std::string& engine_path, bool gpu_pr
     : use_gpu_preprocessing(gpu_preproc), d_input(nullptr), 
       d_output(nullptr), d_resized(nullptr)
 {
-    spdlog::info("😊 Inicializando FER+ Emotion Recognizer");
+    spdlog::info("Inicializando FER+ Emotion Recognizer");
     spdlog::info("   GPU Preprocessing: {}", gpu_preproc ? "ENABLED" : "DISABLED");
     
     if (!loadEngine(engine_path)) {

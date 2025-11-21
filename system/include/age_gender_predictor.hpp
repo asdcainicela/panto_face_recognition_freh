@@ -1,4 +1,3 @@
-// ============= include/age_gender_predictor.hpp - FIXED =============
 #pragma once
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/cuda.hpp>
@@ -24,7 +23,6 @@ struct AgeGenderResult {
     Gender gender;
     float age_confidence;
     float gender_confidence;
-    
     std::string to_string() const;
 };
 
@@ -34,25 +32,22 @@ private:
     std::unique_ptr<nvinfer1::IRuntime> runtime;
     std::unique_ptr<nvinfer1::ICudaEngine> engine;
     std::unique_ptr<nvinfer1::IExecutionContext> context;
-    
-    // GPU buffers
+
     void* d_input;
     void* d_output;
     void* d_resized;
-    
+
     cudaStream_t stream;
-    // ❌ REMOVIDO: cv::cuda::Stream cv_stream;
-    
-    // GPU preprocessing (solo GpuMat, sin Stream wrapper)
+
     cv::cuda::GpuMat gpu_input;
     cv::cuda::GpuMat gpu_resized;
-    
+
     int input_width = 224;
     int input_height = 224;
     int num_classes = 0;
-    
+
     bool use_gpu_preprocessing = true;
-    
+
     bool loadEngine(const std::string& engine_path);
     cv::Mat preprocess_cpu(const cv::Mat& face);
     void preprocess_gpu(const cv::Mat& face);
@@ -61,10 +56,10 @@ private:
 public:
     AgeGenderPredictor(const std::string& engine_path, bool gpu_preproc = true);
     ~AgeGenderPredictor();
-    
+
     AgeGenderResult predict(const cv::Mat& face);
     std::vector<AgeGenderResult> predict_batch(const std::vector<cv::Mat>& faces);
-    
+
     struct ProfileStats {
         double preprocess_ms = 0;
         double inference_ms = 0;

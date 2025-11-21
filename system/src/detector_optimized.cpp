@@ -142,7 +142,7 @@ FaceDetectorOptimized::FaceDetectorOptimized(const std::string& engine_path,
     : use_gpu_preprocessing(gpu_preproc), d_input_buffer(nullptr), 
       d_resized_buffer(nullptr)
 {
-    spdlog::info("🚀 [OPT] Inicializando SCRFD TensorRT Optimizado");
+    spdlog::info(" [OPT] Inicializando SCRFD TensorRT Optimizado");
     spdlog::info("   GPU Preprocessing: {}", gpu_preproc ? "ENABLED" : "DISABLED");
     
     if (!loadEngine(engine_path)) {
