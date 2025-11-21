@@ -258,6 +258,26 @@ void FaceDetectorOptimized::preprocess_gpu(const cv::Mat& img) {
     
     cv_stream.waitForCompletion();
     
+    // ✅ DEBUG: Verificar que gpu_resized tiene datos
+    static int debug_once = 0;
+    if (debug_once++ == 0) {
+        cv::Mat cpu_resized;
+        gpu_resized.download(cpu_resized);
+        
+        spdlog::info("🖼️ Frame resized: {}x{}, type={}", 
+                     cpu_resized.cols, cpu_resized.rows, cpu_resized.type());
+        
+        // Verificar primeros píxeles
+        cv::Vec3b pixel = cpu_resized.at<cv::Vec3b>(0, 0);
+        spdlog::info("🎨 Primer pixel BGR: ({}, {}, {})", 
+                     pixel[0], pixel[1], pixel[2]);
+        
+        // Calcular promedio
+        cv::Scalar mean = cv::mean(cpu_resized);
+        spdlog::info("📊 Mean BGR: ({:.1f}, {:.1f}, {:.1f})", 
+                     mean[0], mean[1], mean[2]);
+    }
+    
     cudaMemcpyAsync(d_resized_buffer, gpu_resized.data, 
                    input_width * input_height * 3,
                    cudaMemcpyDeviceToDevice, stream);
@@ -268,21 +288,20 @@ void FaceDetectorOptimized::preprocess_gpu(const cv::Mat& img) {
         input_width, input_height, stream
     );
 
-    // DEBUG: Verificar valores del tensor
+    // Debug tensor normalizado
     std::vector<float> debug_data(100);
     cudaMemcpyAsync(debug_data.data(), buffers[input_index], 
                    100 * sizeof(float), cudaMemcpyDeviceToHost, stream);
     cudaStreamSynchronize(stream);
     
     static int debug_count = 0;
-    if (debug_count++ < 1) {  // Solo primera vez
+    if (debug_count++ < 1) {
         spdlog::info("🔍 Primeros 10 valores del tensor normalizado:");
         for (int i = 0; i < 10; i++) {
             spdlog::info("  [{}] = {:.4f}", i, debug_data[i]);
         }
     }
 }
-
 // ==================== DETECTION ====================
 
 std::vector<Detection> FaceDetectorOptimized::detect(const cv::Mat& img) {
