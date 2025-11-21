@@ -116,33 +116,27 @@ cv::Mat AgeGenderPredictor::preprocess_cpu(const cv::Mat& face) {
 }
 
 void AgeGenderPredictor::preprocess_gpu(const cv::Mat& face) {
-    // Upload to GPU (usando default stream)
+    // Upload to GPU
     gpu_input.upload(face);
     
-    // Resize (síncrono por defecto)
+    // Resize
     cv::cuda::resize(gpu_input, gpu_resized, 
                      cv::Size(input_width, input_height),
                      0, 0, cv::INTER_LINEAR);
     
-    // Download data to temporary buffer
-    gpu_resized.download(std::vector<unsigned char>(
-        reinterpret_cast<unsigned char*>(gpu_resized.data),
-        reinterpret_cast<unsigned char*>(gpu_resized.data) + input_width * input_height * 3
-    ).data());
-    
-    // Copy to d_resized
+    // Copy resized image to d_resized buffer (GPU -> GPU)
     cudaMemcpyAsync(d_resized, gpu_resized.data, 
                    input_width * input_height * 3,
                    cudaMemcpyDeviceToDevice, stream);
     
-    // Normalize (CPU for now - later optimize with kernel)
+    // Download to CPU for normalization (GPU -> CPU)
     std::vector<unsigned char> temp(input_width * input_height * 3);
     cudaMemcpyAsync(temp.data(), d_resized,
                    input_width * input_height * 3,
                    cudaMemcpyDeviceToHost, stream);
     cudaStreamSynchronize(stream);
     
-    // BGR -> RGB + normalize ImageNet
+    // BGR -> RGB + normalize ImageNet on CPU
     std::vector<float> normalized(input_width * input_height * 3);
     float mean[3] = {0.485f, 0.456f, 0.406f};
     float std[3] = {0.229f, 0.224f, 0.225f};
@@ -165,6 +159,7 @@ void AgeGenderPredictor::preprocess_gpu(const cv::Mat& face) {
         }
     }
     
+    // Upload normalized data to GPU (CPU -> GPU)
     cudaMemcpyAsync(d_input, normalized.data(),
                    normalized.size() * sizeof(float),
                    cudaMemcpyHostToDevice, stream);
