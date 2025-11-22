@@ -21,9 +21,9 @@ port = 554
 [input]
 # Opciones: "main", "sub", o ruta a video "videos/test.mp4"
 #source = "sub"
-#source = "main"
+source = "main"
 #source = "videos/output/output_main_20251120_170436.mp4"
-source = "run1.mp4"
+#source = "run1.mp4"
 
 
 # Backend de captura para RTSP: "ffmpeg" (recomendado) o "gstreamer"
@@ -52,14 +52,14 @@ threshold = 0.6
 enabled = true
 use_interval = true
 # Cada 3 frames (120ms @ 25fps)
-analyze_interval = 3
+analyze_interval = 1
 
 [age_gender]
 enabled = true
 # Actualizar periódicamente
 use_interval = true
 # Cada 30 frames (1.2s @ 25fps)
-analyze_interval = 30
+analyze_interval = 1
 
 # ===== DATABASE =====
 [database]

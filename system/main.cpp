@@ -422,7 +422,7 @@ int main(int argc, char* argv[]) {
 
                 cv::rectangle(display, box, box_color, 2);
 
-                int y = box.y - 10;
+                int y = box.y - 20;
                 int line_height = 18;
 
                 // ✅ LÍNEA 1: ID + NOMBRE
