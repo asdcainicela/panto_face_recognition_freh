@@ -48,19 +48,18 @@ use_gpu_preprocessing = true
 # 0.5 = permisivo, 0.6 = default, 0.7 = estricto
 threshold = 0.6
 
-# ===== ? ANÁLISIS DE EMOCIONES (FER+) =====
 [emotion]
 enabled = true
-model_path = "models/emotion_ferplus.engine"
-# Analizar cada N frames (para reducir overhead)
-analyze_interval = 1
+use_interval = true
+# Cada 3 frames (120ms @ 25fps)
+analyze_interval = 3
 
-# ===== ? PREDICCIÓN DE EDAD Y GÉNERO =====
 [age_gender]
 enabled = true
-model_path = "models/age_gender.engine"
-# Analizar cada N frames
-analyze_interval = 1
+# Actualizar periódicamente
+use_interval = true
+# Cada 30 frames (1.2s @ 25fps)
+analyze_interval = 30
 
 # ===== DATABASE =====
 [database]
