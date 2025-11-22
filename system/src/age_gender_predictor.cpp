@@ -197,7 +197,20 @@ AgeGenderResult AgeGenderPredictor::predict(const cv::Mat& face) {
     return postprocess(logits);
 }
 
+
+
 AgeGenderResult AgeGenderPredictor::postprocess(const std::vector<float>& logits) {
+    // ✅ NUEVO: Mostrar logits crudos
+    static int debug_count = 0;
+    if (debug_count < 3) {
+        spdlog::info("🔍 DEBUG: Logits crudos (primeros 10):");
+        for (int i = 0; i < std::min(10, (int)logits.size()); i++) {
+            spdlog::info("  logits[{}] = {:.6f}", i, logits[i]);
+        }
+        debug_count++;
+    }
+    
+    // Softmax
     std::vector<float> expv(logits.size());
     float maxv = *std::max_element(logits.begin(), logits.end());
     float sum = 0.0f;
@@ -208,27 +221,97 @@ AgeGenderResult AgeGenderPredictor::postprocess(const std::vector<float>& logits
     std::vector<float> probs(logits.size());
     for (size_t i = 0; i < logits.size(); ++i) probs[i] = expv[i] / sum;
 
+    // ✅ NUEVO: Mostrar probabilidades después de softmax
+    static int debug_count2 = 0;
+    if (debug_count2 < 3) {
+        spdlog::info("🔍 DEBUG: Probabilidades después de softmax (top 10):");
+        
+        // Crear vector de pares (índice, probabilidad)
+        std::vector<std::pair<int, float>> indexed_probs;
+        for (int i = 0; i < (int)probs.size(); i++) {
+            indexed_probs.push_back({i, probs[i]});
+        }
+        
+        // Ordenar por probabilidad descendente
+        std::sort(indexed_probs.begin(), indexed_probs.end(),
+                  [](const auto& a, const auto& b) { return a.second > b.second; });
+        
+        // Mostrar top 10
+        for (int i = 0; i < std::min(10, (int)indexed_probs.size()); i++) {
+            spdlog::info("  Clase {}: {:.4f} ({:.1f}%)", 
+                        indexed_probs[i].first, 
+                        indexed_probs[i].second,
+                        indexed_probs[i].second * 100);
+        }
+        debug_count2++;
+    }
+
+    // Gender prediction (primeras 2 clases)
     float female_prob = probs.size() > 0 ? probs[0] : 0.0f;
     float male_prob   = probs.size() > 1 ? probs[1] : 0.0f;
     Gender gender = (male_prob > female_prob) ? Gender::MALE : Gender::FEMALE;
     float gender_conf = std::max(female_prob, male_prob);
 
+    // ✅ NUEVO: Log género
+    static int debug_count3 = 0;
+    if (debug_count3 < 3) {
+        spdlog::info("🔍 DEBUG: Gender prediction:");
+        spdlog::info("  Female prob: {:.4f} ({:.1f}%)", female_prob, female_prob * 100);
+        spdlog::info("  Male prob: {:.4f} ({:.1f}%)", male_prob, male_prob * 100);
+        spdlog::info("  Predicted: {} (conf: {:.1f}%)", 
+                    gender_to_string(gender), gender_conf * 100);
+        debug_count3++;
+    }
+
+    // Age prediction (resto de clases desde índice 2)
     int age_start = 2;
     int max_idx = age_start;
     float max_prob = (probs.size() > (size_t)age_start) ? probs[age_start] : 0.0f;
+    
     for (size_t i = age_start; i < probs.size(); ++i) {
         if (probs[i] > max_prob) {
             max_prob = probs[i];
             max_idx = static_cast<int>(i);
         }
     }
+    
     int age = max_idx - age_start;
+
+    // ✅ NUEVO: Log edad
+    static int debug_count4 = 0;
+    if (debug_count4 < 3) {
+        spdlog::info("🔍 DEBUG: Age prediction:");
+        spdlog::info("  max_idx: {}", max_idx);
+        spdlog::info("  age_start: {}", age_start);
+        spdlog::info("  Calculated age: {} (max_idx - age_start)", age);
+        spdlog::info("  Age confidence: {:.4f} ({:.1f}%)", max_prob, max_prob * 100);
+        
+        // Mostrar distribución de edades (clases 2-11)
+        spdlog::info("  Age distribution (top classes):");
+        for (int i = age_start; i < std::min(age_start + 10, (int)probs.size()); i++) {
+            spdlog::info("    Clase {} (age {}): {:.4f}", i, i - age_start, probs[i]);
+        }
+        debug_count4++;
+    }
 
     AgeGenderResult r;
     r.age = age;
     r.gender = gender;
     r.age_confidence = max_prob;
     r.gender_confidence = gender_conf;
+    
+    // ✅ NUEVO: Log resultado final
+    static int debug_count5 = 0;
+    if (debug_count5 < 3) {
+        spdlog::info("🔍 DEBUG: RESULTADO FINAL:");
+        spdlog::info("  Age: {}", r.age);
+        spdlog::info("  Gender: {}", gender_to_string(r.gender));
+        spdlog::info("  Age conf: {:.1f}%", r.age_confidence * 100);
+        spdlog::info("  Gender conf: {:.1f}%", r.gender_confidence * 100);
+        spdlog::info("========================================");
+        debug_count5++;
+    }
+    
     return r;
 }
 
