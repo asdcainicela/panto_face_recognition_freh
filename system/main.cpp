@@ -1,4 +1,4 @@
-// ============= main.cpp - FIXED AGE/GENDER + DEBUG =============
+// ============= main.cpp - VISUALIZACIÓN CORREGIDA PARA AGE/GENDER =============
 #include "detector_optimized.hpp"
 #include "tracker.hpp"
 #include "recognizer.hpp"
@@ -301,8 +301,13 @@ int main(int argc, char* argv[]) {
                         cv::Rect safe = f.box & cv::Rect(0, 0, frame.cols, frame.rows);
                         if (safe.area() <= 0) continue;
 
+                        // ✅ FILTRO: Solo procesar rostros >= 40x40 pixels
+                        if (safe.width < 40 || safe.height < 40) {
+                            spdlog::debug("⏭️  Track {}: Skip (too small {}x{})", f.id, safe.width, safe.height);
+                            continue;
+                        }
+
                         try {
-                            // ✅ DEBUG: Guardar imagen del rostro
                             cv::Mat face_crop = frame(safe).clone();
                             
                             auto r = age_gender_predictor->predict(face_crop);
@@ -312,7 +317,6 @@ int main(int argc, char* argv[]) {
                             
                             processed_count++;
                             
-                            // ✅ LOG CON MÁS DETALLES
                             spdlog::info("🎂 Track {}: Age={}, Gender={} ({:.1f}%) | Box={}x{} @ ({},{})", 
                                         f.id, 
                                         f.age_years, 
@@ -320,17 +324,6 @@ int main(int argc, char* argv[]) {
                                         f.gender_confidence * 100,
                                         safe.width, safe.height,
                                         safe.x, safe.y);
-                            
-                            // ✅ GUARDAR IMAGEN DE DEBUG (solo primeros 5)
-                            static int debug_count = 0;
-                            if (debug_count < 5) {
-                                std::string filename = "debug_face_" + std::to_string(f.id) + 
-                                                      "_age" + std::to_string(r.age) + 
-                                                      "_" + f.gender + ".jpg";
-                                cv::imwrite(filename, face_crop);
-                                spdlog::info("💾 Guardado: {}", filename);
-                                debug_count++;
-                            }
                             
                         } catch (const std::exception& e) {
                             spdlog::warn("Age/Gender prediction failed for track {}: {}", f.id, e.what());
@@ -352,23 +345,16 @@ int main(int argc, char* argv[]) {
                 bool should_process = false;
                 
                 if (emotion_use_interval) {
-                    // MODO INTERVALO: Actualizar cada N frames
                     should_process = (frame_count % emotion_interval == 0);
                 } else {
-                    // MODO UNA VEZ: Siempre intentar
                     should_process = true;
                 }
                 
                 if (should_process) {
                     auto t8 = std::chrono::high_resolution_clock::now();
                     for (auto& f : tracked_faces) {
-                        // En modo "una vez", skip si ya tiene emoción
                         if (!emotion_use_interval && !f.emotion.empty() && f.emotion != "Unknown") continue;
-                        
-                        // Solo procesar rostros confirmados
                         if (f.hits < 3) continue;
-                        
-                        // Opcional: esperar a que tenga age/gender
                         if (age_gender_enabled && f.age_years == 0) continue;
 
                         cv::Rect safe = f.box & cv::Rect(0, 0, frame.cols, frame.rows);
@@ -424,41 +410,60 @@ int main(int argc, char* argv[]) {
                     f.box.height * sy
                 );
 
-                // ✅ BOUNDING BOX (verde si reconocido, azul si no)
-                cv::rectangle(display, box,
-                    f.is_recognized ? cv::Scalar(0,255,0) : cv::Scalar(255,0,0),
-                    2
-                );
+                // ✅ COLOR DEL BOUNDING BOX
+                cv::Scalar box_color;
+                if (f.is_recognized) {
+                    box_color = cv::Scalar(0, 255, 0);  // Verde: Reconocido
+                } else if (f.age_years > 0) {
+                    box_color = cv::Scalar(0, 255, 255);  // Amarillo: Con Age/Gender
+                } else {
+                    box_color = cv::Scalar(255, 0, 0);  // Azul: Solo detectado
+                }
+
+                cv::rectangle(display, box, box_color, 2);
 
                 int y = box.y - 10;
                 int line_height = 18;
 
                 // ✅ LÍNEA 1: ID + NOMBRE
-                std::string line = "ID:" + std::to_string(f.id);
+                std::string line1 = "ID:" + std::to_string(f.id);
                 if (f.is_recognized && draw_names) {
-                    line += " - " + f.name;
+                    line1 += " - " + f.name;
                 }
 
-                cv::putText(display, line, cv::Point(box.x, y),
+                cv::putText(display, line1, cv::Point(box.x, y),
                     cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255,255,255), 1
                 );
-
                 y += line_height;
 
-                // ✅ LÍNEA 2: EDAD + GÉNERO
-                if (age_gender_enabled && f.age_years >= 0 && !f.gender.empty()) {
-                    std::string age_gender_text = std::to_string(f.age_years) + " years, " + f.gender;
+                // ✅ LÍNEA 2: EDAD + GÉNERO (solo si YA fue calculado)
+                if (age_gender_enabled && f.age_years > 0 && f.gender != "Unknown" && !f.gender.empty()) {
+                    // Calcular color según confianza
+                    cv::Scalar color;
+                    if (f.gender_confidence >= 0.7) {
+                        color = cv::Scalar(0, 255, 0);  // Verde: Alta confianza
+                    } else if (f.gender_confidence >= 0.5) {
+                        color = cv::Scalar(0, 255, 255);  // Amarillo: Confianza media
+                    } else {
+                        color = cv::Scalar(0, 165, 255);  // Naranja: Baja confianza
+                    }
+                    
+                    std::ostringstream age_gender_stream;
+                    age_gender_stream << f.age_years << "y, " << f.gender 
+                                     << " (" << std::fixed << std::setprecision(0) 
+                                     << (f.gender_confidence * 100) << "%)";
+                    
                     cv::putText(display,
-                        age_gender_text,
+                        age_gender_stream.str(),
                         cv::Point(box.x, y),
                         cv::FONT_HERSHEY_SIMPLEX, 0.5,
-                        cv::Scalar(0,255,255),  // Amarillo
+                        color,
                         1
                     );
                     y += line_height;
                 }
 
-                // ✅ LÍNEA 3: EMOCIÓN
+                // ✅ LÍNEA 3: EMOCIÓN (solo si NO es "Unknown")
                 if (emotion_enabled && !f.emotion.empty() && f.emotion != "Unknown") {
                     cv::putText(
                         display, f.emotion,
@@ -481,13 +486,13 @@ int main(int argc, char* argv[]) {
                 }
             }
 
-            // ✅ PANEL DE INFO
+            // ✅ PANEL DE INFO (semi-transparente)
             auto elapsed = std::chrono::steady_clock::now() - start_time;
             double sec = std::chrono::duration<double>(elapsed).count();
             double fps = frame_count / sec;
 
-            int pw = 300;
-            int ph = 260;
+            int pw = 320;
+            int ph = 280;
 
             cv::Mat overlay = display.clone();
             cv::rectangle(overlay, cv::Rect(0,0,pw,ph), cv::Scalar(0,0,0), -1);
@@ -500,19 +505,22 @@ int main(int argc, char* argv[]) {
             );
             y += 25;
 
-            auto put = [&](const std::string& t){
+            auto put = [&](const std::string& t, const cv::Scalar& color = cv::Scalar(255,255,255)){
                 cv::putText(display, t, cv::Point(10, y),
-                    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255,255,255), 1
+                    cv::FONT_HERSHEY_SIMPLEX, 0.5, color, 1
                 );
                 y += 22;
             };
 
             put("FPS: " + std::to_string((int)fps));
             put("Frames: " + std::to_string(frame_count));
+            put("Tracks: " + std::to_string(tracked_faces.size()));
+            put("");
+            put("--- Timings ---", cv::Scalar(100, 200, 255));
             put("Det: " + std::to_string((int)det_ms) + " ms");
             put("Track: " + std::to_string((int)track_ms) + " ms");
 
-            if (mode_recognize) put("Recognize: " + std::to_string((int)recog_ms) + " ms");
+            if (mode_recognize) put("Recognition: " + std::to_string((int)recog_ms) + " ms");
             if (emotion_enabled) put("Emotion: " + std::to_string((int)emotion_ms) + " ms");
             if (age_gender_enabled) put("Age/Gender: " + std::to_string((int)age_gender_ms) + " ms");
 
