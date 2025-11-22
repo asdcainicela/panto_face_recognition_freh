@@ -22,7 +22,9 @@ port = 554
 # Opciones: "main", "sub", o ruta a video "videos/test.mp4"
 #source = "sub"
 #source = "main"
-source = "videos/output/output_main_20251120_170436.mp4"
+#source = "videos/output/output_main_20251120_170436.mp4"
+source = "run1.mp4"
+
 
 # Backend de captura para RTSP: "ffmpeg" (recomendado) o "gstreamer"
 #capture_backend = "ffmpeg"
@@ -51,14 +53,14 @@ threshold = 0.6
 enabled = true
 model_path = "models/emotion_ferplus.engine"
 # Analizar cada N frames (para reducir overhead)
-analyze_interval = 5
+analyze_interval = 1
 
 # ===== ? PREDICCIÓN DE EDAD Y GÉNERO =====
 [age_gender]
 enabled = true
 model_path = "models/age_gender.engine"
 # Analizar cada N frames
-analyze_interval = 10
+analyze_interval = 1
 
 # ===== DATABASE =====
 [database]

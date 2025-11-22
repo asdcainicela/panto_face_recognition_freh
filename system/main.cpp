@@ -272,10 +272,11 @@ int main(int argc, char* argv[]) {
             }
 
             // ✅ AGE/GENDER - PRIMERO (más importante, actualizar cada N frames)
-            if (age_gender_enabled && frame_count % age_gender_interval == 0) {
+            if (age_gender_enabled) {
                 auto t6 = std::chrono::high_resolution_clock::now();
                 for (auto& f : tracked_faces) {
-                    if (f.hits < 3) continue;
+                    // Condición: rostro confirmado (hits >= 3) Y todavía no tiene datos
+                    if (f.hits < 3 || f.age_years > 0) continue;
 
                     cv::Rect safe = f.box & cv::Rect(0, 0, frame.cols, frame.rows);
                     if (safe.area() <= 0) continue;
@@ -285,6 +286,9 @@ int main(int argc, char* argv[]) {
                         f.age_years = r.age;
                         f.gender = gender_to_string(r.gender);
                         f.gender_confidence = r.gender_confidence;
+                        
+                        spdlog::info("🎂 Track {}: Age={}, Gender={} ({:.1f}%)", 
+                                    f.id, f.age_years, f.gender, f.gender_confidence * 100);
                     } catch (const std::exception& e) {
                         spdlog::warn("Age/Gender prediction failed: {}", e.what());
                     }
@@ -297,7 +301,7 @@ int main(int argc, char* argv[]) {
             if (emotion_enabled && frame_count % emotion_interval == 0) {
                 auto t8 = std::chrono::high_resolution_clock::now();
                 for (auto& f : tracked_faces) {
-                    if (f.hits < 3) continue;
+                    if (f.hits < 3 || f.age_years == 0) continue;
 
                     cv::Rect safe = f.box & cv::Rect(0, 0, frame.cols, frame.rows);
                     if (safe.area() <= 0) continue;
@@ -373,7 +377,7 @@ int main(int argc, char* argv[]) {
                 y += line_height;
 
                 // ✅ LÍNEA 2: EDAD + GÉNERO (amarillo/cyan)
-                if (age_gender_enabled && f.age_years > 0) {
+                if (age_gender_enabled && f.age_years >= 0 && !f.gender.empty()){
                     std::string age_gender_text = std::to_string(f.age_years) + " years, " + f.gender;
                     cv::putText(display,
                         age_gender_text,
