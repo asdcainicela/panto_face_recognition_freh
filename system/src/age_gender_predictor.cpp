@@ -197,122 +197,103 @@ AgeGenderResult AgeGenderPredictor::predict(const cv::Mat& face) {
     return postprocess(logits);
 }
 
-
+// ============= SOLO LA FUNCIÓN postprocess() PARA FAIRFACE =============
+// Reemplazar en src/age_gender_predictor.cpp
 
 AgeGenderResult AgeGenderPredictor::postprocess(const std::vector<float>& logits) {
-    // ✅ NUEVO: Mostrar logits crudos
+    // ✅ FORMATO FAIRFACE:
+    // Output: [1, 11]
+    // Index 0-1: Gender (Male, Female)
+    // Index 2-10: Age brackets (9 rangos)
+    
+    if (logits.size() < 11) {
+        spdlog::error("Invalid logits size: {} (expected 11)", logits.size());
+        return AgeGenderResult{25, Gender::MALE, 0.0f, 0.0f}; // default
+    }
+    
+    // ============ GENDER PREDICTION ============
+    float male_logit = logits[0];
+    float female_logit = logits[1];
+    
+    // Softmax para gender
+    float max_gender = std::max(male_logit, female_logit);
+    float exp_male = std::exp(male_logit - max_gender);
+    float exp_female = std::exp(female_logit - max_gender);
+    float sum_gender = exp_male + exp_female;
+    
+    float male_prob = exp_male / sum_gender;
+    float female_prob = exp_female / sum_gender;
+    
+    Gender gender = (male_prob > female_prob) ? Gender::MALE : Gender::FEMALE;
+    float gender_conf = std::max(male_prob, female_prob);
+    
+    // ============ AGE PREDICTION ============
+    // Age logits: indices 2-10 (9 clases)
+    std::vector<float> age_logits(logits.begin() + 2, logits.end());
+    
+    // Softmax para age
+    float max_age = *std::max_element(age_logits.begin(), age_logits.end());
+    std::vector<float> age_probs(age_logits.size());
+    float sum_age = 0.0f;
+    
+    for (size_t i = 0; i < age_logits.size(); ++i) {
+        age_probs[i] = std::exp(age_logits[i] - max_age);
+        sum_age += age_probs[i];
+    }
+    
+    for (size_t i = 0; i < age_probs.size(); ++i) {
+        age_probs[i] /= sum_age;
+    }
+    
+    // Encontrar clase con mayor probabilidad
+    int max_age_idx = 0;
+    float max_age_prob = age_probs[0];
+    for (size_t i = 1; i < age_probs.size(); ++i) {
+        if (age_probs[i] > max_age_prob) {
+            max_age_prob = age_probs[i];
+            max_age_idx = i;
+        }
+    }
+    
+    // Mapeo de clase a edad (punto medio del rango)
+    const int age_map[] = {
+        1,   // 0-2 years   -> 1
+        6,   // 3-9 years   -> 6
+        15,  // 10-19 years -> 15
+        25,  // 20-29 years -> 25
+        35,  // 30-39 years -> 35
+        45,  // 40-49 years -> 45
+        55,  // 50-59 years -> 55
+        65,  // 60-69 years -> 65
+        75   // 70+ years   -> 75
+    };
+    
+    int predicted_age = age_map[max_age_idx];
+    
+    // ✅ DEBUG (solo primeras 3 predicciones)
     static int debug_count = 0;
     if (debug_count < 3) {
-        spdlog::info("🔍 DEBUG: Logits crudos (primeros 10):");
-        for (int i = 0; i < std::min(10, (int)logits.size()); i++) {
-            spdlog::info("  logits[{}] = {:.6f}", i, logits[i]);
+        spdlog::info("🔍 Age/Gender Debug:");
+        spdlog::info("  Gender: Male={:.3f}, Female={:.3f} -> {} ({:.1f}%)",
+                    male_prob, female_prob, gender_to_string(gender), gender_conf * 100);
+        spdlog::info("  Age class: {} (prob={:.3f})", max_age_idx, max_age_prob);
+        spdlog::info("  Age brackets probabilities:");
+        const char* age_labels[] = {"0-2", "3-9", "10-19", "20-29", "30-39", 
+                                   "40-49", "50-59", "60-69", "70+"};
+        for (size_t i = 0; i < age_probs.size(); ++i) {
+            spdlog::info("    {} years: {:.3f}", age_labels[i], age_probs[i]);
         }
+        spdlog::info("  Final prediction: {} years, {}", predicted_age, gender_to_string(gender));
         debug_count++;
     }
     
-    // Softmax
-    std::vector<float> expv(logits.size());
-    float maxv = *std::max_element(logits.begin(), logits.end());
-    float sum = 0.0f;
-    for (size_t i = 0; i < logits.size(); ++i) {
-        expv[i] = std::exp(logits[i] - maxv);
-        sum += expv[i];
-    }
-    std::vector<float> probs(logits.size());
-    for (size_t i = 0; i < logits.size(); ++i) probs[i] = expv[i] / sum;
-
-    // ✅ NUEVO: Mostrar probabilidades después de softmax
-    static int debug_count2 = 0;
-    if (debug_count2 < 3) {
-        spdlog::info("🔍 DEBUG: Probabilidades después de softmax (top 10):");
-        
-        // Crear vector de pares (índice, probabilidad)
-        std::vector<std::pair<int, float>> indexed_probs;
-        for (int i = 0; i < (int)probs.size(); i++) {
-            indexed_probs.push_back({i, probs[i]});
-        }
-        
-        // Ordenar por probabilidad descendente
-        std::sort(indexed_probs.begin(), indexed_probs.end(),
-                  [](const auto& a, const auto& b) { return a.second > b.second; });
-        
-        // Mostrar top 10
-        for (int i = 0; i < std::min(10, (int)indexed_probs.size()); i++) {
-            spdlog::info("  Clase {}: {:.4f} ({:.1f}%)", 
-                        indexed_probs[i].first, 
-                        indexed_probs[i].second,
-                        indexed_probs[i].second * 100);
-        }
-        debug_count2++;
-    }
-
-    // Gender prediction (primeras 2 clases)
-    float female_prob = probs.size() > 0 ? probs[0] : 0.0f;
-    float male_prob   = probs.size() > 1 ? probs[1] : 0.0f;
-    Gender gender = (male_prob > female_prob) ? Gender::MALE : Gender::FEMALE;
-    float gender_conf = std::max(female_prob, male_prob);
-
-    // ✅ NUEVO: Log género
-    static int debug_count3 = 0;
-    if (debug_count3 < 3) {
-        spdlog::info("🔍 DEBUG: Gender prediction:");
-        spdlog::info("  Female prob: {:.4f} ({:.1f}%)", female_prob, female_prob * 100);
-        spdlog::info("  Male prob: {:.4f} ({:.1f}%)", male_prob, male_prob * 100);
-        spdlog::info("  Predicted: {} (conf: {:.1f}%)", 
-                    gender_to_string(gender), gender_conf * 100);
-        debug_count3++;
-    }
-
-    // Age prediction (resto de clases desde índice 2)
-    int age_start = 2;
-    int max_idx = age_start;
-    float max_prob = (probs.size() > (size_t)age_start) ? probs[age_start] : 0.0f;
+    AgeGenderResult result;
+    result.age = predicted_age;
+    result.gender = gender;
+    result.age_confidence = max_age_prob;
+    result.gender_confidence = gender_conf;
     
-    for (size_t i = age_start; i < probs.size(); ++i) {
-        if (probs[i] > max_prob) {
-            max_prob = probs[i];
-            max_idx = static_cast<int>(i);
-        }
-    }
-    
-    int age = max_idx - age_start;
-
-    // ✅ NUEVO: Log edad
-    static int debug_count4 = 0;
-    if (debug_count4 < 3) {
-        spdlog::info("🔍 DEBUG: Age prediction:");
-        spdlog::info("  max_idx: {}", max_idx);
-        spdlog::info("  age_start: {}", age_start);
-        spdlog::info("  Calculated age: {} (max_idx - age_start)", age);
-        spdlog::info("  Age confidence: {:.4f} ({:.1f}%)", max_prob, max_prob * 100);
-        
-        // Mostrar distribución de edades (clases 2-11)
-        spdlog::info("  Age distribution (top classes):");
-        for (int i = age_start; i < std::min(age_start + 10, (int)probs.size()); i++) {
-            spdlog::info("    Clase {} (age {}): {:.4f}", i, i - age_start, probs[i]);
-        }
-        debug_count4++;
-    }
-
-    AgeGenderResult r;
-    r.age = age;
-    r.gender = gender;
-    r.age_confidence = max_prob;
-    r.gender_confidence = gender_conf;
-    
-    // ✅ NUEVO: Log resultado final
-    static int debug_count5 = 0;
-    if (debug_count5 < 3) {
-        spdlog::info("🔍 DEBUG: RESULTADO FINAL:");
-        spdlog::info("  Age: {}", r.age);
-        spdlog::info("  Gender: {}", gender_to_string(r.gender));
-        spdlog::info("  Age conf: {:.1f}%", r.age_confidence * 100);
-        spdlog::info("  Gender conf: {:.1f}%", r.gender_confidence * 100);
-        spdlog::info("========================================");
-        debug_count5++;
-    }
-    
-    return r;
+    return result;
 }
 
 std::vector<AgeGenderResult> AgeGenderPredictor::predict_batch(const std::vector<cv::Mat>& faces) {
