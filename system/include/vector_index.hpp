@@ -25,6 +25,8 @@
 #include <memory>
 #include <algorithm>
 #include <cmath>
+#include <random>
+#include <unordered_set>
 
 // ==================== STRUCTS ====================
 
