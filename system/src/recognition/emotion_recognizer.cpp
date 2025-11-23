@@ -1,5 +1,6 @@
 // ============= src/emotion_recognizer.cpp - FIXED =============
-#include "emotion_recognizer.hpp"
+// ============= src/recognition/emotion_recognizer.cpp =============
+#include "recognition/emotion_recognizer.hpp"  // ⭐ CAMBIO
 #include <spdlog/spdlog.h>
 #include <fstream>
 #include <algorithm>

@@ -1,3 +1,4 @@
+// ============= include/validation/model_validator.hpp =============
 #pragma once
 #include <string>
 #include <vector>
@@ -6,7 +7,7 @@
 #include <NvInferRuntime.h>
 #include <fstream>
 #include <spdlog/spdlog.h>
-#include "tensorrt_logger.hpp"
+#include "core/tensorrt_logger.hpp"  
 
 struct TensorInfo {
     std::string name;

@@ -1,9 +1,10 @@
-// ============= src/tracker.cpp =============
-#include "tracker.hpp"
-#include "detector_optimized.hpp"
+// ============= src/tracking/tracker.cpp =============
+// ============= src/tracking/tracker.cpp =============
+#include "tracking/tracker.hpp"              // ⭐ CAMBIO
+#include "detection/detector_optimized.hpp"  // ⭐ CAMBIO
 #include <spdlog/spdlog.h>
 #include <algorithm>
-#include <numeric>  // para std::iota
+#include <numeric>
 
 
 TrackedFace::TrackedFace() 

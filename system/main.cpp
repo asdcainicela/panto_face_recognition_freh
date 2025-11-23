@@ -1,15 +1,15 @@
 // ============= main.cpp - PRODUCTION VERSION =============
-#include "detector_optimized.hpp"
-#include "tracker.hpp"
-#include "recognizer.hpp"
-#include "emotion_recognizer.hpp"
-#include "age_gender_predictor.hpp"
-#include "face_database.hpp"
-#include "face_db_manager.hpp"
-#include "stream_capture.hpp"
-#include "utils.hpp"
-#include "draw_utils.hpp"
-#include "model_validator.hpp"
+#include "detection/detector_optimized.hpp"      // ⭐ CAMBIO
+#include "tracking/tracker.hpp"                  // ⭐ CAMBIO
+#include "recognition/recognizer.hpp"            // ⭐ CAMBIO
+#include "recognition/emotion_recognizer.hpp"    // ⭐ CAMBIO
+#include "recognition/age_gender_predictor.hpp"  // ⭐ CAMBIO
+#include "database/face_database.hpp"            // ⭐ CAMBIO
+#include "database/face_db_manager.hpp"          // ⭐ CAMBIO
+#include "streaming/stream_capture.hpp"          // ⭐ CAMBIO
+#include "core/utils.hpp"                        // ⭐ CAMBIO
+#include "core/draw_utils.hpp"                   // ⭐ CAMBIO
+#include "validation/model_validator.hpp"        // ⭐ CAMBIO (si lo usas)
 #include <spdlog/spdlog.h>
 #include <fstream>
 #include <map>

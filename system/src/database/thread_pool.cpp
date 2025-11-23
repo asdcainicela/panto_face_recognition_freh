@@ -1,5 +1,5 @@
 // ============= src/thread_pool.cpp =============
-#include "thread_pool.hpp"
+#include "database/thread_pool.hpp"  // ⭐ CAMBIO
 #include <spdlog/spdlog.h>
 
 ThreadPool::ThreadPool(size_t num_threads) {

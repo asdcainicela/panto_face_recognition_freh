@@ -57,13 +57,17 @@
  * FECHA: 2025
  */
 
-#include "detector_optimized.hpp"
-#include "cuda_kernels.h"
+// ============= src/detection/detector_optimized.cpp =============
+#include "detection/detector_optimized.hpp"  // ⭐ CAMBIO
+#include "detection/cuda_kernels.h"          // ⭐ CAMBIO
 #include <spdlog/spdlog.h>
 #include <algorithm>
 #include <cmath>
 #include <fstream>
 
+// ... resto del código
+
+// ... resto del código sin cambios
 constexpr int MIN_FACE_SIZE = 20;
 constexpr float MAX_FACE_RATIO = 0.9f;
 constexpr float MIN_ASPECT_RATIO = 0.4f;

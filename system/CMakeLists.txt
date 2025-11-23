@@ -1,4 +1,4 @@
-# ============= CMakeLists.txt - ACTUALIZADO =============
+# ============= CMakeLists.txt - ESTRUCTURA MODULAR =============
 
 cmake_minimum_required(VERSION 3.10)
 project(panto)
@@ -16,16 +16,20 @@ set(CMAKE_RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set(CMAKE_LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 set(CMAKE_ARCHIVE_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/lib)
 
+# ===== FIND PACKAGES =====
 find_package(OpenCV REQUIRED)
 find_package(spdlog REQUIRED)
 find_package(CUDA REQUIRED)
 find_package(SQLite3 REQUIRED)
 
+# ===== INCLUDE DIRECTORIES =====
+# ⭐ Esto permite usar #include "module/file.hpp"
 include_directories(${CUDA_INCLUDE_DIRS})
 include_directories(${OpenCV_INCLUDE_DIRS})
 include_directories(${SQLite3_INCLUDE_DIRS})
 include_directories(${CMAKE_SOURCE_DIR}/include)
 
+# ===== TENSORRT =====
 find_path(TENSORRT_INCLUDE_DIR NvInfer.h
     HINTS /usr/include/aarch64-linux-gnu /usr/include /usr/local/include /opt/tensorrt/include
 )
@@ -38,25 +42,9 @@ find_library(TENSORRT_PLUGIN_LIBRARY nvinfer_plugin
 find_library(TENSORRT_ONNX nvonnxparser
     HINTS /usr/lib/aarch64-linux-gnu /usr/lib /usr/local/lib /opt/tensorrt/lib
 )
-
 include_directories(${TENSORRT_INCLUDE_DIR})
 
-# ===== EXISTING LIBRARIES =====
-add_library(panto_utils SHARED src/utils.cpp)
-target_link_libraries(panto_utils ${OpenCV_LIBS} spdlog::spdlog)
-
-add_library(panto_draw SHARED src/draw_utils.cpp)
-target_link_libraries(panto_draw ${OpenCV_LIBS} spdlog::spdlog)
-
-add_library(panto_stream SHARED src/stream_capture.cpp)
-target_link_libraries(panto_stream 
-    panto_utils
-    panto_draw
-    ${OpenCV_LIBS}
-    spdlog::spdlog
-    pthread
-)
-
+# ===== CUDA SETUP =====
 set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}
     -O3
     -Xcompiler -fPIC
@@ -64,12 +52,34 @@ set(CUDA_NVCC_FLAGS ${CUDA_NVCC_FLAGS}
     --expt-relaxed-constexpr
 )
 
+# ===== CORE LIBRARIES =====
+
+add_library(panto_utils SHARED 
+    src/core/utils.cpp
+)
+target_link_libraries(panto_utils 
+    ${OpenCV_LIBS} 
+    spdlog::spdlog
+)
+
+add_library(panto_draw SHARED 
+    src/core/draw_utils.cpp
+)
+target_link_libraries(panto_draw 
+    ${OpenCV_LIBS} 
+    spdlog::spdlog
+)
+
+# ===== DETECTION MODULE =====
+
 cuda_add_library(panto_cuda_kernels STATIC
-    src/cuda_kernels.cu
+    src/detection/cuda_kernels.cu
     OPTIONS -Xcompiler -fPIC
 )
 
-add_library(panto_detector_opt SHARED src/detector_optimized.cpp)
+add_library(panto_detector_opt SHARED 
+    src/detection/detector_optimized.cpp
+)
 target_link_libraries(panto_detector_opt
     panto_cuda_kernels
     ${OpenCV_LIBS}
@@ -82,10 +92,21 @@ target_link_libraries(panto_detector_opt
     spdlog::spdlog
 )
 
-add_library(panto_tracker SHARED src/tracker.cpp)
-target_link_libraries(panto_tracker ${OpenCV_LIBS} spdlog::spdlog)
+# ===== TRACKING MODULE =====
 
-add_library(panto_recognizer SHARED src/recognizer.cpp)
+add_library(panto_tracker SHARED 
+    src/tracking/tracker.cpp
+)
+target_link_libraries(panto_tracker 
+    ${OpenCV_LIBS} 
+    spdlog::spdlog
+)
+
+# ===== RECOGNITION MODULE =====
+
+add_library(panto_recognizer SHARED 
+    src/recognition/recognizer.cpp
+)
 target_link_libraries(panto_recognizer
     panto_cuda_kernels
     ${OpenCV_LIBS}
@@ -97,7 +118,9 @@ target_link_libraries(panto_recognizer
     spdlog::spdlog
 )
 
-add_library(panto_emotion SHARED src/emotion_recognizer.cpp)
+add_library(panto_emotion SHARED 
+    src/recognition/emotion_recognizer.cpp
+)
 target_link_libraries(panto_emotion
     ${OpenCV_LIBS}
     ${CUDA_LIBRARIES}
@@ -108,7 +131,9 @@ target_link_libraries(panto_emotion
     spdlog::spdlog
 )
 
-add_library(panto_age_gender SHARED src/age_gender_predictor.cpp)
+add_library(panto_age_gender SHARED 
+    src/recognition/age_gender_predictor.cpp
+)
 target_link_libraries(panto_age_gender
     ${OpenCV_LIBS}
     ${CUDA_LIBRARIES}
@@ -119,18 +144,35 @@ target_link_libraries(panto_age_gender
     spdlog::spdlog
 )
 
-add_library(panto_database SHARED src/face_database.cpp)
-target_link_libraries(panto_database ${SQLite3_LIBRARIES} spdlog::spdlog)
+# ===== DATABASE MODULE =====
 
-# ===== NEW LIBRARIES (ENTERPRISE) =====
+add_library(panto_thread_pool SHARED 
+    src/database/thread_pool.cpp
+)
+target_link_libraries(panto_thread_pool 
+    pthread 
+    spdlog::spdlog
+)
 
-add_library(panto_thread_pool SHARED src/thread_pool.cpp)
-target_link_libraries(panto_thread_pool pthread spdlog::spdlog)
+add_library(panto_vector_index SHARED 
+    src/database/vector_index.cpp
+)
+target_link_libraries(panto_vector_index 
+    pthread 
+    spdlog::spdlog
+)
 
-add_library(panto_vector_index SHARED src/vector_index.cpp)
-target_link_libraries(panto_vector_index pthread spdlog::spdlog)
+add_library(panto_database SHARED 
+    src/database/face_database.cpp
+)
+target_link_libraries(panto_database 
+    ${SQLite3_LIBRARIES} 
+    spdlog::spdlog
+)
 
-add_library(panto_db_manager SHARED src/face_db_manager.cpp)
+add_library(panto_db_manager SHARED 
+    src/database/face_db_manager.cpp
+)
 target_link_libraries(panto_db_manager
     panto_thread_pool
     panto_vector_index
@@ -138,6 +180,19 @@ target_link_libraries(panto_db_manager
     ${OpenCV_LIBS}
     pthread
     spdlog::spdlog
+)
+
+# ===== STREAMING MODULE =====
+
+add_library(panto_stream SHARED 
+    src/streaming/stream_capture.cpp
+)
+target_link_libraries(panto_stream 
+    panto_utils
+    panto_draw
+    ${OpenCV_LIBS}
+    spdlog::spdlog
+    pthread
 )
 
 # ===== MAIN EXECUTABLE =====
@@ -153,9 +208,9 @@ target_link_libraries(panto
     panto_emotion
     panto_age_gender
     panto_database
-    panto_db_manager      # NEW
-    panto_thread_pool     # NEW
-    panto_vector_index    # NEW
+    panto_db_manager
+    panto_thread_pool
+    panto_vector_index
 )
 
 # ===== TEST EXECUTABLES =====
@@ -170,17 +225,16 @@ target_link_libraries(test_validator
 )
 
 add_executable(benchmark test/benchmark_detector.cpp)
-target_link_libraries(benchmark panto_detector_opt ${OpenCV_LIBS} spdlog::spdlog)
+target_link_libraries(benchmark 
+    panto_detector_opt 
+    ${OpenCV_LIBS} 
+    spdlog::spdlog
+)
 
 add_executable(test_recognizer test/test_recognizer.cpp)
-target_link_libraries(test_recognizer panto_recognizer ${OpenCV_LIBS} spdlog::spdlog)
-
-add_executable(register_face register_face.cpp)
-target_link_libraries(register_face
-    panto_detector_opt
-    panto_recognizer
-    panto_database
-    ${OpenCV_LIBS}
+target_link_libraries(test_recognizer 
+    panto_recognizer 
+    ${OpenCV_LIBS} 
     spdlog::spdlog
 )
 
@@ -196,19 +250,29 @@ install(TARGETS
     panto_emotion
     panto_age_gender
     panto_database
+    panto_db_manager
+    panto_thread_pool
+    panto_vector_index
     panto_cuda_kernels
-    panto_thread_pool       # NEW
-    panto_vector_index      # NEW
-    panto_db_manager        # NEW
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
 )
 
-install(TARGETS panto benchmark test_recognizer RUNTIME DESTINATION bin)
+install(TARGETS panto benchmark test_recognizer test_validator RUNTIME DESTINATION bin)
 install(FILES config.toml DESTINATION .)
 
+# ===== STATUS MESSAGES =====
+message(STATUS "=== PANTO Build Configuration ===")
 message(STATUS "opencv: ${OpenCV_VERSION}")
 message(STATUS "cuda: ${CUDA_VERSION} (sm_87)")
 message(STATUS "tensorrt: ${TENSORRT_LIBRARY}")
 message(STATUS "cublas: ${CUDA_CUBLAS_LIBRARIES}")
 message(STATUS "sqlite3: ${SQLite3_LIBRARIES}")
+message(STATUS "")
+message(STATUS "=== Module Organization ===")
+message(STATUS "Core: utils, draw_utils")
+message(STATUS "Detection: detector, cuda_kernels")
+message(STATUS "Tracking: tracker")
+message(STATUS "Recognition: recognizer, emotion, age_gender")
+message(STATUS "Database: face_db, db_manager, vector_index, thread_pool")
+message(STATUS "Streaming: stream_capture")

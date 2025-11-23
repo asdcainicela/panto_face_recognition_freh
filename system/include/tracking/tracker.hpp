@@ -21,13 +21,14 @@
  * FECHA: 2025
  */
 
+// ============= include/tracking/tracker.hpp =============
 #pragma once
 #include <opencv2/opencv.hpp>
 #include <opencv2/video/tracking.hpp>
 #include <vector>
 #include <string>
 
-struct Detection;
+struct Detection;  // Forward declaration
 
 struct TrackedFace {
     int id;

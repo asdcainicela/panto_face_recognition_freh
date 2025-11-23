@@ -28,9 +28,10 @@
  * - Batch write: 1000 rostros/segundo
  */
 
+// ============= include/database/face_db_manager.hpp =============
 #pragma once
-#include "thread_pool.hpp"
-#include "vector_index.hpp"
+#include "database/thread_pool.hpp"      // ⭐ CAMBIO
+#include "database/vector_index.hpp"     // ⭐ CAMBIO
 #include <string>
 #include <vector>
 #include <queue>
@@ -41,8 +42,6 @@
 #include <chrono>
 #include <sqlite3.h>
 #include <opencv2/opencv.hpp>
-
-// ==================== STRUCTS ====================
 
 struct FaceData {
     int track_id;

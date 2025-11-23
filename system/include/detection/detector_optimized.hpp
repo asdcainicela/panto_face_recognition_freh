@@ -1,4 +1,4 @@
-// ============= include/detector_optimized.hpp =============
+
 #pragma once
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/cuda.hpp>
@@ -14,8 +14,7 @@
 #include <NvInferRuntime.h>
 #include <cuda_runtime_api.h>
 
-#include "tensorrt_logger.hpp"
-
+#include "core/tensorrt_logger.hpp"  
 
 struct Detection {
     cv::Rect box;
@@ -23,10 +22,10 @@ struct Detection {
     cv::Point2f landmarks[5];
 };
 
-
 class FaceDetectorOptimized {
 private:
     panto::TensorRTLogger logger;
+    // ... resto sin cambios
     std::unique_ptr<nvinfer1::IRuntime> runtime;
     std::unique_ptr<nvinfer1::ICudaEngine> engine;
     std::unique_ptr<nvinfer1::IExecutionContext> context;

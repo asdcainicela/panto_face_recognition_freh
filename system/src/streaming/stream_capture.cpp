@@ -1,6 +1,6 @@
 // ============= src/stream_capture.cpp =============
-#include "stream_capture.hpp"
-#include "utils.hpp"
+#include "streaming/stream_capture.hpp"  // ⭐ CAMBIO
+#include "core/utils.hpp"                // ⭐ CAMBIO
 #include <spdlog/spdlog.h>
 #include <thread>
 

@@ -1,10 +1,12 @@
 // ============= src/recognizer.cpp =============
-#include "recognizer.hpp"
-#include "cuda_kernels.h"
+#include "recognition/recognizer.hpp"
+#include "detection/cuda_kernels.h"
 #include <spdlog/spdlog.h>
 #include <fstream>
 #include <cmath>
-#include <iostream>  // <-- para debug
+#include <iostream>
+
+// ... resto del código sin cambios
 
 
 // ==================== CONSTRUCTOR/DESTRUCTOR ====================

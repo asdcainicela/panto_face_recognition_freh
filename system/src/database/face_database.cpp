@@ -1,10 +1,12 @@
-// ============= src/face_database.cpp =============
-#include "face_database.hpp"
-#include "recognizer.hpp"
+// ============= src/database/face_database.cpp =============
+#include "database/face_database.hpp"  // ⭐ CAMBIO
+#include "recognition/recognizer.hpp"  // ⭐ CAMBIO
 #include <spdlog/spdlog.h>
 #include <cstring>
 #include <ctime>
 #include <filesystem>
+
+// ... resto del código
 
 // ==================== CONSTRUCTOR/DESTRUCTOR ====================
 

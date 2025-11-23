@@ -1,10 +1,12 @@
-// ============= src/vector_index.cpp =============
-#include "vector_index.hpp"
+// ============= src/database/vector_index.cpp =============
+#include "database/vector_index.hpp"  // ⭐ CAMBIO
 #include <spdlog/spdlog.h>
 #include <fstream>
 #include <random>
 #include <queue>
 #include <set>
+
+// ... resto del código
 
 VectorIndex::VectorIndex(int dim, int M, int ef_construction)
     : dim(dim), M(M), M0(M * 2), ef_construction(ef_construction), max_layer(0)
