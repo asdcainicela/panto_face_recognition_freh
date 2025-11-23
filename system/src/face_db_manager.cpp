@@ -22,42 +22,51 @@ FaceDatabaseManager::FaceDatabaseManager(const Config& config)
     
     index = std::make_unique<VectorIndex>(512, 16, 200);
     
-    if (std::ifstream(config.index_path).good()) {
-        spdlog::info("📂 Loading existing HNSW index...");
-        if (index->load(config.index_path)) {
-            spdlog::info("✓ Index loaded: {} vectors", index->size());
-        }
-    } else {
-        spdlog::info("📥 Building index from database...");
-        
-        const char* sql = "SELECT person_id, embedding FROM face_embeddings ORDER BY quality_score DESC";
-        sqlite3_stmt* stmt;
-        
-        if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
-            std::vector<std::pair<std::string, std::vector<float>>> vectors;
-            std::unordered_set<std::string> added;
-            
-            while (sqlite3_step(stmt) == SQLITE_ROW) {
-                std::string person_id = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
-                
-                if (added.find(person_id) != added.end()) continue;
-                added.insert(person_id);
-                
-                const unsigned char* blob = static_cast<const unsigned char*>(sqlite3_column_blob(stmt, 1));
-                int blob_size = sqlite3_column_bytes(stmt, 1);
-                
-                std::vector<float> emb(blob_size / sizeof(float));
-                std::memcpy(emb.data(), blob, blob_size);
-                
-                vectors.emplace_back(person_id, emb);
+    try {
+        if (std::ifstream(config.index_path).good()) {
+            spdlog::info("📂 Loading existing HNSW index...");
+            if (index->load(config.index_path)) {
+                spdlog::info("✓ Index loaded: {} vectors", index->size());
             }
+        } else {
+            spdlog::info("📥 Building index from database...");
             
-            sqlite3_finalize(stmt);
+            const char* sql = "SELECT person_id, embedding FROM face_embeddings ORDER BY quality_score DESC";
+            sqlite3_stmt* stmt;
             
-            spdlog::info("   Building index for {} persons...", vectors.size());
-            index->batch_insert(vectors);
-            spdlog::info("✓ Index built");
+            if (sqlite3_prepare_v2(db, sql, -1, &stmt, nullptr) == SQLITE_OK) {
+                std::vector<std::pair<std::string, std::vector<float>>> vectors;
+                std::unordered_set<std::string> added;
+                
+                while (sqlite3_step(stmt) == SQLITE_ROW) {
+                    std::string person_id = reinterpret_cast<const char*>(sqlite3_column_text(stmt, 0));
+                    
+                    if (added.find(person_id) != added.end()) continue;
+                    added.insert(person_id);
+                    
+                    const unsigned char* blob = static_cast<const unsigned char*>(sqlite3_column_blob(stmt, 1));
+                    int blob_size = sqlite3_column_bytes(stmt, 1);
+                    
+                    std::vector<float> emb(blob_size / sizeof(float));
+                    std::memcpy(emb.data(), blob, blob_size);
+                    
+                    vectors.emplace_back(person_id, emb);
+                }
+                
+                sqlite3_finalize(stmt);
+                
+                if (!vectors.empty()) {
+                    spdlog::info("   Building index for {} persons...", vectors.size());
+                    index->batch_insert(vectors);
+                    spdlog::info("✓ Index built");
+                } else {
+                    spdlog::info("   Empty database, starting fresh");
+                }
+            }
         }
+    } catch (const std::exception& e) {
+        spdlog::error("Index load error: {}", e.what());
+        spdlog::info("   Starting with empty index");
     }
     
     writer_pool = std::make_unique<ThreadPool>(config.writer_threads);
