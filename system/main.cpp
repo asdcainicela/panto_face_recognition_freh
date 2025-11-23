@@ -291,6 +291,10 @@ int main(int argc, char* argv[]) {
         if (mode_detect) {
             auto t1 = std::chrono::high_resolution_clock::now();
             auto dets = detector->detect(frame);
+            spdlog::info("Frame {} - Detections: {} - Preproc: {:.2f}ms Inference: {:.2f}ms", 
+                        frame_count, dets.size(), 
+                        detector->last_profile.preprocess_ms,
+                        detector->last_profile.inference_ms);
             auto t2 = std::chrono::high_resolution_clock::now();
             det_ms = std::chrono::duration<double, std::milli>(t2 - t1).count();
 
