@@ -1,3 +1,5 @@
+# ============= CMakeLists.txt - ACTUALIZADO =============
+
 cmake_minimum_required(VERSION 3.10)
 project(panto)
 
@@ -39,6 +41,7 @@ find_library(TENSORRT_ONNX nvonnxparser
 
 include_directories(${TENSORRT_INCLUDE_DIR})
 
+# ===== EXISTING LIBRARIES =====
 add_library(panto_utils SHARED src/utils.cpp)
 target_link_libraries(panto_utils ${OpenCV_LIBS} spdlog::spdlog)
 
@@ -66,10 +69,7 @@ cuda_add_library(panto_cuda_kernels STATIC
     OPTIONS -Xcompiler -fPIC
 )
 
-add_library(panto_detector_opt SHARED 
-    src/detector_optimized.cpp
-)
-
+add_library(panto_detector_opt SHARED src/detector_optimized.cpp)
 target_link_libraries(panto_detector_opt
     panto_cuda_kernels
     ${OpenCV_LIBS}
@@ -122,6 +122,26 @@ target_link_libraries(panto_age_gender
 add_library(panto_database SHARED src/face_database.cpp)
 target_link_libraries(panto_database ${SQLite3_LIBRARIES} spdlog::spdlog)
 
+# ===== NEW LIBRARIES (ENTERPRISE) =====
+
+add_library(panto_thread_pool SHARED src/thread_pool.cpp)
+target_link_libraries(panto_thread_pool pthread spdlog::spdlog)
+
+add_library(panto_vector_index SHARED src/vector_index.cpp)
+target_link_libraries(panto_vector_index pthread spdlog::spdlog)
+
+add_library(panto_db_manager SHARED src/face_db_manager.cpp)
+target_link_libraries(panto_db_manager
+    panto_thread_pool
+    panto_vector_index
+    ${SQLite3_LIBRARIES}
+    ${OpenCV_LIBS}
+    pthread
+    spdlog::spdlog
+)
+
+# ===== MAIN EXECUTABLE =====
+
 add_executable(panto main.cpp)
 target_link_libraries(panto
     panto_stream
@@ -133,7 +153,12 @@ target_link_libraries(panto
     panto_emotion
     panto_age_gender
     panto_database
+    panto_db_manager      # NEW
+    panto_thread_pool     # NEW
+    panto_vector_index    # NEW
 )
+
+# ===== TEST EXECUTABLES =====
 
 add_executable(test_validator test/test_validator.cpp)
 target_link_libraries(test_validator
@@ -159,6 +184,8 @@ target_link_libraries(register_face
     spdlog::spdlog
 )
 
+# ===== INSTALL =====
+
 install(TARGETS
     panto_utils
     panto_draw
@@ -170,6 +197,9 @@ install(TARGETS
     panto_age_gender
     panto_database
     panto_cuda_kernels
+    panto_thread_pool       # NEW
+    panto_vector_index      # NEW
+    panto_db_manager        # NEW
     LIBRARY DESTINATION lib
     ARCHIVE DESTINATION lib
 )
