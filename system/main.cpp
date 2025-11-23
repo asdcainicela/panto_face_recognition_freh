@@ -373,10 +373,14 @@ int main(int argc, char* argv[]) {
                             db_manager->request_match(f.id, emb, 
                                 [&f](const MatchResult& result) {
                                     f.is_recognized = true;
-                                    f.name = result.is_new_person ? 
-                                        "New_" + result.person_id.substr(2, 6) : 
-                                        result.name;
-                                    f.person_id = result.person_id;
+                                    
+                                    if (result.is_new_person || result.person_id.empty()) {
+                                        f.name = "Unknown";
+                                        f.person_id = "";
+                                    } else {
+                                        f.name = result.name.empty() ? result.person_id : result.name;
+                                        f.person_id = result.person_id;
+                                    }
                                 });
                         }
                     }
