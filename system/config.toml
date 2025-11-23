@@ -1,13 +1,10 @@
+# ============= config.toml - PRODUCTION VERSION =============
 
 [mode]
 # Modos de operación
-# Detección de rostros
 detect = true
-# Grabar video
 record = false
-# Mostrar en pantalla
 display = true
-# Reconocimiento facial (ArcFace)
 recognize = true
 
 # ===== CÁMARA =====
@@ -20,23 +17,19 @@ port = 554
 # ===== INPUT =====
 [input]
 # Opciones: "main", "sub", o ruta a video "videos/test.mp4"
-#source = "sub"
 source = "main"
+#source = "sub"
 #source = "videos/output/output_main_20251120_170436.mp4"
-#source = "run1.mp4"
-
 
 # Backend de captura para RTSP: "ffmpeg" (recomendado) o "gstreamer"
 #capture_backend = "ffmpeg"
 capture_backend = "gstreamer"
-
 
 # ===== DETECTOR (SCRFD) =====
 [detector]
 model_path = "models/scrfd_10g_bnkps.engine"
 conf_threshold = 0.3
 nms_threshold = 0.4
-  # CUDA preprocessing
 use_gpu_preprocessing = false
 
 # ===== RECOGNIZER (ArcFace) =====
@@ -45,23 +38,51 @@ model_path = "models/arcface_r100.engine"
 embedding_size = 512
 use_gpu_preprocessing = true
 # Umbral de similitud (0.0-1.0)
-# 0.5 = permisivo, 0.6 = default, 0.7 = estricto
-threshold = 0.6
+# 0.5 = muy permisivo
+# 0.6 = balanceado (RECOMENDADO)
+# 0.7 = estricto
+threshold = 0.60
 
+# ===== EMOTION =====
 [emotion]
 enabled = true
+# true = analizar cada N frames | false = analizar una sola vez
 use_interval = true
-# Cada 3 frames (120ms @ 25fps)
+# Cada cuántos frames analizar (si use_interval = true)
 analyze_interval = 1
 
+# ===== AGE/GENDER =====
 [age_gender]
 enabled = true
-# Actualizar periódicamente
+# true = analizar periódicamente | false = analizar una sola vez
 use_interval = true
-# Cada 30 frames (1.2s @ 25fps)
+# Cada cuántos frames actualizar (si use_interval = true)
 analyze_interval = 1
 
-# ===== DATABASE =====
+# ===== DATABASE MANAGER (NUEVO) =====
+[database_manager]
+# Ruta de la base de datos SQLite
+db_path = "database/faces_v3.db"
+# Ruta del índice HNSW (búsqueda vectorial)
+index_path = "database/faces.hnsw"
+# Umbral de similitud (debe coincidir con recognizer.threshold)
+match_threshold = 0.60
+# Calidad mínima para guardar rostros (0.0-1.0)
+quality_threshold = 0.50
+# Threads para escritura en DB (batch processing)
+writer_threads = 2
+# Threads para búsqueda de matches (similarity search)
+matcher_threads = 4
+# Tamaño del batch para escrituras
+batch_size = 50
+# Timeout en ms para flush de batch
+batch_timeout_ms = 3000
+# Auto-guardar índice periódicamente
+auto_save_index = true
+# Intervalo de guardado automático (segundos)
+auto_save_interval_sec = 300
+
+# ===== DATABASE (Legacy - Para compatibilidad) =====
 [database]
 path = "database/faces.db"
 backend = "sqlite"
@@ -74,7 +95,6 @@ display_height = 720
 draw_fps = true
 draw_detections = true
 draw_landmarks = true
-# Mostrar nombres reconocidos
 draw_names = true
 save_output = false
 output_dir = "videos/output"
@@ -83,14 +103,14 @@ video_fps = 25.0
 
 # ===== PERFORMANCE =====
 [performance]
+# FPS máximo objetivo (0 = sin límite)
 max_fps = 30
-# FPS objetivo (0 = sin límite)
-skip_frames = 0
 # Procesar 1 de cada N frames (0 = todos)
+skip_frames = 0
+# Intervalo para log de FPS
 fps_interval = 30
-# Intervalo de log
 
-# ===== ? CAPTURE THREAD =====
+# ===== CAPTURE THREAD =====
 [capture]
 # Configuración del thread de captura exclusivo
 # Máximo de frames en queue
@@ -100,4 +120,17 @@ max_errors_before_reconnect = 30
 # Máximo de fallos antes de abortar 
 max_consecutive_fails = 100
 # Fallos consecutivos para reconectar
-reconnect_threshold = 10   
+reconnect_threshold = 10
+
+# ===== ADVANCED TUNING =====
+[advanced]
+# Intervalo de guardado de rostros (nanosegundos)
+# 5000000000 = 5 segundos (no guardar el mismo rostro muy seguido)
+face_save_interval_ns = 5000000000
+
+# Tamaño mínimo de rostro para procesar (pixels)
+min_face_size = 40
+
+# Cache TTL para matches (milisegundos)
+# Evita búsquedas repetidas del mismo track
+match_cache_ttl_ms = 30000
