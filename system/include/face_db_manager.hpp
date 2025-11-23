@@ -83,19 +83,31 @@ using MatchCallback = std::function<void(const MatchResult&)>;
 class FaceDatabaseManager {
 public:
     struct Config {
-        std::string db_path = "database/faces_v3.db";
-        std::string index_path = "database/faces.hnsw";
-        float match_threshold = 0.60f;
-        float quality_threshold = 0.50f;
-        int writer_threads = 2;
-        int matcher_threads = 4;
-        int batch_size = 50;
-        int batch_timeout_ms = 3000;
-        bool auto_save_index = true;
-        int auto_save_interval_sec = 300;  // 5 min
+        std::string db_path;
+        std::string index_path;
+        float match_threshold;
+        float quality_threshold;
+        int writer_threads;
+        int matcher_threads;
+        int batch_size;
+        int batch_timeout_ms;
+        bool auto_save_index;
+        int auto_save_interval_sec;
+        
+        Config() 
+            : db_path("database/faces_v3.db"),
+              index_path("database/faces.hnsw"),
+              match_threshold(0.60f),
+              quality_threshold(0.50f),
+              writer_threads(2),
+              matcher_threads(4),
+              batch_size(50),
+              batch_timeout_ms(3000),
+              auto_save_index(true),
+              auto_save_interval_sec(300) {}
     };
     
-    explicit FaceDatabaseManager(const Config& config = Config{});
+    explicit FaceDatabaseManager(const Config& config = Config());
     ~FaceDatabaseManager();
     
     // ===== CORE API (THREAD-SAFE, NON-BLOCKING) =====
@@ -157,7 +169,7 @@ private:
     // ===== STORAGE =====
     sqlite3* db;
     std::unique_ptr<VectorIndex> index;
-    std::mutex db_mutex;  // SQLite no es thread-safe sin WAL
+    mutable std::mutex db_mutex;  // SQLite no es thread-safe sin WAL
     
     // ===== QUEUES =====
     struct WriteTask {
@@ -174,8 +186,8 @@ private:
     
     std::queue<WriteTask> write_queue;
     std::queue<MatchTask> match_queue;
-    std::mutex write_mutex;
-    std::mutex match_mutex;
+    mutable std::mutex write_mutex;
+    mutable std::mutex match_mutex;
     
     // ===== CACHE =====
     struct CachedMatch {
@@ -183,7 +195,7 @@ private:
         int64_t timestamp;
     };
     std::unordered_map<int, CachedMatch> match_cache;
-    std::mutex cache_mutex;
+    mutable std::mutex cache_mutex;
     static constexpr int CACHE_TTL_MS = 30000;  // 30 segundos
     
     // ===== STATS =====
@@ -206,7 +218,7 @@ private:
     // Writers
     void writer_supervisor_loop();
     void process_write_batch(std::vector<WriteTask>& batch);
-    std::string insert_or_update_person(const FaceData& face, bool is_new);
+    void insert_or_update_person(const FaceData& face, bool is_new, const std::string& person_id);
     std::string generate_person_id();
     
     // Matchers
