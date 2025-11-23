@@ -1,16 +1,16 @@
 // ============= src/detection/detector_optimized.cpp - FIXED SYNC =============
 /*
- * SCRFD Face Detector - TensorRT Optimized Implementation
+ * CORRECCIÓN CRÍTICA DE SINCRONIZACIÓN (2025-11-23)
  * 
- * OPTIMIZACIONES DE SINCRONIZACIÓN (2025-11-23):
- * ✅ Eliminar sincronizaciones innecesarias en preprocess_gpu()
- * ✅ Usar SOLO cv::cuda::Stream para operaciones OpenCV
- * ✅ Sincronizar UNA VEZ después de inference
- * ✅ Permitir operaciones asíncronas en pipeline GPU
+ * PROBLEMA IDENTIFICADO:
+ * - cv_stream (OpenCV) y stream (CUDA nativo) son diferentes streams
+ * - cudaMemcpyAsync con stream después de operaciones en cv_stream causaba race conditions
+ * - El video se pegaba porque las operaciones GPU no estaban sincronizadas
  * 
- * PROBLEMA RESUELTO:
- * - Video se quedaba pegado por exceso de sincronizaciones
- * - Ahora el stream fluye continuamente sin bloqueos
+ * SOLUCIÓN:
+ * ✅ Usar SOLO cv_stream para TODAS las operaciones asíncronas
+ * ✅ Sincronizar UNA VEZ después de preprocess_gpu() antes de inference
+ * ✅ Eliminar todas las sincronizaciones intermedias
  */
 
 #include "detection/detector_optimized.hpp"
@@ -26,7 +26,7 @@ constexpr float MIN_ASPECT_RATIO = 0.4f;
 constexpr float MAX_ASPECT_RATIO = 2.5f;
 constexpr float NMS_IOM_THRESHOLD = 0.8f;
 
-// ==================== SCRFD HELPERS ====================
+// ==================== SCRFD HELPERS (sin cambios) ====================
 
 static std::vector<std::vector<float>> generate_anchors_scrfd(
     int feat_h, int feat_w, int stride, int num_anchors) 
@@ -105,10 +105,12 @@ FaceDetectorOptimized::FaceDetectorOptimized(const std::string& engine_path,
         throw std::runtime_error("No se pudo cargar TensorRT engine");
     }
     
+    // ✅ CRÍTICO: Crear stream con prioridad alta
     int leastPriority, greatestPriority;
     cudaDeviceGetStreamPriorityRange(&leastPriority, &greatestPriority);
     cudaStreamCreateWithPriority(&stream, cudaStreamNonBlocking, greatestPriority);
     
+    // ✅ CRÍTICO: cv_stream debe wrappear el MISMO stream nativo
     cv_stream = cv::cuda::StreamAccessor::wrapStream(stream);
     
     if (use_gpu_preprocessing) {
@@ -123,7 +125,7 @@ FaceDetectorOptimized::FaceDetectorOptimized(const std::string& engine_path,
         spdlog::info("     - resized={:.1f}MB", resized_size / 1024.0 / 1024.0);
     }
     
-    spdlog::info("✓ [OPT] Detector optimizado listo (sync fixed)");
+    spdlog::info("✓ [OPT] Detector optimizado listo (sync fixed v2)");
 }
 
 FaceDetectorOptimized::~FaceDetectorOptimized() {
@@ -135,7 +137,7 @@ FaceDetectorOptimized::~FaceDetectorOptimized() {
     if (stream) cudaStreamDestroy(stream);
 }
 
-// ==================== LOAD ENGINE ====================
+// ==================== LOAD ENGINE (sin cambios) ====================
 
 bool FaceDetectorOptimized::loadEngine(const std::string& engine_path) {
     std::ifstream file(engine_path, std::ios::binary);
@@ -192,7 +194,7 @@ bool FaceDetectorOptimized::loadEngine(const std::string& engine_path) {
     return true;
 }
 
-// ==================== PREPROCESSING ====================
+// ==================== PREPROCESSING (CPU - sin cambios) ====================
 
 cv::Mat FaceDetectorOptimized::preprocess_cpu(const cv::Mat& img) {
     cv::Mat resized, normalized;
@@ -205,8 +207,14 @@ cv::Mat FaceDetectorOptimized::preprocess_cpu(const cv::Mat& img) {
     return normalized;
 }
 
+// ==================== PREPROCESSING (GPU - FIXED) ====================
+
 void FaceDetectorOptimized::preprocess_gpu(const cv::Mat& img) {
-    // ✅ OPTIMIZACIÓN: Operaciones asíncronas sin sincronizaciones intermedias
+    /* ✅ CORRECCIÓN CRÍTICA:
+     * - Usar SOLO cv_stream para TODAS las operaciones
+     * - cv_stream wrappea el stream nativo, garantizando orden de ejecución
+     * - NO sincronizar aquí - dejar que el pipeline fluya
+     */
     
     // 1. Upload to GPU (usa cv_stream)
     gpu_input.upload(img, cv_stream);
@@ -216,37 +224,31 @@ void FaceDetectorOptimized::preprocess_gpu(const cv::Mat& img) {
                      cv::Size(input_width, input_height), 
                      0, 0, cv::INTER_LINEAR, cv_stream);
     
-    // ❌ REMOVIDO: cv_stream.waitForCompletion();
-    // ✅ Dejar que las operaciones fluyan asíncronamente
+    // 3. ✅ CORRECCIÓN: Obtener el stream nativo desde cv_stream
+    cudaStream_t native_stream = cv::cuda::StreamAccessor::getStream(cv_stream);
     
-    // 3. Copy resized image to d_resized_buffer (usa stream nativo)
+    // 4. Copy resized image (usa el mismo stream)
     cudaMemcpyAsync(
         d_resized_buffer, 
         gpu_resized.data, 
         input_width * input_height * 3,
         cudaMemcpyDeviceToDevice, 
-        stream  // ✅ Stream nativo de CUDA (compatible con cv_stream)
+        native_stream  // ✅ Mismo stream = orden garantizado
     );
     
-    // ❌ REMOVIDO: cudaStreamSynchronize(stream);
-    
-    // 4. Normalize using CUDA kernel (usa stream nativo)
+    // 5. Normalize using CUDA kernel (usa el mismo stream)
     cuda_normalize_imagenet(
         static_cast<const unsigned char*>(d_resized_buffer),
         static_cast<float*>(buffers[input_index]),
         input_width, 
         input_height, 
-        stream
+        native_stream  // ✅ Mismo stream = orden garantizado
     );
     
-    // ❌ REMOVIDO: cudaStreamSynchronize(stream);
-    // ✅ La sincronización se hace DESPUÉS de enqueueV3()
-    
-    // ⚠️ NOTA: No sincronizar aquí permite que el pipeline GPU fluya
-    //          TensorRT manejará la sincronización internamente en enqueueV3()
+    // ❌ NO sincronizar aquí - dejar fluir el pipeline
 }
 
-// ==================== DETECTION ====================
+// ==================== DETECTION (FIXED) ====================
 
 std::vector<Detection> FaceDetectorOptimized::detect(const cv::Mat& img) {
     cv::Size orig_size = img.size();
@@ -255,7 +257,12 @@ std::vector<Detection> FaceDetectorOptimized::detect(const cv::Mat& img) {
     
     if (use_gpu_preprocessing) {
         preprocess_gpu(img);
-        // ✅ NO sincronizar aquí - dejar fluir el pipeline
+        
+        // ✅ CRÍTICO: Sincronizar UNA VEZ después de todas las operaciones GPU
+        // Esto garantiza que gpu_input.upload(), resize(), memcpy() y normalize()
+        // hayan terminado antes de que TensorRT acceda a los datos
+        cudaStreamSynchronize(stream);
+        
     } else {
         cv::Mat input_blob = preprocess_cpu(img);
         
@@ -273,16 +280,23 @@ std::vector<Detection> FaceDetectorOptimized::detect(const cv::Mat& img) {
         cudaMemcpyAsync(buffers[input_index], input_data.data(), 
                        input_data.size() * sizeof(float),
                        cudaMemcpyHostToDevice, stream);
+        
+        // Sincronizar después de memcpy
+        cudaStreamSynchronize(stream);
     }
     
     auto t1 = std::chrono::high_resolution_clock::now();
     last_profile.preprocess_ms = 
         std::chrono::duration<double, std::milli>(t1 - t0).count();
     
-    // ✅ TensorRT inference (sincroniza internamente el stream)
-    context->enqueueV3(stream);
+    // ✅ TensorRT inference (ya sincronizado)
+    bool ok = context->enqueueV3(stream);
+    if (!ok) {
+        spdlog::error("❌ TensorRT enqueue failed");
+        return {};
+    }
     
-    // ✅ Sincronizar UNA VEZ después de inference
+    // ✅ Sincronizar después de inference
     cudaStreamSynchronize(stream);
     
     auto t2 = std::chrono::high_resolution_clock::now();
@@ -305,7 +319,7 @@ std::vector<Detection> FaceDetectorOptimized::detect(const cv::Mat& img) {
                        size * sizeof(float), cudaMemcpyDeviceToHost, stream);
     }
     
-    // ✅ Sincronizar SOLO después de copiar outputs
+    // ✅ Sincronizar después de copiar outputs
     cudaStreamSynchronize(stream);
     
     auto result = postprocess_scrfd(outputs, orig_size);
@@ -320,7 +334,7 @@ std::vector<Detection> FaceDetectorOptimized::detect(const cv::Mat& img) {
     return result;
 }
 
-// ==================== POSTPROCESSING ====================
+// ==================== POSTPROCESSING (sin cambios) ====================
 
 std::vector<Detection> FaceDetectorOptimized::postprocess_scrfd(
     const std::vector<std::vector<float>>& outputs,
