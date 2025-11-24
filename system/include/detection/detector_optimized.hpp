@@ -1,4 +1,3 @@
-
 #pragma once
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/cuda.hpp>
@@ -14,7 +13,7 @@
 #include <NvInferRuntime.h>
 #include <cuda_runtime_api.h>
 
-#include "core/tensorrt_logger.hpp"  
+#include "core/tensorrt_logger.hpp"
 
 struct Detection {
     cv::Rect box;
@@ -22,20 +21,41 @@ struct Detection {
     cv::Point2f landmarks[5];
 };
 
+// ✅ NUEVO: Triple Buffer para pipeline asíncrono
+struct TripleBuffer {
+    void* buffer[3];
+    cudaEvent_t event[3];
+    int current_idx = 0;
+    
+    void init(size_t size);
+    void cleanup();
+    void* get_current();
+    cudaEvent_t get_event();
+    void rotate();
+};
+
 class FaceDetectorOptimized {
 private:
     panto::TensorRTLogger logger;
-    // ... resto sin cambios
     std::unique_ptr<nvinfer1::IRuntime> runtime;
     std::unique_ptr<nvinfer1::ICudaEngine> engine;
     std::unique_ptr<nvinfer1::IExecutionContext> context;
     
     // GPU buffers
     void* buffers[10];
-    void* d_input_buffer;      // Input tensor en GPU (float)
-    void* d_resized_buffer;    // Buffer para imagen resized (unsigned char)
-    cudaStream_t stream;       // CUDA stream nativo (para TensorRT)
-    cv::cuda::Stream cv_stream; // OpenCV CUDA stream wrapper
+    void* d_input_buffer;      // Legacy (no usado con triple buffer)
+    void* d_resized_buffer;    // Legacy (no usado con triple buffer)
+    
+    // ✅ NUEVO: Triple buffers para pipeline asíncrono
+    TripleBuffer triple_input;
+    TripleBuffer triple_resized;
+    
+    cudaStream_t stream;
+    cv::cuda::Stream cv_stream;
+    
+    // ✅ NUEVO: Events para timing sin sync
+    cudaEvent_t event_preprocess_done;
+    cudaEvent_t event_inference_done;
     
     // GPU preprocessing buffers
     cv::cuda::GpuMat gpu_input;
@@ -55,7 +75,10 @@ private:
     bool use_gpu_preprocessing = true;
     
     cv::Mat preprocess_cpu(const cv::Mat& img);
-    void preprocess_gpu(const cv::Mat& img);
+    
+    // ✅ NUEVO: Preprocessing completamente asíncrono
+    void preprocess_gpu_async(const cv::Mat& img);
+    
     std::vector<Detection> postprocess_scrfd(
         const std::vector<std::vector<float>>& outputs,
         const cv::Size& orig_size);
