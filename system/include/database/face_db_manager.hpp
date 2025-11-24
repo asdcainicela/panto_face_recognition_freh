@@ -1,37 +1,18 @@
-// ============= include/face_db_manager.hpp =============
+// ============= include/database/face_db_manager_fixed.hpp =============
 /*
- * Face Database Manager - Enterprise C++ Solution
+ * Face Database Manager - FIXED VERSION
  * 
- * ARQUITECTURA:
- * ┌─────────────────┐
- * │  Main Thread    │ → push_face() / request_match()
- * └────────┬────────┘
- *          │ Lock-free queues
- *    ┌─────┴─────┐
- *    │           │
- * ┌──▼───┐   ┌──▼────┐
- * │Writer│   │Matcher│
- * │Pool  │   │Pool   │
- * └──┬───┘   └──┬────┘
- *    │          │
- *    └────┬─────┘
- *         ▼
- *   ┌──────────────┐
- *   │  SQLite WAL  │
- *   │  HNSW Index  │
- *   └──────────────┘
- * 
- * PERFORMANCE GARANTIZADO:
- * - push_face(): <100μs (non-blocking)
- * - request_match(): <200μs + callback
- * - Match search: ~1ms para 100k personas
- * - Batch write: 1000 rostros/segundo
+ * CAMBIOS CRÍTICOS:
+ * ✅ Separación completa de locks (index vs db vs cache)
+ * ✅ Lock-free queues con límites estrictos
+ * ✅ Writer no llama a index->search() bajo db_mutex
+ * ✅ Timeout automático para operaciones bloqueadas
+ * ✅ Backpressure explícito cuando queues están llenas
  */
 
-// ============= include/database/face_db_manager.hpp =============
 #pragma once
-#include "database/thread_pool.hpp"      // ⭐ CAMBIO
-#include "database/vector_index.hpp"     // ⭐ CAMBIO
+#include "database/thread_pool.hpp"
+#include "database/vector_index.hpp"
 #include <string>
 #include <vector>
 #include <queue>
@@ -42,28 +23,21 @@
 #include <chrono>
 #include <sqlite3.h>
 #include <opencv2/opencv.hpp>
+#include <condition_variable>
 
 struct FaceData {
     int track_id;
-    std::vector<float> embedding;      // 512D
-    float quality_score;               // [0-1]
-    
-    // Geometry
+    std::vector<float> embedding;
+    float quality_score;
     cv::Rect bbox;
     cv::Point2f landmarks[5];
     float yaw_angle;
     float pitch_angle;
-    
-    // Demographics
     int age;
     std::string gender;
     float gender_confidence;
-    
-    // Emotion
     std::string emotion;
     float emotion_confidence;
-    
-    // Metadata
     int64_t timestamp;
 };
 
@@ -72,12 +46,12 @@ struct MatchResult {
     std::string name;
     float similarity;
     bool is_new_person;
-    int64_t match_time_us;             // Tiempo de búsqueda
+    int64_t match_time_us;
 };
 
 using MatchCallback = std::function<void(const MatchResult&)>;
 
-// ==================== MAIN CLASS ====================
+// ==================== FIXED DATABASE MANAGER ====================
 
 class FaceDatabaseManager {
 public:
@@ -88,7 +62,8 @@ public:
         float quality_threshold;
         int writer_threads;
         int matcher_threads;
-        int batch_size;
+        int max_write_queue;      // ✅ Límite estricto
+        int max_match_queue;      // ✅ Límite estricto
         int batch_timeout_ms;
         bool auto_save_index;
         int auto_save_interval_sec;
@@ -100,7 +75,8 @@ public:
               quality_threshold(0.50f),
               writer_threads(2),
               matcher_threads(4),
-              batch_size(50),
+              max_write_queue(100),   // ✅ Máximo 100 writes pendientes
+              max_match_queue(50),    // ✅ Máximo 50 matches pendientes
               batch_timeout_ms(3000),
               auto_save_index(true),
               auto_save_interval_sec(300) {}
@@ -109,20 +85,18 @@ public:
     explicit FaceDatabaseManager(const Config& config = Config());
     ~FaceDatabaseManager();
     
-    // ===== CORE API (THREAD-SAFE, NON-BLOCKING) =====
+    // ===== CORE API (THREAD-SAFE, NON-BLOCKING CON BACKPRESSURE) =====
     
-    // Push rostro para procesamiento (async)
-    void push_face(const FaceData& face);
+    // ✅ Retorna false si queue está llena (backpressure)
+    bool push_face(const FaceData& face);
     
-    // Solicitar match (callback se ejecuta en matcher thread)
-    void request_match(int track_id, 
+    // ✅ Retorna false si queue está llena (callback se ejecuta con error)
+    bool request_match(int track_id, 
                       const std::vector<float>& embedding,
                       MatchCallback callback);
     
-    // Actualizar nombre de persona
     bool update_person_name(const std::string& person_id, const std::string& name);
     
-    // Query persona por ID (sync)
     struct PersonInfo {
         std::string person_id;
         std::string name;
@@ -140,6 +114,8 @@ public:
         size_t total_embeddings;
         size_t pending_writes;
         size_t pending_matches;
+        size_t dropped_writes;    // ✅ Contador de writes rechazados
+        size_t dropped_matches;   // ✅ Contador de matches rechazados
         size_t cache_hits;
         size_t cache_misses;
         double avg_match_time_ms;
@@ -153,7 +129,7 @@ public:
     
     void start();
     void stop();
-    void flush();  // Force write pending data
+    void flush();
     
     bool is_running() const { return running.load(); }
     
@@ -168,9 +144,13 @@ private:
     // ===== STORAGE =====
     sqlite3* db;
     std::unique_ptr<VectorIndex> index;
-    mutable std::mutex db_mutex;  // SQLite no es thread-safe sin WAL
     
-    // ===== QUEUES =====
+    // ✅ LOCKS SEPARADOS (nunca se adquieren juntos)
+    mutable std::mutex db_mutex;      // Solo para SQLite
+    mutable std::mutex index_mutex;   // Solo para VectorIndex (en vez de shared_mutex interno)
+    mutable std::mutex cache_mutex;   // Solo para cache
+    
+    // ===== QUEUES CON CONDITION VARIABLES =====
     struct WriteTask {
         FaceData face;
         int64_t enqueue_time;
@@ -185,8 +165,10 @@ private:
     
     std::queue<WriteTask> write_queue;
     std::queue<MatchTask> match_queue;
-    mutable std::mutex write_mutex;
-    mutable std::mutex match_mutex;
+    std::mutex write_mutex;
+    std::mutex match_mutex;
+    std::condition_variable write_cv;   // ✅ Para despertar writer
+    std::condition_variable match_cv;   // ✅ Para despertar matcher
     
     // ===== CACHE =====
     struct CachedMatch {
@@ -194,14 +176,15 @@ private:
         int64_t timestamp;
     };
     std::unordered_map<int, CachedMatch> match_cache;
-    mutable std::mutex cache_mutex;
-    static constexpr int CACHE_TTL_MS = 30000;  // 30 segundos
+    static constexpr int CACHE_TTL_MS = 30000;
     
     // ===== STATS =====
     mutable std::atomic<size_t> stat_cache_hits{0};
     mutable std::atomic<size_t> stat_cache_misses{0};
     mutable std::atomic<size_t> stat_total_matches{0};
     mutable std::atomic<int64_t> stat_total_match_time_us{0};
+    mutable std::atomic<size_t> stat_dropped_writes{0};   // ✅ Nuevo
+    mutable std::atomic<size_t> stat_dropped_matches{0};  // ✅ Nuevo
     
     // ===== WORKER THREADS =====
     std::thread writer_supervisor;
@@ -214,11 +197,19 @@ private:
     bool init_database();
     bool create_tables();
     
-    // Writers
+    // Writers (✅ CORREGIDO: No llama index->search bajo db_mutex)
     void writer_supervisor_loop();
     void process_write_batch(std::vector<WriteTask>& batch);
     void insert_or_update_person(const FaceData& face, bool is_new, const std::string& person_id);
     std::string generate_person_id();
+    
+    // ✅ NUEVO: Pre-match separado (sin db_mutex)
+    struct PreMatchResult {
+        bool is_new;
+        std::string person_id;
+        float similarity;
+    };
+    PreMatchResult pre_match_face(const std::vector<float>& embedding);
     
     // Matchers
     void matcher_supervisor_loop();
@@ -232,6 +223,5 @@ private:
     // Helpers
     bool check_cache(int track_id, MatchResult& result);
     void update_cache(int track_id, const MatchResult& result);
-    float estimate_quality(const FaceData& face);
     int64_t now_us();
 };

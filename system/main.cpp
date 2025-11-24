@@ -216,8 +216,15 @@ int main(int argc, char* argv[]) {
                 db_config.batch_size = 50;
                 db_config.batch_timeout_ms = 3000;
                 db_config.auto_save_index = true;
+                db_config.max_write_queue = 100;   // ✅ Límite estricto
+                db_config.max_match_queue = 50;    // ✅ Límite estricto
                 
                 db_manager = std::make_unique<FaceDatabaseManager>(db_config);
+                
+                // Verificar si write fue aceptado
+                if (!db_manager->push_face(face_data)) {
+                    spdlog::warn("⚠️ Face dropped (queue full or low quality)");
+                }
                 db_manager->start();
             }
 
@@ -528,6 +535,15 @@ int main(int argc, char* argv[]) {
                         stats.total_persons, stats.pending_writes, stats.pending_matches,
                         stats.cache_hits, stats.cache_hits + stats.cache_misses);
         }
+
+        if (frame_count % 300 == 0) {
+            auto stats = db_manager->get_stats();
+            if (stats.dropped_writes > 0 || stats.dropped_matches > 0) {
+                spdlog::warn("⚠️ Backpressure: {} writes + {} matches dropped",
+                            stats.dropped_writes, stats.dropped_matches);
+            }
+        }
+
     }
 
     if (db_manager) {
