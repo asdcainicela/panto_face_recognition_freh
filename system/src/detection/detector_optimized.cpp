@@ -29,40 +29,34 @@ constexpr float MIN_ASPECT_RATIO = 0.4f;
 constexpr float MAX_ASPECT_RATIO = 2.5f;
 constexpr float NMS_IOM_THRESHOLD = 0.8f;
 
-// ==================== TRIPLE BUFFER MANAGER ====================
-struct TripleBuffer {
-    void* buffer[3];
-    cudaEvent_t event[3];
-    int current_idx = 0;
-    
-    void init(size_t size) {
-        for (int i = 0; i < 3; i++) {
-            cudaMalloc(&buffer[i], size);
-            cudaEventCreate(&event[i]);
-        }
+// ==================== TRIPLE BUFFER IMPLEMENTATION ====================
+void TripleBuffer::init(size_t size) {
+    for (int i = 0; i < 3; i++) {
+        cudaMalloc(&buffer[i], size);
+        cudaEventCreate(&event[i]);
     }
-    
-    void cleanup() {
-        for (int i = 0; i < 3; i++) {
-            if (buffer[i]) cudaFree(buffer[i]);
-            if (event[i]) cudaEventDestroy(event[i]);
-        }
-    }
-    
-    void* get_current() {
-        return buffer[current_idx];
-    }
-    
-    cudaEvent_t get_event() {
-        return event[current_idx];
-    }
-    
-    void rotate() {
-        current_idx = (current_idx + 1) % 3;
-    }
-};
+}
 
-// ==================== SCRFD HELPERS (sin cambios) ====================
+void TripleBuffer::cleanup() {
+    for (int i = 0; i < 3; i++) {
+        if (buffer[i]) cudaFree(buffer[i]);
+        if (event[i]) cudaEventDestroy(event[i]);
+    }
+}
+
+void* TripleBuffer::get_current() {
+    return buffer[current_idx];
+}
+
+cudaEvent_t TripleBuffer::get_event() {
+    return event[current_idx];
+}
+
+void TripleBuffer::rotate() {
+    current_idx = (current_idx + 1) % 3;
+}
+
+// ==================== SCRFD HELPERS ====================
 
 static std::vector<std::vector<float>> generate_anchors_scrfd(
     int feat_h, int feat_w, int stride, int num_anchors) 
@@ -187,7 +181,7 @@ FaceDetectorOptimized::~FaceDetectorOptimized() {
     if (stream) cudaStreamDestroy(stream);
 }
 
-// ==================== LOAD ENGINE (sin cambios) ====================
+// ==================== LOAD ENGINE ====================
 
 bool FaceDetectorOptimized::loadEngine(const std::string& engine_path) {
     std::ifstream file(engine_path, std::ios::binary);
@@ -244,7 +238,7 @@ bool FaceDetectorOptimized::loadEngine(const std::string& engine_path) {
     return true;
 }
 
-// ==================== PREPROCESSING CPU (sin cambios) ====================
+// ==================== PREPROCESSING CPU ====================
 
 cv::Mat FaceDetectorOptimized::preprocess_cpu(const cv::Mat& img) {
     cv::Mat resized, normalized;
@@ -417,7 +411,7 @@ std::vector<Detection> FaceDetectorOptimized::detect(const cv::Mat& img) {
     return result;
 }
 
-// ==================== POSTPROCESSING (sin cambios) ====================
+// ==================== POSTPROCESSING ====================
 
 std::vector<Detection> FaceDetectorOptimized::postprocess_scrfd(
     const std::vector<std::vector<float>>& outputs,
