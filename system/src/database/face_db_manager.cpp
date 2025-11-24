@@ -1,5 +1,5 @@
 // ============= src/database/face_db_manager_fixed.cpp =============
-#include "database/face_db_manager_fixed.hpp"
+#include "database/face_db_manager.hpp"
 #include <spdlog/spdlog.h>
 #include <random>
 #include <sstream>
