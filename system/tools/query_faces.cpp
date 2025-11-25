@@ -4,6 +4,9 @@
  * 
  * EJEMPLOS DE USO:
  * 
+ *
+  ./build/bin/query_faces  logs/faces/freh.db --recent 5
+
  * ./query_faces faces_20251124_143052.db --stats
  * ./query_faces faces.db --recent 10
  * ./query_faces faces.db --gender Male --age-range 25 35

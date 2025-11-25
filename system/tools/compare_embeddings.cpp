@@ -6,6 +6,8 @@
  *   g++ -std=c++17 compare_embeddings.cpp -o compare_embeddings -lsqlite3 -O3
  * 
  * USO:
+ ./build/bin/compare_embeddings  logs/faces/freh.db --threshold 0.5 # usar esto
+
  *   ./compare_embeddings freh.db --threshold 0.70
  *   ./compare_embeddings freh.db --threshold 0.75 --verbose
  *   ./compare_embeddings freh.db --export unique_persons.txt
