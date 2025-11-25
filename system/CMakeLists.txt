@@ -122,8 +122,7 @@ target_link_libraries(panto_age_gender
 add_library(panto_database SHARED src/face_database.cpp)
 target_link_libraries(panto_database ${SQLite3_LIBRARIES} spdlog::spdlog)
 
-# ✅ NUEVO: Face Logger SQLite (header-only, no necesita compilar .cpp)
-# La implementación está en el header
+# ✅ Face Logger SQLite (header-only, no necesita compilar .cpp)
 
 add_executable(panto main.cpp)
 target_link_libraries(panto
@@ -136,7 +135,7 @@ target_link_libraries(panto
     panto_emotion
     panto_age_gender
     panto_database
-    ${SQLite3_LIBRARIES}  # ✅ NUEVO: Agregar SQLite3
+    ${SQLite3_LIBRARIES}
 )
 
 add_executable(test_validator test/test_validator.cpp)
@@ -163,11 +162,17 @@ target_link_libraries(register_face
     spdlog::spdlog
 )
 
-# ✅ NUEVO: Utilidad para consultar la base de datos
+# ✅ Utilidad para consultar la base de datos
 add_executable(query_faces tools/query_faces.cpp)
 target_link_libraries(query_faces
     ${SQLite3_LIBRARIES}
     spdlog::spdlog
+)
+
+# ✅ NUEVO: Comparador de embeddings para identificar personas únicas
+add_executable(compare_embeddings tools/compare_embeddings.cpp)
+target_link_libraries(compare_embeddings
+    ${SQLite3_LIBRARIES}
 )
 
 install(TARGETS
@@ -185,7 +190,7 @@ install(TARGETS
     ARCHIVE DESTINATION lib
 )
 
-install(TARGETS panto benchmark test_recognizer query_faces RUNTIME DESTINATION bin)
+install(TARGETS panto benchmark test_recognizer query_faces compare_embeddings RUNTIME DESTINATION bin)
 install(FILES config.toml DESTINATION .)
 
 message(STATUS "opencv: ${OpenCV_VERSION}")
