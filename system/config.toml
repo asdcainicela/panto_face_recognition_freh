@@ -4,7 +4,7 @@
 # Detección de rostros
 detect = true
 # Grabar video
-record = false
+record = true
 # Mostrar en pantalla
 display = true
 # Reconocimiento facial (ArcFace)

@@ -8,7 +8,7 @@
  *   "timestamp": "2025-11-24 14:30:52.123",
  *   "age": 35,
  *   "gender": "Male",
- *   "company": "Alma",
+ *   "company": "Freh",
  *   "emotion": "Happy",
  *   "embedding": [0.123, -0.456, 0.789, ...]  // 512 valores
  * }
@@ -34,7 +34,7 @@ struct FaceLogEntry {
     std::string timestamp;               // Timestamp
     int age;                             // Edad
     std::string gender;                  // "Male" o "Female"
-    std::string company;                 // "Alma"
+    std::string company;                 // "Freh"
     std::string emotion;                 // Emoción
     std::vector<float> embedding;        // 512 valores del rostro
     

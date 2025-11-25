@@ -375,7 +375,7 @@ int main(int argc, char* argv[]) {
                         FaceLogEntry entry;
                         entry.age = (face.age_years > 0) ? face.age_years : 25; // default
                         entry.gender = (!face.gender.empty()) ? face.gender : "Unknown";
-                        entry.company = "Alma";
+                        entry.company = "Freh";
                         entry.emotion = (!face.emotion.empty()) ? face.emotion : "Unknown";
                         
                         // Extraer embedding SI NO LO TIENE
