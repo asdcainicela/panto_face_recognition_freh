@@ -1,5 +1,5 @@
 // ============= test/test_recognizer.cpp =============
-#include "recognition/recognizer.hpp"  // ⭐ CAMBIO
+#include "recognizer.hpp"
 #include <spdlog/spdlog.h>
 #include <opencv2/opencv.hpp>
 #include <chrono>

@@ -9,7 +9,7 @@
 //   ./test_validator config.toml
 //
 
-#include "validation/model_validator.hpp"  // ⭐ CAMBIO
+#include "model_validator.hpp"
 #include <spdlog/spdlog.h>
 #include <fstream>
 #include <map>

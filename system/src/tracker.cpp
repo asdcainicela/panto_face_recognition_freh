@@ -1,24 +1,22 @@
-// ============= src/tracking/tracker.cpp =============
-// ============= src/tracking/tracker.cpp =============
-#include "tracking/tracker.hpp"              // ⭐ CAMBIO
-#include "detection/detector_optimized.hpp"  // ⭐ CAMBIO
+// ============= src/tracker.cpp =============
+#include "tracker.hpp"
+#include "detector_optimized.hpp"
 #include <spdlog/spdlog.h>
 #include <algorithm>
-#include <numeric>
+#include <numeric>  // <-- AGREGAR ESTE INCLUDE para std::iota
 
+// ==================== TrackedFace ====================
 
 TrackedFace::TrackedFace() 
     : id(-1), confidence(0.0f), age(0), hits(0), 
       time_since_update(0), kf_initialized(false),
       is_recognized(false), name("Unknown"),
-      emotion("Unknown"), emotion_confidence(0.0f),
-      age_years(0), gender("Unknown"), gender_confidence(0.0f),
-      best_quality(0.0f), person_id("")
+      emotion("Unknown"), emotion_confidence(0.0f),      // ✅ NUEVO
+      age_years(0), gender("Unknown"), gender_confidence(0.0f)  // ✅ NUEVO
 {
     for (int i = 0; i < 5; i++) {
         landmarks[i] = cv::Point2f(0, 0);
     }
-    embedding.clear();
 }
 
 void TrackedFace::init_kalman() {

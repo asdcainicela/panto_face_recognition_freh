@@ -1,4 +1,5 @@
-// ============= src/detection/cuda_kernels.cu =============
+// ============= src/cuda_kernels.cu - VERSION CON DEBUG =============
+
 #include <cuda_runtime.h>
 #include <cstdio>
 

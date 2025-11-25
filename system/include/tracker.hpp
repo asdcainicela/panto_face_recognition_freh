@@ -21,43 +21,42 @@
  * FECHA: 2025
  */
 
-// ============= include/tracking/tracker.hpp =============
 #pragma once
 #include <opencv2/opencv.hpp>
 #include <opencv2/video/tracking.hpp>
 #include <vector>
 #include <string>
 
-struct Detection;  // Forward declaration
+// Forward declaration
+struct Detection;
 
 struct TrackedFace {
-    int id;
-    cv::Rect box;
-    cv::Point2f landmarks[5];
-    float confidence;
+    int id;                    // ID único persistente
+    cv::Rect box;              // BBox actual
+    cv::Point2f landmarks[5];  // Landmarks faciales
+    float confidence;          // Confianza de detección
     
-    int age;
-    int hits;
-    int time_since_update;
+    // Estado del tracker
+    int age;                   // Total frames desde aparición
+    int hits;                  // Detecciones consecutivas confirmadas
+    int time_since_update;     // Frames sin detección
     
+    // Kalman filter para predicción
     cv::KalmanFilter kf;
     bool kf_initialized;
     
+    // Para reconocimiento facial (FASE 2)
     bool is_recognized;
     std::string name;
-    
-    std::string emotion;
-    float emotion_confidence;
-    
-    int age_years;
-    std::string gender;
-    float gender_confidence;
-    
-    // ===== NUEVO: Para DB Manager =====
     std::vector<float> embedding;
-    float best_quality;
-    std::string person_id;
-    // ==================================
+
+    std::string emotion;           // "Happy", "Sad", "Angry", etc.
+    float emotion_confidence;      // 0.0 - 1.0
+    
+    int age_years;                 // 25, 30, etc.
+    std::string gender;            // "Male" o "Female"
+    float gender_confidence;       // 0.0 - 1.0
+    
     
     TrackedFace();
     void init_kalman();
@@ -71,9 +70,13 @@ public:
                 int max_age = 30,
                 int min_hits = 3);
     
+    // Actualizar tracker con nuevas detecciones
     std::vector<TrackedFace> update(const std::vector<Detection>& detections);
+    
+    // Obtener tracks activos
     std::vector<TrackedFace> get_active_tracks() const;
     
+    // Stats
     int get_total_tracks() const { return next_id - 1; }
     int get_active_count() const;
     
@@ -85,6 +88,7 @@ private:
     int max_age;
     int min_hits;
     
+    // Helper functions
     float calculate_iou(const cv::Rect& a, const cv::Rect& b);
     
     void associate_detections_to_tracks(

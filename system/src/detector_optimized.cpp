@@ -1,23 +1,64 @@
-// ============= src/detection/detector_optimized.cpp - ASYNC PIPELINE =============
+// ============= src/detector_optimized.cpp =============
 /*
- * SOLUCIÓN AL PROBLEMA DE "PEGADO" DEL VIDEO (2025-11-23)
+ * SCRFD Face Detector - TensorRT Optimized Implementation
  * 
- * PROBLEMA ORIGINAL:
- * - 4 cudaStreamSynchronize() por frame → 30-40ms de overhead
- * - Processing secuencial → CPU idle mientras GPU trabaja
- * - Buffer único → race conditions y stalls
+ * CARACTERÍSTICAS:
+ * - Detección de rostros usando SCRFD (Sample and Computation Redistribution for Face Detection)
+ * - Aceleración TensorRT con soporte FP16
+ * - Preprocessing GPU opcional (CUDA kernels custom)
+ * - Multi-scale detection: strides 8, 16, 32 (80x80, 40x40, 20x20 feature maps)
+ * - NMS (Non-Maximum Suppression) con IoU + IoM (Intersection over Minimum)
  * 
- * SOLUCIÓN IMPLEMENTADA:
- * ✅ Triple buffering (ping-pong-pong)
- * ✅ Pipeline asíncrono: preprocess → inference → postprocess overlap
- * ✅ Solo 1 sync al final (cuando se necesitan resultados)
- * ✅ CUDA events para timing preciso sin stalls
+ * ARQUITECTURA DEL MODELO:
+ * - Input: 640x640x3 (BGR -> RGB, normalizado: (x-127.5)/128.0)
+ * - Output: 9 tensors secuenciales por stride:
+ *   [stride8_scores, stride8_bbox, stride8_kps,
+ *    stride16_scores, stride16_bbox, stride16_kps,
+ *    stride32_scores, stride32_bbox, stride32_kps]
  * 
- * MEJORA ESPERADA: 25-30 FPS → 40-50 FPS
+ * FORMATO DE OUTPUTS:
+ * - Scores: [N] confidence por anchor (N = feat_h * feat_w * num_anchors)
+ * - BBox: [N, 4] distancias (left, top, right, bottom) desde anchor center
+ * - Keypoints: [N, 10] offsets para 5 landmarks (2 coords cada uno)
+ * 
+ * ANCHORS:
+ * - 2 anchors por posición espacial (num_anchors = 2)
+ * - Generados con offset 0.5: center = (j + 0.5) * stride
+ * - Total: 12800 (stride 8) + 3200 (stride 16) + 800 (stride 32) = 16800
+ * 
+ * DECODIFICACIÓN:
+ * - BBox: x1 = cx - l*stride, y1 = cy - t*stride
+ *         x2 = cx + r*stride, y2 = cy + b*stride
+ * - Keypoints: kx = cx + dx*stride, ky = cy + dy*stride
+ * - Escalado: multiplicar por (orig_w/640, orig_h/640)
+ * 
+ * VALIDACIONES:
+ * - Tamaño mínimo: 20x20 pixels
+ * - Tamaño máximo: 90% de la imagen
+ * - Aspect ratio: 0.4 - 2.5
+ * - Clipping a límites de imagen
+ * 
+ * NMS:
+ * - Threshold IoU: configurable (default 0.4)
+ * - Threshold IoM: 0.8 (para eliminar cajas muy contenidas)
+ * - Sort by confidence descendente
+ * 
+ * OPTIMIZACIONES:
+ * - CUDA streams para operaciones asíncronas
+ * - GPU preprocessing con kernels custom (BGR->RGB + normalize)
+ * - TensorRT FP16 inference
+ * - Memory pooling (buffers pre-allocated)
+ * 
+ * PERFORMANCE (Jetson Orin):
+ * - 1920x1080: ~15-20ms total (GPU preproc ON)
+ * - Breakdown: preproc ~2-3ms, inference ~8-10ms, postproc ~3-5ms
+ * 
+ * AUTOR: PANTO System
+ * FECHA: 2025
  */
 
-#include "detection/detector_optimized.hpp"
-#include "detection/cuda_kernels.h"
+#include "detector_optimized.hpp"
+#include "cuda_kernels.h"
 #include <spdlog/spdlog.h>
 #include <algorithm>
 #include <cmath>
@@ -28,33 +69,6 @@ constexpr float MAX_FACE_RATIO = 0.9f;
 constexpr float MIN_ASPECT_RATIO = 0.4f;
 constexpr float MAX_ASPECT_RATIO = 2.5f;
 constexpr float NMS_IOM_THRESHOLD = 0.8f;
-
-// ==================== TRIPLE BUFFER IMPLEMENTATION ====================
-void TripleBuffer::init(size_t size) {
-    for (int i = 0; i < 3; i++) {
-        cudaMalloc(&buffer[i], size);
-        cudaEventCreate(&event[i]);
-    }
-}
-
-void TripleBuffer::cleanup() {
-    for (int i = 0; i < 3; i++) {
-        if (buffer[i]) cudaFree(buffer[i]);
-        if (event[i]) cudaEventDestroy(event[i]);
-    }
-}
-
-void* TripleBuffer::get_current() {
-    return buffer[current_idx];
-}
-
-cudaEvent_t TripleBuffer::get_event() {
-    return event[current_idx];
-}
-
-void TripleBuffer::rotate() {
-    current_idx = (current_idx + 1) % 3;
-}
 
 // ==================== SCRFD HELPERS ====================
 
@@ -128,14 +142,13 @@ FaceDetectorOptimized::FaceDetectorOptimized(const std::string& engine_path,
     : use_gpu_preprocessing(gpu_preproc), d_input_buffer(nullptr), 
       d_resized_buffer(nullptr)
 {
-    spdlog::info("🚀 [ASYNC] Inicializando SCRFD con Pipeline Asíncrono");
+    spdlog::info("🔧 [OPT] Inicializando SCRFD TensorRT Optimizado");
     spdlog::info("   GPU Preprocessing: {}", gpu_preproc ? "ENABLED" : "DISABLED");
     
     if (!loadEngine(engine_path)) {
         throw std::runtime_error("No se pudo cargar TensorRT engine");
     }
     
-    // ✅ Stream de alta prioridad
     int leastPriority, greatestPriority;
     cudaDeviceGetStreamPriorityRange(&leastPriority, &greatestPriority);
     cudaStreamCreateWithPriority(&stream, cudaStreamNonBlocking, greatestPriority);
@@ -143,41 +156,26 @@ FaceDetectorOptimized::FaceDetectorOptimized(const std::string& engine_path,
     cv_stream = cv::cuda::StreamAccessor::wrapStream(stream);
     
     if (use_gpu_preprocessing) {
-        // ✅ TRIPLE BUFFERING para input y resized
         size_t input_size = input_width * input_height * 3 * sizeof(float);
+        cudaMalloc(&d_input_buffer, input_size);
+        
         size_t resized_size = input_width * input_height * 3;
+        cudaMalloc(&d_resized_buffer, resized_size);
         
-        triple_input.init(input_size);
-        triple_resized.init(resized_size);
-        
-        spdlog::info("   Triple buffers allocated (3x each):");
-        spdlog::info("     - input={:.1f}MB", input_size * 3 / 1024.0 / 1024.0);
-        spdlog::info("     - resized={:.1f}MB", resized_size * 3 / 1024.0 / 1024.0);
+        spdlog::info("   GPU buffers allocated:");
+        spdlog::info("     - input={:.1f}MB", input_size / 1024.0 / 1024.0);
+        spdlog::info("     - resized={:.1f}MB", resized_size / 1024.0 / 1024.0);
     }
     
-    // ✅ CUDA events para timing sin sync
-    cudaEventCreate(&event_preprocess_done);
-    cudaEventCreate(&event_inference_done);
-    
-    spdlog::info("✓ [ASYNC] Detector ready - Pipeline asíncrono activado");
+    spdlog::info("✓ [OPT] Detector optimizado listo");
 }
 
 FaceDetectorOptimized::~FaceDetectorOptimized() {
-    // Wait for all pending work
-    cudaStreamSynchronize(stream);
-    
     for (int i = 0; i < 10; i++) {
         if (buffers[i]) cudaFree(buffers[i]);
     }
-    
-    if (use_gpu_preprocessing) {
-        triple_input.cleanup();
-        triple_resized.cleanup();
-    }
-    
-    cudaEventDestroy(event_preprocess_done);
-    cudaEventDestroy(event_inference_done);
-    
+    if (d_input_buffer) cudaFree(d_input_buffer);
+    if (d_resized_buffer) cudaFree(d_resized_buffer);
     if (stream) cudaStreamDestroy(stream);
 }
 
@@ -238,7 +236,7 @@ bool FaceDetectorOptimized::loadEngine(const std::string& engine_path) {
     return true;
 }
 
-// ==================== PREPROCESSING CPU ====================
+// ==================== PREPROCESSING ====================
 
 cv::Mat FaceDetectorOptimized::preprocess_cpu(const cv::Mat& img) {
     cv::Mat resized, normalized;
@@ -251,83 +249,93 @@ cv::Mat FaceDetectorOptimized::preprocess_cpu(const cv::Mat& img) {
     return normalized;
 }
 
-// ==================== PREPROCESSING GPU - ASYNC ====================
-
-void FaceDetectorOptimized::preprocess_gpu_async(const cv::Mat& img) {
-    /* ✅ CAMBIO CRÍTICO: COMPLETAMENTE ASÍNCRONO
-     * - Usa triple buffer rotativo
-     * - NO hay ningún cudaStreamSynchronize()
-     * - Marca evento al finalizar
-     */
-    
-    // 1. Rotar al siguiente buffer disponible
-    triple_input.rotate();
-    triple_resized.rotate();
-    
-    void* current_input = triple_input.get_current();
-    void* current_resized = triple_resized.get_current();
-    
-    // 2. Upload (async)
+void FaceDetectorOptimized::preprocess_gpu(const cv::Mat& img) {
+    // 1. Upload to GPU (OpenCV stream)
     gpu_input.upload(img, cv_stream);
     
-    // 3. Resize (async)
+    // 2. Resize (OpenCV stream)
     cv::cuda::resize(gpu_input, gpu_resized, 
                      cv::Size(input_width, input_height), 
                      0, 0, cv::INTER_LINEAR, cv_stream);
     
-    // 4. Copy to buffer (async)
-    cudaStream_t native_stream = cv::cuda::StreamAccessor::getStream(cv_stream);
-    cudaMemcpyAsync(
-        current_resized, 
+    // ✅ FIX 1: Sincronizar OpenCV stream ANTES de usar CUDA nativo
+    cv_stream.waitForCompletion();
+    
+    // ✅ FIX 2: Verificar que gpu_resized tiene datos válidos
+    if (gpu_resized.empty() || gpu_resized.cols != input_width || gpu_resized.rows != input_height) {
+        spdlog::error("❌ GPU resize failed: {}x{}", gpu_resized.cols, gpu_resized.rows);
+        throw std::runtime_error("GPU resize produced invalid output");
+    }
+    
+    // 3. Copy resized image to d_resized_buffer (CUDA stream nativo)
+    cudaError_t copy_err = cudaMemcpyAsync(
+        d_resized_buffer, 
         gpu_resized.data, 
         input_width * input_height * 3,
         cudaMemcpyDeviceToDevice, 
-        native_stream
+        stream
     );
     
-    // 5. Normalize (async)
+    if (copy_err != cudaSuccess) {
+        spdlog::error("❌ cudaMemcpy failed: {}", cudaGetErrorString(copy_err));
+        throw std::runtime_error("GPU memory copy failed");
+    }
+    
+    // ✅ FIX 3: Sincronizar ANTES del kernel (crítico)
+    cudaStreamSynchronize(stream);
+    
+    // 4. Normalize using CUDA kernel
     cuda_normalize_imagenet(
-        static_cast<const unsigned char*>(current_resized),
-        static_cast<float*>(current_input),
+        static_cast<const unsigned char*>(d_resized_buffer),
+        static_cast<float*>(buffers[input_index]),
         input_width, 
         input_height, 
-        native_stream
+        stream
     );
     
-    // 6. ✅ CRÍTICO: Marcar evento cuando termine (NO sync)
-    cudaEventRecord(event_preprocess_done, native_stream);
+    // ✅ FIX 4: Verificar errores del kernel
+    cudaError_t kernel_err = cudaGetLastError();
+    if (kernel_err != cudaSuccess) {
+        spdlog::error("❌ Kernel launch failed: {}", cudaGetErrorString(kernel_err));
+        throw std::runtime_error("CUDA kernel failed");
+    }
+    
+    // ✅ FIX 5: Sincronizar después del kernel
+    cudaStreamSynchronize(stream);
+    
+    // ✅ FIX 6 (OPCIONAL): Verificar output del kernel (solo para debug)
+    static int verify_count = 0;
+    if (verify_count++ < 1) {
+        std::vector<float> debug_data(100);
+        cudaMemcpy(debug_data.data(), buffers[input_index], 
+                   100 * sizeof(float), cudaMemcpyDeviceToHost);
+        
+        float min_val = *std::min_element(debug_data.begin(), debug_data.end());
+        float max_val = *std::max_element(debug_data.begin(), debug_data.end());
+        
+        spdlog::info("🔍 Tensor normalizado: min={:.4f}, max={:.4f}", min_val, max_val);
+        
+        if (min_val < -2.0f || max_val > 2.0f) {
+            spdlog::error("❌ Valores fuera de rango esperado [-1, +1]!");
+        }
+        
+        spdlog::info("🔍 Primeros 10 valores:");
+        for (int i = 0; i < 10; i++) {
+            spdlog::info("  [{}] = {:.4f}", i, debug_data[i]);
+        }
+    }
 }
 
-// ==================== DETECTION - ASYNC PIPELINE ====================
+// ==================== DETECTION ====================
 
 std::vector<Detection> FaceDetectorOptimized::detect(const cv::Mat& img) {
     cv::Size orig_size = img.size();
     
-    // ✅ Event para medir tiempo sin sync
-    cudaEvent_t start, stop;
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
+    auto t0 = std::chrono::high_resolution_clock::now();
     
-    cudaEventRecord(start, stream);
-    
-    // ========== FASE 1: PREPROCESSING ==========
     if (use_gpu_preprocessing) {
-        preprocess_gpu_async(img);
-        
-        // ✅ Copiar buffer actual a TensorRT input (async)
-        cudaMemcpyAsync(
-            buffers[input_index],
-            triple_input.get_current(),
-            input_width * input_height * 3 * sizeof(float),
-            cudaMemcpyDeviceToDevice,
-            stream
-        );
-        
-        // ✅ Esperar solo si el preprocess no terminó
-        cudaStreamWaitEvent(stream, event_preprocess_done, 0);
-        
+        preprocess_gpu(img);
     } else {
-        // CPU preprocessing (fallback)
         cv::Mat input_blob = preprocess_cpu(img);
         
         std::vector<cv::Mat> channels(3);
@@ -346,25 +354,17 @@ std::vector<Detection> FaceDetectorOptimized::detect(const cv::Mat& img) {
                        cudaMemcpyHostToDevice, stream);
     }
     
-    cudaEventRecord(stop, stream);
+    auto t1 = std::chrono::high_resolution_clock::now();
+    last_profile.preprocess_ms = 
+        std::chrono::duration<double, std::milli>(t1 - t0).count();
     
-    // ========== FASE 2: INFERENCE ==========
-    cudaEvent_t infer_start, infer_stop;
-    cudaEventCreate(&infer_start);
-    cudaEventCreate(&infer_stop);
+    context->enqueueV3(stream);
+    cudaStreamSynchronize(stream);
     
-    cudaEventRecord(infer_start, stream);
+    auto t2 = std::chrono::high_resolution_clock::now();
+    last_profile.inference_ms = 
+        std::chrono::duration<double, std::milli>(t2 - t1).count();
     
-    bool ok = context->enqueueV3(stream);
-    if (!ok) {
-        spdlog::error("❌ TensorRT enqueue failed");
-        return {};
-    }
-    
-    cudaEventRecord(infer_stop, stream);
-    cudaEventRecord(event_inference_done, stream);
-    
-    // ========== FASE 3: DOWNLOAD OUTPUTS (ASYNC) ==========
     std::vector<std::vector<float>> outputs(output_indices.size());
     
     for (size_t i = 0; i < output_indices.size(); i++) {
@@ -380,30 +380,13 @@ std::vector<Detection> FaceDetectorOptimized::detect(const cv::Mat& img) {
                        size * sizeof(float), cudaMemcpyDeviceToHost, stream);
     }
     
-    // ✅ ÚNICO SYNC: Solo cuando necesitamos los resultados en CPU
     cudaStreamSynchronize(stream);
     
-    // ========== TIMING (sin overhead) ==========
-    float preprocess_ms = 0, inference_ms = 0;
-    cudaEventElapsedTime(&preprocess_ms, start, stop);
-    cudaEventElapsedTime(&inference_ms, infer_start, infer_stop);
-    
-    last_profile.preprocess_ms = preprocess_ms;
-    last_profile.inference_ms = inference_ms;
-    
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
-    cudaEventDestroy(infer_start);
-    cudaEventDestroy(infer_stop);
-    
-    // ========== FASE 4: POSTPROCESSING (CPU, puede overlapearse) ==========
-    auto t_post_start = std::chrono::high_resolution_clock::now();
     auto result = postprocess_scrfd(outputs, orig_size);
-    auto t_post_end = std::chrono::high_resolution_clock::now();
     
+    auto t3 = std::chrono::high_resolution_clock::now();
     last_profile.postprocess_ms = 
-        std::chrono::duration<double, std::milli>(t_post_end - t_post_start).count();
-    
+        std::chrono::duration<double, std::milli>(t3 - t2).count();
     last_profile.total_ms = last_profile.preprocess_ms + 
                            last_profile.inference_ms + 
                            last_profile.postprocess_ms;

@@ -24,7 +24,6 @@
  * FECHA: 2025
  */
 
-// ============= include/recognition/recognizer.hpp =============
 #pragma once
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/cuda.hpp>
@@ -37,12 +36,13 @@
 #include <NvInfer.h>
 #include <NvInferRuntime.h>
 #include <cuda_runtime_api.h>
-#include "core/tensorrt_logger.hpp"  
 
+
+#include "tensorrt_logger.hpp"
 
 class FaceRecognizer {
 private:
-    panto::TensorRTLogger logger;
+    panto::TensorRTLogger logger;  // en vez de Logger logger;
     std::unique_ptr<nvinfer1::IRuntime> runtime;
     std::unique_ptr<nvinfer1::ICudaEngine> engine;
     std::unique_ptr<nvinfer1::IExecutionContext> context;

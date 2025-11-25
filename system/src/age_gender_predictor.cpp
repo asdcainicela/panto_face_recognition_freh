@@ -1,5 +1,5 @@
-// ============= src/recognition/age_gender_predictor.cpp =============
-#include "recognition/age_gender_predictor.hpp"  // ⭐ CAMBIO
+// ============= src/age_gender_predictor.cpp - FAIRFACE COMPLETO =============
+#include "age_gender_predictor.hpp"
 #include <spdlog/spdlog.h>
 #include <fstream>
 #include <algorithm>
@@ -15,8 +15,6 @@
         throw std::runtime_error(cudaGetErrorString(err)); \
     } \
 } while (0)
-
-// ... resto del código
 
 // ==================== AgeGenderResult ====================
 

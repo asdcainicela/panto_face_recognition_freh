@@ -1,6 +1,5 @@
-// ============= src/core/draw_utils.cpp =============
-#include "core/draw_utils.hpp"           // ⭐ CAMBIO
-#include "streaming/stream_capture.hpp"  // ⭐ CAMBIO
+#include "draw_utils.hpp"
+#include "stream_capture.hpp"
 
 namespace DrawUtils {
 

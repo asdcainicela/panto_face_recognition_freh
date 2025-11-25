@@ -1,4 +1,3 @@
-// ============= include/recognition/emotion_recognizer.hpp =============
 #pragma once
 #include <opencv2/opencv.hpp>
 #include <opencv2/core/cuda.hpp>
@@ -12,27 +11,23 @@
 #include <NvInferRuntime.h>
 #include <cuda_runtime_api.h>
 
-#include "core/tensorrt_logger.hpp"  
+#include "tensorrt_logger.hpp"
+#include "cuda_kernels.h"
 
-enum class Emotion {
-    NEUTRAL = 0,
-    HAPPINESS = 1,
-    SURPRISE = 2,
-    SADNESS = 3,
-    ANGER = 4,
-    DISGUST = 5,
-    FEAR = 6,
-    CONTEMPT = 7
+enum class Gender {
+    FEMALE = 0,
+    MALE = 1
 };
 
-struct EmotionResult {
-    Emotion emotion;
-    float confidence;
-    std::vector<float> probabilities;
+struct AgeGenderResult {
+    int age;
+    Gender gender;
+    float age_confidence;
+    float gender_confidence;
     std::string to_string() const;
 };
 
-class EmotionRecognizer {
+class AgeGenderPredictor {
 private:
     panto::TensorRTLogger logger;
     std::unique_ptr<nvinfer1::IRuntime> runtime;
@@ -46,26 +41,25 @@ private:
     cudaStream_t stream;
 
     cv::cuda::GpuMat gpu_input;
-    cv::cuda::GpuMat gpu_gray;
     cv::cuda::GpuMat gpu_resized;
 
-    int input_width = 64;
-    int input_height = 64;
-    int num_classes = 8;
+    int input_width = 224;
+    int input_height = 224;
+    int num_classes = 0;
 
     bool use_gpu_preprocessing = true;
 
     bool loadEngine(const std::string& engine_path);
     cv::Mat preprocess_cpu(const cv::Mat& face);
     void preprocess_gpu(const cv::Mat& face);
-    EmotionResult postprocess(const std::vector<float>& logits);
+    AgeGenderResult postprocess(const std::vector<float>& logits);
 
 public:
-    EmotionRecognizer(const std::string& engine_path, bool gpu_preproc = true);
-    ~EmotionRecognizer();
+    AgeGenderPredictor(const std::string& engine_path, bool gpu_preproc = true);
+    ~AgeGenderPredictor();
 
-    EmotionResult predict(const cv::Mat& face);
-    std::vector<EmotionResult> predict_batch(const std::vector<cv::Mat>& faces);
+    AgeGenderResult predict(const cv::Mat& face);
+    std::vector<AgeGenderResult> predict_batch(const std::vector<cv::Mat>& faces);
 
     struct ProfileStats {
         double preprocess_ms = 0;
@@ -75,4 +69,4 @@ public:
     ProfileStats last_profile;
 };
 
-std::string emotion_to_string(Emotion emotion);
+std::string gender_to_string(Gender gender);

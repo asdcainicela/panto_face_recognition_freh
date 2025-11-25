@@ -1,5 +1,5 @@
 // ============= src/utils.cpp - COMPLETO CON FFMPEG + GSTREAMER =============
-#include "core/utils.hpp"  // ⭐ CAMBIO
+#include "utils.hpp"
 #include <spdlog/spdlog.h>
 #include <thread>
 #include <chrono>

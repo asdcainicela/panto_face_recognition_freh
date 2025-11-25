@@ -1,5 +1,5 @@
 // ============= test/benchmark_detector.cpp =============
-#include "detection/detector_optimized.hpp"  // ⭐ CAMBIO
+#include "detector_optimized.hpp"
 #include <spdlog/spdlog.h>
 #include <opencv2/opencv.hpp>
 #include <chrono>
