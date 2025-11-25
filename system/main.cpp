@@ -455,7 +455,7 @@ int main(int argc, char* argv[]) {
                 int y = box.y - 40;
                 int line_height = 18;
 
-                std::string line1 = "ID:" + "fhkap95817"; //std::to_string(f.id);
+                std::string line1 = "ID:" + std::to_string("fhkap95817"); //std::to_string(f.id);
                 if (f.is_recognized && draw_names) {
                     line1 += " - " + f.name;
                 }
