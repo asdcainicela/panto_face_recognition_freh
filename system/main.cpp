@@ -477,7 +477,7 @@ int main(int argc, char* argv[]) {
                 cv::rectangle(display, box, box_color, 2);
                 
 
-                int y = box.y - 40;
+                int y = box.y - 50;
                 int line_height = 25;
 
                 //std::string line1 = "ID:" + std::to_string("fhkap95817"); //std::to_string(f.id);
@@ -491,7 +491,7 @@ int main(int argc, char* argv[]) {
                     cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255,255,255), 1
                 );*/
                 draw_text_with_background(display, line1, cv::Point(box.x, y),
-                    0.8, cv::Scalar(255,255,255), cv::Scalar(0,0,0), 1, 5);
+                    0.65, cv::Scalar(255,255,255), cv::Scalar(0,0,0), 1, 5);
 
                 y += line_height;
 
@@ -520,7 +520,7 @@ int main(int argc, char* argv[]) {
                         1
                     );*/
                     draw_text_with_background(display, age_gender_stream.str(),
-                        cv::Point(box.x, y), 0.8, color, cv::Scalar(0,0,0), 1, 5);
+                        cv::Point(box.x, y), 0.65, color, cv::Scalar(0,0,0), 1, 5);
 
                     y += line_height;
                 }
@@ -536,7 +536,7 @@ int main(int argc, char* argv[]) {
                     );
                     */
                    draw_text_with_background(display, f.emotion,
-                        cv::Point(box.x, y), 0.8, cv::Scalar(255,255,255), 
+                        cv::Point(box.x, y), 0.65, cv::Scalar(255,255,255), 
                         cv::Scalar(0,0,0), 1, 5);
                     y += line_height;
                 }
