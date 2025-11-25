@@ -175,6 +175,10 @@ target_link_libraries(compare_embeddings
     ${SQLite3_LIBRARIES}
 )
 
+add_executable(compare_embeddings_fixed tools/compare_embeddings_fixed.cpp)
+target_link_libraries(compare_embeddings_fixed
+    ${SQLite3_LIBRARIES}
+)
 install(TARGETS
     panto_utils
     panto_draw
@@ -190,7 +194,7 @@ install(TARGETS
     ARCHIVE DESTINATION lib
 )
 
-install(TARGETS panto benchmark test_recognizer query_faces compare_embeddings RUNTIME DESTINATION bin)
+install(TARGETS panto benchmark test_recognizer query_faces compare_embeddings compare_embeddings_fixed RUNTIME DESTINATION bin)
 install(FILES config.toml DESTINATION .)
 
 message(STATUS "opencv: ${OpenCV_VERSION}")
