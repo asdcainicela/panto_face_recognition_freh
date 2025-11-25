@@ -1,4 +1,4 @@
-// ============= main.cpp - VISUALIZACIÓN CORREGIDA PARA AGE/GENDER =============
+// ============= main.cpp - CON FACELOGGER INTEGRADO =============
 #include "detector_optimized.hpp"
 #include "tracker.hpp"
 #include "recognizer.hpp"
@@ -9,6 +9,7 @@
 #include "utils.hpp"
 #include "draw_utils.hpp"
 #include "model_validator.hpp"
+#include "face_logger.hpp"  // ✅ NUEVO
 #include <spdlog/spdlog.h>
 #include <fstream>
 #include <map>
@@ -137,6 +138,11 @@ int main(int argc, char* argv[]) {
     bool age_gender_use_interval = config.get_bool("age_gender.use_interval", false);
     int age_gender_interval = config.get_int("age_gender.analyze_interval", 10);
 
+    // ✅ NUEVO: Configuración FaceLogger
+    bool enable_logging = config.get_bool("output.enable_logging", true);
+    std::string log_path = config.get("output.log_path", "logs/faces");
+    int log_interval = config.get_int("output.log_interval", 30);
+
     ModelValidator validator;
     if (!validator.validate_all(
         model_path,
@@ -173,6 +179,7 @@ int main(int argc, char* argv[]) {
     std::unique_ptr<EmotionRecognizer> emotion_recognizer;
     std::unique_ptr<AgeGenderPredictor> age_gender_predictor;
     std::unique_ptr<FaceDatabase> database;
+    std::unique_ptr<FaceLogger> face_logger;  // ✅ NUEVO
 
     if (mode_detect) {
         try {
@@ -193,8 +200,12 @@ int main(int argc, char* argv[]) {
 
             if (age_gender_enabled) {
                 age_gender_predictor = std::make_unique<AgeGenderPredictor>(age_gender_path, true);
-                spdlog::info("📊 Age/Gender mode: use_interval={} (interval={})", 
-                            age_gender_use_interval, age_gender_interval);
+            }
+
+            // ✅ NUEVO: Inicializar FaceLogger
+            if (enable_logging) {
+                face_logger = std::make_unique<FaceLogger>(log_path);
+                spdlog::info("📝 FaceLogger habilitado (intervalo: {} frames)", log_interval);
             }
         }
         catch (const std::exception& e) {
@@ -242,6 +253,9 @@ int main(int argc, char* argv[]) {
 
     auto start_time = std::chrono::steady_clock::now();
 
+    // ✅ NUEVO: Control de logging
+    std::map<int, bool> track_logged;  // track_id -> logged
+
     while (!stop_signal) {
         bool ok = is_rtsp ? stream_capture->read(frame) : cap.read(frame);
         if (!ok || frame.empty()) {
@@ -262,93 +276,47 @@ int main(int argc, char* argv[]) {
             auto t2 = std::chrono::high_resolution_clock::now();
             det_ms = std::chrono::duration<double, std::milli>(t2 - t1).count();
 
-            if (frame_count % 30 == 0) {
-                spdlog::info("📊 Frame {}: Detections={}, Det={}ms", 
-                            frame_count, dets.size(), (int)det_ms);
-            }
-
             tracked_faces = tracker->update(dets);
             auto t3 = std::chrono::high_resolution_clock::now();
             track_ms = std::chrono::duration<double, std::milli>(t3 - t2).count();
 
-            if (frame_count % 30 == 0) {
-                spdlog::info("🎯 Tracked faces: {}", tracked_faces.size());
-            }
-
-            // ✅ AGE/GENDER - Estrategia configurable
+            // AGE/GENDER
             if (age_gender_enabled) {
-                bool should_process = false;
-                
-                if (age_gender_use_interval) {
-                    // MODO INTERVALO: Actualizar cada N frames
-                    should_process = (frame_count % age_gender_interval == 0);
-                } else {
-                    // MODO UNA VEZ: Siempre intentar (se filtra después)
-                    should_process = true;
-                }
+                bool should_process = age_gender_use_interval 
+                    ? (frame_count % age_gender_interval == 0) 
+                    : true;
                 
                 if (should_process) {
                     auto t6 = std::chrono::high_resolution_clock::now();
-                    int processed_count = 0;
                     
                     for (auto& f : tracked_faces) {
-                        // En modo "una vez", skip si ya tiene datos
                         if (!age_gender_use_interval && f.age_years > 0) continue;
-                        
-                        // Skip rostros no confirmados
                         if (f.hits < 3) continue;
 
                         cv::Rect safe = f.box & cv::Rect(0, 0, frame.cols, frame.rows);
-                        if (safe.area() <= 0) continue;
-
-                        // ✅ FILTRO: Solo procesar rostros >= 40x40 pixels
-                        if (safe.width < 40 || safe.height < 40) {
-                            spdlog::debug("⏭️  Track {}: Skip (too small {}x{})", f.id, safe.width, safe.height);
-                            continue;
-                        }
+                        if (safe.area() <= 0 || safe.width < 40 || safe.height < 40) continue;
 
                         try {
                             cv::Mat face_crop = frame(safe).clone();
-                            
                             auto r = age_gender_predictor->predict(face_crop);
                             f.age_years = r.age;
                             f.gender = gender_to_string(r.gender);
                             f.gender_confidence = r.gender_confidence;
-                            
-                            processed_count++;
-                            
-                            spdlog::info("🎂 Track {}: Age={}, Gender={} ({:.1f}%) | Box={}x{} @ ({},{})", 
-                                        f.id, 
-                                        f.age_years, 
-                                        f.gender, 
-                                        f.gender_confidence * 100,
-                                        safe.width, safe.height,
-                                        safe.x, safe.y);
-                            
                         } catch (const std::exception& e) {
-                            spdlog::warn("Age/Gender prediction failed for track {}: {}", f.id, e.what());
+                            spdlog::warn("Age/Gender failed: {}", e.what());
                         }
                     }
                     
                     auto t7 = std::chrono::high_resolution_clock::now();
                     age_gender_ms = std::chrono::duration<double, std::milli>(t7 - t6).count();
-                    
-                    if (processed_count > 0) {
-                        spdlog::info("⏱️  Age/Gender: {}ms para {} rostros (promedio: {:.1f}ms/rostro)",
-                                    (int)age_gender_ms, processed_count, age_gender_ms / processed_count);
-                    }
                 }
             }
 
-            // ✅ EMOTION - Estrategia configurable
+            // EMOTION
             if (emotion_enabled) {
-                bool should_process = false;
-                
-                if (emotion_use_interval) {
-                    should_process = (frame_count % emotion_interval == 0);
-                } else {
-                    should_process = true;
-                }
+                bool should_process = emotion_use_interval 
+                    ? (frame_count % emotion_interval == 0) 
+                    : true;
                 
                 if (should_process) {
                     auto t8 = std::chrono::high_resolution_clock::now();
@@ -365,7 +333,7 @@ int main(int argc, char* argv[]) {
                             f.emotion = emotion_to_string(r.emotion);
                             f.emotion_confidence = r.confidence;
                         } catch (const std::exception& e) {
-                            spdlog::warn("Emotion prediction failed: {}", e.what());
+                            spdlog::warn("Emotion failed: {}", e.what());
                         }
                     }
                     auto t9 = std::chrono::high_resolution_clock::now();
@@ -373,7 +341,7 @@ int main(int argc, char* argv[]) {
                 }
             }
 
-            // ✅ RECOGNITION - Solo una vez por track
+            // RECOGNITION
             if (mode_recognize) {
                 auto t4 = std::chrono::high_resolution_clock::now();
 
@@ -384,6 +352,8 @@ int main(int argc, char* argv[]) {
                     if (safe.area() <= 0) continue;
 
                     auto emb = recognizer->extract_embedding(frame(safe));
+                    f.embedding = emb;  // ✅ Guardar embedding en el track
+                    
                     auto res = database->recognize(emb);
 
                     if (res.recognized) {
@@ -394,6 +364,38 @@ int main(int argc, char* argv[]) {
 
                 auto t5 = std::chrono::high_resolution_clock::now();
                 recog_ms = std::chrono::duration<double, std::milli>(t5 - t4).count();
+            }
+
+            // ✅ NUEVO: GUARDAR ROSTROS EN JSON
+            if (enable_logging && face_logger && frame_count % log_interval == 0) {
+                for (auto& face : tracked_faces) {
+                    // Solo guardar tracks confirmados que no hemos guardado antes
+                    if (face.hits >= 3 && track_logged.find(face.id) == track_logged.end()) {
+                        
+                        // Verificar que tiene los datos necesarios
+                        if (face.age_years == 0 || face.gender == "Unknown" || 
+                            face.emotion == "Unknown" || face.embedding.empty()) {
+                            continue;  // Skip si faltan datos
+                        }
+
+                        // Crear entrada de log
+                        FaceLogEntry entry;
+                        
+                        // Datos básicos
+                        entry.age = face.age_years;
+                        entry.gender = face.gender;
+                        entry.company = "Alma";
+                        entry.emotion = face.emotion;
+                        entry.embedding = face.embedding;  // 512 valores
+                        
+                        // Guardar
+                        face_logger->log_entry(entry);
+                        track_logged[face.id] = true;
+                        
+                        spdlog::info("💾 Guardado: ID={} | Age={} | Gender={} | Emotion={}", 
+                                    entry.id, entry.age, entry.gender, entry.emotion);
+                    }
+                }
             }
         }
 
@@ -410,14 +412,13 @@ int main(int argc, char* argv[]) {
                     f.box.height * sy
                 );
 
-                // ✅ COLOR DEL BOUNDING BOX
                 cv::Scalar box_color;
                 if (f.is_recognized) {
-                    box_color = cv::Scalar(0, 255, 0);  // Verde: Reconocido
+                    box_color = cv::Scalar(0, 255, 0);
                 } else if (f.age_years > 0) {
-                    box_color = cv::Scalar(0, 255, 255);  // Amarillo: Con Age/Gender
+                    box_color = cv::Scalar(0, 255, 255);
                 } else {
-                    box_color = cv::Scalar(255, 0, 0);  // Azul: Solo detectado
+                    box_color = cv::Scalar(255, 0, 0);
                 }
 
                 cv::rectangle(display, box, box_color, 2);
@@ -425,7 +426,6 @@ int main(int argc, char* argv[]) {
                 int y = box.y - 20;
                 int line_height = 18;
 
-                // ✅ LÍNEA 1: ID + NOMBRE
                 std::string line1 = "ID:" + std::to_string(f.id);
                 if (f.is_recognized && draw_names) {
                     line1 += " - " + f.name;
@@ -436,16 +436,14 @@ int main(int argc, char* argv[]) {
                 );
                 y += line_height;
 
-                // ✅ LÍNEA 2: EDAD + GÉNERO (solo si YA fue calculado)
                 if (age_gender_enabled && f.age_years > 0 && f.gender != "Unknown" && !f.gender.empty()) {
-                    // Calcular color según confianza
                     cv::Scalar color;
                     if (f.gender_confidence >= 0.7) {
-                        color = cv::Scalar(0, 255, 0);  // Verde: Alta confianza
+                        color = cv::Scalar(0, 255, 0);
                     } else if (f.gender_confidence >= 0.5) {
-                        color = cv::Scalar(0, 255, 255);  // Amarillo: Confianza media
+                        color = cv::Scalar(0, 255, 255);
                     } else {
-                        color = cv::Scalar(0, 165, 255);  // Naranja: Baja confianza
+                        color = cv::Scalar(0, 165, 255);
                     }
                     
                     std::ostringstream age_gender_stream;
@@ -463,19 +461,17 @@ int main(int argc, char* argv[]) {
                     y += line_height;
                 }
 
-                // ✅ LÍNEA 3: EMOCIÓN (solo si NO es "Unknown")
                 if (emotion_enabled && !f.emotion.empty() && f.emotion != "Unknown") {
                     cv::putText(
                         display, f.emotion,
                         cv::Point(box.x, y),
                         cv::FONT_HERSHEY_SIMPLEX, 0.5,
-                        cv::Scalar(0,0,255),  // Rojo
+                        cv::Scalar(0,0,255),
                         1
                     );
                     y += line_height;
                 }
 
-                // ✅ LANDMARKS
                 if (draw_lands) {
                     for (int i = 0; i < 5; i++) {
                         cv::circle(display,
@@ -486,13 +482,12 @@ int main(int argc, char* argv[]) {
                 }
             }
 
-            // ✅ PANEL DE INFO (semi-transparente)
             auto elapsed = std::chrono::steady_clock::now() - start_time;
             double sec = std::chrono::duration<double>(elapsed).count();
             double fps = frame_count / sec;
 
             int pw = 320;
-            int ph = 280;
+            int ph = 300;  // ✅ Aumentado para incluir info de logging
 
             cv::Mat overlay = display.clone();
             cv::rectangle(overlay, cv::Rect(0,0,pw,ph), cv::Scalar(0,0,0), -1);
@@ -523,11 +518,23 @@ int main(int argc, char* argv[]) {
             if (mode_recognize) put("Recognition: " + std::to_string((int)recog_ms) + " ms");
             if (emotion_enabled) put("Emotion: " + std::to_string((int)emotion_ms) + " ms");
             if (age_gender_enabled) put("Age/Gender: " + std::to_string((int)age_gender_ms) + " ms");
+            
+            // ✅ NUEVO: Info de logging
+            if (enable_logging && face_logger) {
+                put("");
+                put("--- Logging ---", cv::Scalar(100, 255, 100));
+                put("Saved: " + std::to_string(face_logger->get_entries_count()));
+            }
 
             cv::imshow(window_name, display);
 
             if (cv::waitKey(1) == 27) break;
         }
+    }
+
+    // ✅ NUEVO: Cerrar logger al finalizar
+    if (face_logger) {
+        face_logger->close();
     }
 
     return 0;

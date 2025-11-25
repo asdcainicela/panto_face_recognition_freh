@@ -81,6 +81,12 @@ output_dir = "videos/output"
 video_codec = "H264"
 video_fps = 25.0
 
+# FaceLogger Configuration
+enable_logging = true           # Activar/desactivar logging
+log_path = "logs/faces"         # Directorio donde se guardan los JSON
+log_interval = 30               # Guardar cada 30 frames (evita duplicados)
+
+
 # ===== PERFORMANCE =====
 [performance]
 max_fps = 30
