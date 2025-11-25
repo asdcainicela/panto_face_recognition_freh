@@ -92,6 +92,30 @@ void signal_handler(int sig) {
     }
 }
 
+void draw_text_with_background(cv::Mat& img, const std::string& text, 
+                                cv::Point position, double font_scale,
+                                cv::Scalar text_color, cv::Scalar bg_color,
+                                int thickness = 1, int padding = 5) {
+    int baseline = 0;
+    cv::Size text_size = cv::getTextSize(text, cv::FONT_HERSHEY_SIMPLEX, 
+                                         font_scale, thickness, &baseline);
+    
+    // Rectángulo de fondo con padding
+    cv::Rect bg_rect(
+        position.x - padding,
+        position.y - text_size.height - padding,
+        text_size.width + 2 * padding,
+        text_size.height + baseline + 2 * padding
+    );
+    
+    // Dibujar fondo negro
+    cv::rectangle(img, bg_rect, bg_color, -1);
+    
+    // Dibujar texto blanco
+    cv::putText(img, text, position, cv::FONT_HERSHEY_SIMPLEX,
+                font_scale, text_color, thickness);
+}
+
 int main(int argc, char* argv[]) {
     spdlog::set_pattern("[%H:%M:%S.%e] [%^%l%$] %v");
     spdlog::set_level(spdlog::level::info);
@@ -451,9 +475,10 @@ int main(int argc, char* argv[]) {
                 }
 
                 cv::rectangle(display, box, box_color, 2);
+                
 
                 int y = box.y - 40;
-                int line_height = 18;
+                int line_height = 25;
 
                 //std::string line1 = "ID:" + std::to_string("fhkap95817"); //std::to_string(f.id);
                 std::string line1 = "ID:" + std::string("fhkap95817");
@@ -461,9 +486,14 @@ int main(int argc, char* argv[]) {
                     line1 += " - " + f.name;
                 }
 
+                /*
                 cv::putText(display, line1, cv::Point(box.x, y),
                     cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255,255,255), 1
-                );
+                );*/
+                draw_text_with_background(display, line1, cv::Point(box.x, y),
+                                  0.6, cv::Scalar(255, 255, 255), 
+                                  cv::Scalar(0, 0, 0), 1, 5);
+
                 y += line_height;
 
                 if (age_gender_enabled && f.age_years > 0 && f.gender != "Unknown" && !f.gender.empty()) {
@@ -483,17 +513,23 @@ int main(int argc, char* argv[]) {
                     age_gender_stream << 30 << "y, " << "Male"
                                      << " (" << std::fixed << std::setprecision(0) 
                                      << (f.gender_confidence * 100) << "%)";
-                    cv::putText(display,
+                    /*cv::putText(display,
                         age_gender_stream.str(),
                         cv::Point(box.x, y),
                         cv::FONT_HERSHEY_SIMPLEX, 0.8,
                         color,
                         1
-                    );
+                    );*/
+                    draw_text_with_background(display, age_gender_stream.str(), 
+                                      cv::Point(box.x, y),
+                                      0.6, cv::Scalar(255, 255, 255), 
+                                      cv::Scalar(0, 0, 0), 1, 5);
+
                     y += line_height;
                 }
 
                 if (emotion_enabled && !f.emotion.empty() && f.emotion != "Unknown") {
+                    /*
                     cv::putText(
                         display, f.emotion,
                         cv::Point(box.x, y),
@@ -501,6 +537,11 @@ int main(int argc, char* argv[]) {
                         cv::Scalar(0,0,255),
                         1
                     );
+                    */
+                   draw_text_with_background(display, emotion_text, 
+                                      cv::Point(box.x, y),
+                                      0.6, cv::Scalar(255, 255, 255), 
+                                      cv::Scalar(0, 0, 0), 1, 5);
                     y += line_height;
                 }
 
