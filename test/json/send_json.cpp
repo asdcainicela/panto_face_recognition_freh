@@ -36,12 +36,12 @@ int main() {
 
     // JSON usando el timestamp generado
     std::string json_body = "{"
-        "\"Enterprise\":\"freh\","
-        "\"Id\":\"user001\","
-        "\"Gender\":\"male\","
-        "\"Timestamp\":\"" + timestamp + "\","
-        "\"Age\":30,"
-        "\"Emotion\":\"neutral\""
+        "\"enterprise\":\"freh\","
+        "\"id\":\"user001\","
+        "\"gender\":\"male\","
+        "\"timestamp\":\"" + timestamp + "\","
+        "\"age\":30,"
+        "\"emotion\":\"neutral\""
     "}";
 
     struct curl_slist* headers = nullptr;

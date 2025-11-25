@@ -122,6 +122,9 @@ target_link_libraries(panto_age_gender
 add_library(panto_database SHARED src/face_database.cpp)
 target_link_libraries(panto_database ${SQLite3_LIBRARIES} spdlog::spdlog)
 
+# ✅ NUEVO: Face Logger SQLite (header-only, no necesita compilar .cpp)
+# La implementación está en el header
+
 add_executable(panto main.cpp)
 target_link_libraries(panto
     panto_stream
@@ -133,6 +136,7 @@ target_link_libraries(panto
     panto_emotion
     panto_age_gender
     panto_database
+    ${SQLite3_LIBRARIES}  # ✅ NUEVO: Agregar SQLite3
 )
 
 add_executable(test_validator test/test_validator.cpp)
@@ -159,6 +163,13 @@ target_link_libraries(register_face
     spdlog::spdlog
 )
 
+# ✅ NUEVO: Utilidad para consultar la base de datos
+add_executable(query_faces tools/query_faces.cpp)
+target_link_libraries(query_faces
+    ${SQLite3_LIBRARIES}
+    spdlog::spdlog
+)
+
 install(TARGETS
     panto_utils
     panto_draw
@@ -174,7 +185,7 @@ install(TARGETS
     ARCHIVE DESTINATION lib
 )
 
-install(TARGETS panto benchmark test_recognizer RUNTIME DESTINATION bin)
+install(TARGETS panto benchmark test_recognizer query_faces RUNTIME DESTINATION bin)
 install(FILES config.toml DESTINATION .)
 
 message(STATUS "opencv: ${OpenCV_VERSION}")

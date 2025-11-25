@@ -4,7 +4,7 @@
 # Detección de rostros
 detect = true
 # Grabar video
-record = true
+record = false
 # Mostrar en pantalla
 display = true
 # Reconocimiento facial (ArcFace)
@@ -87,8 +87,18 @@ enable_logging = true
          # Directorio donde se guardan los JSON         
 log_path = "logs/faces"
 # Guardar cada 30 frames (evita duplicados)
-log_interval = 1
+#log_interval = 1
+# (OPCIONAL) Nombre específico de la base de datos
+# Si está vacío, se genera automáticamente: faces_YYYYMMDD_HHMMSS.db
+# Útil para testing o sesiones específicas
+log_db_name = "freh.db"
 
+# Intervalo de guardado (cada N frames)
+# Valores recomendados:
+#   - 30 frames (1.2s @ 25fps): balance óptimo
+#   - 10 frames (0.4s): más frecuente, más datos
+#   - 60 frames (2.4s): menos frecuente, menos duplicados
+log_interval = 10
 
 # ===== PERFORMANCE =====
 [performance]
