@@ -369,31 +369,32 @@ int main(int argc, char* argv[]) {
             // ✅ NUEVO: GUARDAR ROSTROS EN JSON
             if (enable_logging && face_logger && frame_count % log_interval == 0) {
                 for (auto& face : tracked_faces) {
-                    // Solo guardar tracks confirmados que no hemos guardado antes
                     if (face.hits >= 3 && track_logged.find(face.id) == track_logged.end()) {
                         
-                        // Verificar que tiene los datos necesarios
-                        if (face.age_years == 0 || face.gender == "Unknown" || 
-                            face.emotion == "Unknown" || face.embedding.empty()) {
-                            continue;  // Skip si faltan datos
-                        }
-
-                        // Crear entrada de log
+                        // Crear entrada aunque falten datos
                         FaceLogEntry entry;
-                        
-                        // Datos básicos
-                        entry.age = face.age_years;
-                        entry.gender = face.gender;
+                        entry.age = (face.age_years > 0) ? face.age_years : 25; // default
+                        entry.gender = (!face.gender.empty()) ? face.gender : "Unknown";
                         entry.company = "Alma";
-                        entry.emotion = face.emotion;
-                        entry.embedding = face.embedding;  // 512 valores
+                        entry.emotion = (!face.emotion.empty()) ? face.emotion : "Unknown";
                         
-                        // Guardar
+                        // Extraer embedding SI NO LO TIENE
+                        if (face.embedding.empty() && mode_recognize) {
+                            cv::Rect safe = face.box & cv::Rect(0, 0, frame.cols, frame.rows);
+                            if (safe.area() > 0) {
+                                try {
+                                    face.embedding = recognizer->extract_embedding(frame(safe));
+                                } catch(...) {}
+                            }
+                        }
+                        entry.embedding = face.embedding;
+                        
+                        // Guardar SIEMPRE
                         face_logger->log_entry(entry);
                         track_logged[face.id] = true;
                         
-                        spdlog::info("💾 Guardado: ID={} | Age={} | Gender={} | Emotion={}", 
-                                    entry.id, entry.age, entry.gender, entry.emotion);
+                        spdlog::info("💾 GUARDADO: ID={} | Age={} | Gender={} | Emotion={} | Emb={}", 
+                                    entry.id, entry.age, entry.gender, entry.emotion, entry.embedding.size());
                     }
                 }
             }
