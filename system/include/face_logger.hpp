@@ -40,7 +40,7 @@ struct FaceLogEntry {
     
     FaceLogEntry() 
         : id(""), age(0), gender("Unknown"), 
-          company("Alma"), emotion("Unknown") {}
+          company("Freh"), emotion("Unknown") {}
     
     // Generar ID aleatorio (alfanumérico)
     static std::string generate_id(int length = 8) {
