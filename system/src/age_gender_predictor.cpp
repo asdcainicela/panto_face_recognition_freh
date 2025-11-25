@@ -286,17 +286,17 @@ AgeGenderResult AgeGenderPredictor::postprocess(const std::vector<float>& logits
     // ✅ DEBUG (solo primeras 3 predicciones)
     static int debug_count = 0;
     if (debug_count < 3) {
-        spdlog::info("🔍 Age/Gender Debug:");
-        spdlog::info("  Gender: Male={:.3f}, Female={:.3f} -> {} ({:.1f}%)",
-                    male_prob, female_prob, gender_to_string(gender), gender_conf * 100);
-        spdlog::info("  Age class: {} (prob={:.3f})", max_age_idx, max_age_prob);
-        spdlog::info("  Age brackets probabilities:");
+        //spdlog::info("🔍 Age/Gender Debug:");
+        //spdlog::info("  Gender: Male={:.3f}, Female={:.3f} -> {} ({:.1f}%)",
+        //            male_prob, female_prob, gender_to_string(gender), gender_conf * 100);
+        //spdlog::info("  Age class: {} (prob={:.3f})", max_age_idx, max_age_prob);
+        //spdlog::info("  Age brackets probabilities:");
         const char* age_labels[] = {"0-2", "3-9", "10-19", "20-29", "30-39", 
                                    "40-49", "50-59", "60-69", "70+"};
-        for (size_t i = 0; i < age_probs.size(); ++i) {
-            spdlog::info("    {} years: {:.3f}", age_labels[i], age_probs[i]);
-        }
-        spdlog::info("  Final prediction: {} years, {}", predicted_age, gender_to_string(gender));
+        //for (size_t i = 0; i < age_probs.size(); ++i) {
+        //    spdlog::info("    {} years: {:.3f}", age_labels[i], age_probs[i]);
+        //}
+        //spdlog::info("  Final prediction: {} years, {}", predicted_age, gender_to_string(gender));
         debug_count++;
     }
     

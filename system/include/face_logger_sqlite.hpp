@@ -275,9 +275,9 @@ public:
         
         entries_logged++;
         
-        if (entries_logged % 10 == 0) {
-            spdlog::info("📝 {} rostros guardados", entries_logged);
-        }
+        //if (entries_logged % 10 == 0) {
+        //    spdlog::info("📝 {} rostros guardados", entries_logged);
+        //}
         
         return true;
     }

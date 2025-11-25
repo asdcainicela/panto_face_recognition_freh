@@ -486,9 +486,12 @@ int main(int argc, char* argv[]) {
                 auto id_temporal = f.id*10+std::rand()%10; // ID temporal para pruebas
 
                 //std::string line1 = "ID:" + std::to_string("fhkap95817"); //std::to_string(f.id);
-                std::string line1 = "ID:" + std::string("371");
-                bool nuevo =  false;
+                std::string line1 = "ID:" + std::string("371") ;
+                bool nuevo =  true;
                 if (nuevo) {
+                    line1 = "ID:" + std::to_string(id_temporal)+  std::string(" (NEW) ");
+                }
+                else{
                     line1 = "ID:" + std::to_string(id_temporal)+  "-> ID:" + std::string("371");
                 }
 
@@ -573,7 +576,7 @@ int main(int argc, char* argv[]) {
             cv::addWeighted(display, 0.7, overlay, 0.3, 0, display);
 
             int y = 25;
-            cv::putText(display, "PANTO SYSTEM",
+            cv::putText(display, "SYSTEM",
                 cv::Point(10, y), cv::FONT_HERSHEY_SIMPLEX,
                 0.6, cv::Scalar(255,255,255), 1
             );
