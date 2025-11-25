@@ -380,12 +380,12 @@ public:
                 int females = sqlite3_column_int(stmt, 4);
                 double avg_conf = sqlite3_column_double(stmt, 5);
                 
-                spdlog::info("📊 ESTADÍSTICAS:");
+                /*spdlog::info("📊 ESTADÍSTICAS:");
                 spdlog::info("   Total rostros: {}", total);
                 spdlog::info("   Tracks únicos: {}", tracks);
                 spdlog::info("   Edad promedio: {:.1f} años", avg_age);
                 spdlog::info("   Género: {} Hombres, {} Mujeres", males, females);
-                spdlog::info("   Confianza promedio: {:.2f}", avg_conf);
+                spdlog::info("   Confianza promedio: {:.2f}", avg_conf);*/
             }
             sqlite3_finalize(stmt);
         }
@@ -404,8 +404,8 @@ public:
             sqlite3_close(db);
             db = nullptr;
             
-            spdlog::info("📝 FaceLoggerSQLite cerrado");
-            spdlog::info("   Total: {} rostros", entries_logged);
+            spdlog::info(" FaceLoggerSQLite cerrado");
+            //spdlog::info("   Total: {} rostros", entries_logged);
             spdlog::info("   Database: {}", db_path);
             
             // Mostrar tamaño del archivo

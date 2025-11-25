@@ -463,10 +463,10 @@ int main(int argc, char* argv[]) {
                             spdlog::info("Track guardado correctamente");
                             spdlog::info("Procesando siguiente Track...");
                             auto m__ = rand()%10;
-                            if (m__=3){
+                            if (m__==3){
                                spdlog::info("...");
                             }
-                            if (m__=7){
+                            if (m__==7){
 
                                 spdlog::info("...");
                             }
