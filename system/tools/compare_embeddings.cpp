@@ -22,6 +22,8 @@
 #include <sqlite3.h>
 #include <algorithm>
 #include <chrono>
+#include <cstring>   // Para memcpy
+#include <numeric>   // Para accumulate
 
 struct FaceData {
     std::string id;           // ID único del registro
