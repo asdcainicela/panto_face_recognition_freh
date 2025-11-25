@@ -1,4 +1,4 @@
-// ============= main.cpp - CON FACELOGGER SQLite INDIVIDUAL =============
+// ============= main.cpp - CON VIDEO RECORDING =============
 #include "detector_optimized.hpp"
 #include "tracker.hpp"
 #include "recognizer.hpp"
@@ -100,7 +100,6 @@ void draw_text_with_background(cv::Mat& img, const std::string& text,
     cv::Size text_size = cv::getTextSize(text, cv::FONT_HERSHEY_SIMPLEX, 
                                          font_scale, thickness, &baseline);
     
-    // Rectángulo de fondo con padding
     cv::Rect bg_rect(
         position.x - padding,
         position.y - text_size.height - padding,
@@ -108,10 +107,7 @@ void draw_text_with_background(cv::Mat& img, const std::string& text,
         text_size.height + baseline + 2 * padding
     );
     
-    // Dibujar fondo negro
     cv::rectangle(img, bg_rect, bg_color, -1);
-    
-    // Dibujar texto blanco
     cv::putText(img, text, position, cv::FONT_HERSHEY_SIMPLEX,
                 font_scale, text_color, thickness);
 }
@@ -167,6 +163,12 @@ int main(int argc, char* argv[]) {
     std::string log_path = config.get("output.log_path", "logs/faces");
     std::string log_db_name = config.get("output.log_db_name", "");
     int log_interval = config.get_int("output.log_interval", 30);
+
+    // ✅ Configuración VIDEO RECORDING
+    bool save_output = config.get_bool("output.save_output", false);
+    std::string output_dir = config.get("output.output_dir", "videos/output");
+    std::string video_codec = config.get("output.video_codec", "H264");
+    double video_fps = config.get_float("output.video_fps", 25.0);
 
     ModelValidator validator;
     if (!validator.validate_all(
@@ -242,6 +244,26 @@ int main(int argc, char* argv[]) {
             spdlog::error("Error: {}", e.what());
             return 1;
         }
+    }
+
+    // ✅ VideoWriter para guardar video procesado
+    cv::VideoWriter video_writer;
+    std::string output_filename;
+
+    if (save_output) {
+        std::filesystem::create_directories(output_dir);
+        
+        auto now = std::chrono::system_clock::now();
+        auto time_t_now = std::chrono::system_clock::to_time_t(now);
+        std::stringstream ss;
+        ss << output_dir << "/output_" 
+           << std::put_time(std::localtime(&time_t_now), "%Y%m%d_%H%M%S")
+           << ".mp4";
+        output_filename = ss.str();
+        
+        spdlog::info("🎥 Video recording ENABLED");
+        spdlog::info("   Output: {}", output_filename);
+        spdlog::info("   Codec: {} @ {:.1f} FPS", video_codec, video_fps);
     }
 
     std::unique_ptr<StreamCapture> stream_capture;
@@ -399,17 +421,14 @@ int main(int argc, char* argv[]) {
             // ============= GUARDAR ROSTROS EN SQLITE (UNO POR UNO) =============
             if (enable_logging && face_logger && frame_count % log_interval == 0) {
                 for (auto& face : tracked_faces) {
-                    // Solo guardar tracks confirmados y no guardados previamente
                     if (face.hits >= 3 && track_logged.find(face.id) == track_logged.end()) {
                         
-                        // Crear entrada
                         FaceLogEntry entry;
                         entry.age = (face.age_years > 0) ? face.age_years : 25;
                         entry.gender = (!face.gender.empty() && face.gender != "Unknown") ? face.gender : "Unknown";
                         entry.company = "Freh";
                         entry.emotion = (!face.emotion.empty() && face.emotion != "Unknown") ? face.emotion : "Unknown";
                         
-                        // Metadata adicional
                         entry.track_id = face.id;
                         entry.confidence = face.confidence;
                         entry.bbox = FaceLogEntry::bbox_to_json(
@@ -417,7 +436,6 @@ int main(int argc, char* argv[]) {
                             face.box.width, face.box.height
                         );
                         
-                        // Extraer embedding SI NO LO TIENE
                         if (face.embedding.empty() && mode_recognize) {
                             cv::Rect safe = face.box & cv::Rect(0, 0, frame.cols, frame.rows);
                             if (safe.area() > 0) {
@@ -425,12 +443,11 @@ int main(int argc, char* argv[]) {
                                     face.embedding = recognizer->extract_embedding(frame(safe));
                                 } catch(const std::exception& e) {
                                     spdlog::warn("⚠️ Error extrayendo embedding para Track {}: {}", face.id, e.what());
-                                    continue;  // Skip este rostro
+                                    continue;
                                 }
                             }
                         }
                         
-                        // ✅ Validar antes de guardar
                         if (face.embedding.empty()) {
                             spdlog::warn("⚠️ Track {} sin embedding, skipping", face.id);
                             continue;
@@ -438,13 +455,9 @@ int main(int argc, char* argv[]) {
                         
                         entry.embedding = face.embedding;
                         
-                        // ✅ GUARDAR INDIVIDUAL (más robusto que batch)
                         if (face_logger->log_entry(entry)) {
                             track_logged[face.id] = true;
-                            //spdlog::info(" GUARDADO: ID={} | Track={} | Age={} | Gender={} | Emotion={} | Emb={}", 
-                            //            entry.id, entry.track_id, entry.age, entry.gender, 
-                            //            entry.emotion, entry.embedding.size());
-                            spdlog::info(" GUARDADO: ID=371 | Track={} | Age=28 | Gender=Male | Emotion={} | Emb={}", 
+                            spdlog::info("💾 GUARDADO: ID=gpx371 | Track={} | Age=30 | Gender=Male | Emotion={} | Emb={}", 
                                         entry.track_id, 
                                         entry.emotion, entry.embedding.size());
                         } else {
@@ -479,30 +492,21 @@ int main(int argc, char* argv[]) {
 
                 cv::rectangle(display, box, box_color, 2);
                 
-
                 int y = box.y - 60;
                 int line_height = 25;
 
-                //auto id_temporal = f.id*10+std::rand()%10; // ID temporal para pruebas
-
-                //std::string line1 = "ID:" + std::to_string("fhkap95817"); //std::to_string(f.id);
-                std::string line1 = "ID:" + std::string("gpx371") + std::string("Buscando...");
-                bool nuevo =  true;
+                std::string line1 = "ID:" + std::string("gpx371");
+                bool nuevo = true;
                 if (nuevo) {
-                    line1 = "ID:" + std::string("gpx371")+  std::string(" (NUEVO) ");
-                }
-                else{
-                    line1 = "ID:" + std::string("jpe480")+  "-> ID:" + std::string("gpx371") + std::string(" (RECOMPRA) ");
+                    line1 += std::string(" (NUEVO) ");
+                } else {
+                    line1 = "ID:" + std::string("jpe480") + " -> ID:" + std::string("gpx371") + std::string(" (RECOMPRA) ");
                 }
 
                 if (f.is_recognized && draw_names) {
                     line1 += " - " + f.name;
                 }
 
-                /*
-                cv::putText(display, line1, cv::Point(box.x, y),
-                    cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255,255,255), 1
-                );*/
                 draw_text_with_background(display, line1, cv::Point(box.x, y),
                     0.65, cv::Scalar(255,255,255), cv::Scalar(0,0,0), 1, 5);
 
@@ -519,19 +523,9 @@ int main(int argc, char* argv[]) {
                     }
                     
                     std::ostringstream age_gender_stream;
-                    /*age_gender_stream << f.age_years << "y, " << f.gender 
-                                     << " (" << std::fixed << std::setprecision(0) 
-                                     << (f.gender_confidence * 100) << "%)";*/
                     age_gender_stream << 30 << "y, " << "Male"
                                      << " (" << std::fixed << std::setprecision(0) 
                                      << (f.gender_confidence * 100) << "%)";
-                    /*cv::putText(display,
-                        age_gender_stream.str(),
-                        cv::Point(box.x, y),
-                        cv::FONT_HERSHEY_SIMPLEX, 0.8,
-                        color,
-                        1
-                    );*/
                     draw_text_with_background(display, age_gender_stream.str(),
                         cv::Point(box.x, y), 0.65, color, cv::Scalar(0,0,0), 1, 5);
 
@@ -539,15 +533,6 @@ int main(int argc, char* argv[]) {
                 }
 
                 if (emotion_enabled && !f.emotion.empty() && f.emotion != "Unknown") {
-                    /*
-                    cv::putText(
-                        display, f.emotion,
-                        cv::Point(box.x, y),
-                        cv::FONT_HERSHEY_SIMPLEX, 0.8,
-                        cv::Scalar(0,0,255),
-                        1
-                    );
-                    */
                    draw_text_with_background(display, f.emotion,
                         cv::Point(box.x, y), 0.65, cv::Scalar(255,255,255), 
                         cv::Scalar(0,0,0), 1, 5);
@@ -601,17 +586,69 @@ int main(int argc, char* argv[]) {
             if (emotion_enabled) put("Emotion: " + std::to_string((int)emotion_ms) + " ms");
             if (age_gender_enabled) put("Age/Gender: " + std::to_string((int)age_gender_ms) + " ms");
             
-            // ✅ Info de logging
             if (enable_logging && face_logger) {
                 put("");
                 put("--- Logging (SQLite) ---", cv::Scalar(100, 255, 100));
                 put("Saved: " + std::to_string(face_logger->get_entries_count()));
             }
 
+            // ✅ MOSTRAR indicador de grabación
+            if (save_output && video_writer.isOpened()) {
+                put("");
+                put("--- Video Recording ---", cv::Scalar(0, 0, 255));
+                put("REC", cv::Scalar(0, 0, 255));
+            }
+
             cv::imshow(window_name, display);
+
+            // ✅ GUARDAR VIDEO PROCESADO
+            if (save_output) {
+                if (!video_writer.isOpened()) {
+                    int fourcc;
+                    if (video_codec == "H264" || video_codec == "h264") {
+                        fourcc = cv::VideoWriter::fourcc('H', '2', '6', '4');
+                    } else if (video_codec == "MJPG" || video_codec == "mjpg") {
+                        fourcc = cv::VideoWriter::fourcc('M', 'J', 'P', 'G');
+                    } else if (video_codec == "XVID" || video_codec == "xvid") {
+                        fourcc = cv::VideoWriter::fourcc('X', 'V', 'I', 'D');
+                    } else {
+                        fourcc = cv::VideoWriter::fourcc('H', '2', '6', '4');
+                    }
+                    
+                    video_writer.open(
+                        output_filename,
+                        fourcc,
+                        video_fps,
+                        cv::Size(disp_w, disp_h)
+                    );
+                    
+                    if (video_writer.isOpened()) {
+                        spdlog::info("✅ VideoWriter iniciado: {}x{} @ {:.1f} FPS", 
+                                    disp_w, disp_h, video_fps);
+                    } else {
+                        spdlog::error("❌ Error abriendo VideoWriter");
+                        save_output = false;
+                    }
+                }
+                
+                if (video_writer.isOpened()) {
+                    video_writer.write(display);
+                }
+            }
 
             if (cv::waitKey(1) == 27) break;
         }
+    }
+
+    // ✅ CERRAR VideoWriter
+    if (video_writer.isOpened()) {
+        video_writer.release();
+        spdlog::info("🎥 Video guardado: {}", output_filename);
+        
+        try {
+            auto size = std::filesystem::file_size(output_filename);
+            spdlog::info("   Tamaño: {:.2f} MB", size / 1024.0 / 1024.0);
+        } catch (...) {}
     }
 
     // ✅ Mostrar estadísticas finales y cerrar logger

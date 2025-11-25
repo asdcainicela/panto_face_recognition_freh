@@ -75,9 +75,8 @@ draw_fps = true
 draw_detections = true
 draw_landmarks = true
 # Mostrar nombres reconocidos
-draw_names = true
-save_output = false
-output_dir = "videos/output"
+save_output = true
+output_dir = "videos_2/output"
 video_codec = "H264"
 video_fps = 25.0
 
