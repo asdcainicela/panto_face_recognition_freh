@@ -8,7 +8,8 @@
  * 
  * COMPILAR:
  *   g++ -std=c++17 compare_embeddings_fixed.cpp -o compare_fixed -lsqlite3 -O3
- * 
+  ./build/bin/compare_embeddings_fixed  logs/faces/freh.db --method complete --threshold 0.90
+
  * USO:
  *   ./compare_fixed freh.db --method average --threshold 0.60
  *   ./compare_fixed freh.db --method complete --threshold 0.70
