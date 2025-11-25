@@ -1,4 +1,4 @@
-// ============= main.cpp - CON FACELOGGER INTEGRADO =============
+// ============= main.cpp - CON FACELOGGER SQLite INDIVIDUAL =============
 #include "detector_optimized.hpp"
 #include "tracker.hpp"
 #include "recognizer.hpp"
@@ -138,10 +138,10 @@ int main(int argc, char* argv[]) {
     bool age_gender_use_interval = config.get_bool("age_gender.use_interval", false);
     int age_gender_interval = config.get_int("age_gender.analyze_interval", 10);
 
-    // ✅ NUEVO: Configuración FaceLogger
+    // ✅ Configuración FaceLogger
     bool enable_logging = config.get_bool("output.enable_logging", true);
     std::string log_path = config.get("output.log_path", "logs/faces");
-    std::string log_db_name = config.get("output.log_db_name", "");  // Opcional: nombre custom
+    std::string log_db_name = config.get("output.log_db_name", "");
     int log_interval = config.get_int("output.log_interval", 30);
 
     ModelValidator validator;
@@ -180,7 +180,6 @@ int main(int argc, char* argv[]) {
     std::unique_ptr<EmotionRecognizer> emotion_recognizer;
     std::unique_ptr<AgeGenderPredictor> age_gender_predictor;
     std::unique_ptr<FaceDatabase> database;
-    //std::unique_ptr<FaceLogger> face_logger;  // ✅ NUEVO
     std::unique_ptr<FaceLoggerSQLite> face_logger;
 
     if (mode_detect) {
@@ -204,11 +203,7 @@ int main(int argc, char* argv[]) {
                 age_gender_predictor = std::make_unique<AgeGenderPredictor>(age_gender_path, true);
             }
 
-            // ✅ NUEVO: Inicializar FaceLogger
-            /*if (enable_logging) {
-                face_logger = std::make_unique<FaceLogger>(log_path);
-                spdlog::info("📝 FaceLogger habilitado (intervalo: {} frames)", log_interval);
-            }*/
+            // ✅ Inicializar FaceLogger SQLite
             if (enable_logging) {
                 try {
                     face_logger = std::make_unique<FaceLoggerSQLite>(log_path, log_db_name);
@@ -264,11 +259,8 @@ int main(int argc, char* argv[]) {
 
     auto start_time = std::chrono::steady_clock::now();
 
-    std::vector<FaceLogEntry> log_buffer;
-    const int BATCH_SIZE = 10;  // Guardar cada 10 rostros
-
-    // ✅ NUEVO: Control de logging
-    std::map<int, bool> track_logged;  // track_id -> logged
+    // ✅ Control de logging (sin buffer)
+    std::map<int, bool> track_logged;
 
     while (!stop_signal) {
         bool ok = is_rtsp ? stream_capture->read(frame) : cap.read(frame);
@@ -283,7 +275,6 @@ int main(int argc, char* argv[]) {
             continue;
 
         std::vector<TrackedFace> tracked_faces;
-        
 
         if (mode_detect) {
             auto t1 = std::chrono::high_resolution_clock::now();
@@ -367,7 +358,7 @@ int main(int argc, char* argv[]) {
                     if (safe.area() <= 0) continue;
 
                     auto emb = recognizer->extract_embedding(frame(safe));
-                    f.embedding = emb;  // ✅ Guardar embedding en el track
+                    f.embedding = emb;
                     
                     auto res = database->recognize(emb);
 
@@ -381,7 +372,7 @@ int main(int argc, char* argv[]) {
                 recog_ms = std::chrono::duration<double, std::milli>(t5 - t4).count();
             }
 
-            // ============= GUARDAR ROSTROS EN SQLITE =============
+            // ============= GUARDAR ROSTROS EN SQLITE (UNO POR UNO) =============
             if (enable_logging && face_logger && frame_count % log_interval == 0) {
                 for (auto& face : tracked_faces) {
                     // Solo guardar tracks confirmados y no guardados previamente
@@ -389,10 +380,10 @@ int main(int argc, char* argv[]) {
                         
                         // Crear entrada
                         FaceLogEntry entry;
-                        entry.age = (face.age_years > 0) ? face.age_years : 25;  // default
-                        entry.gender = (!face.gender.empty()) ? face.gender : "Unknown";
+                        entry.age = (face.age_years > 0) ? face.age_years : 25;
+                        entry.gender = (!face.gender.empty() && face.gender != "Unknown") ? face.gender : "Unknown";
                         entry.company = "Freh";
-                        entry.emotion = (!face.emotion.empty()) ? face.emotion : "Unknown";
+                        entry.emotion = (!face.emotion.empty() && face.emotion != "Unknown") ? face.emotion : "Unknown";
                         
                         // Metadata adicional
                         entry.track_id = face.id;
@@ -409,29 +400,29 @@ int main(int argc, char* argv[]) {
                                 try {
                                     face.embedding = recognizer->extract_embedding(frame(safe));
                                 } catch(const std::exception& e) {
-                                    spdlog::warn("Error extrayendo embedding: {}", e.what());
+                                    spdlog::warn("⚠️ Error extrayendo embedding para Track {}: {}", face.id, e.what());
+                                    continue;  // Skip este rostro
                                 }
                             }
                         }
-                        entry.embedding = face.embedding;
                         
-                        // ✅ OPCIÓN 1: Guardar individual (más simple)
-                        // face_logger->log_entry(entry);
-                        
-                        // ✅ OPCIÓN 2: Buffer para batch insert (RECOMENDADO - más rápido)
-                        log_buffer.push_back(entry);
-                        
-                        // Guardar batch cuando se llena el buffer
-                        if (log_buffer.size() >= BATCH_SIZE) {
-                            face_logger->log_batch(log_buffer);
-                            log_buffer.clear();
+                        // ✅ Validar antes de guardar
+                        if (face.embedding.empty()) {
+                            spdlog::warn("⚠️ Track {} sin embedding, skipping", face.id);
+                            continue;
                         }
                         
-                        track_logged[face.id] = true;
+                        entry.embedding = face.embedding;
                         
-                        spdlog::info("💾 GUARDADO: ID={} | Track={} | Age={} | Gender={} | Emotion={} | Emb={}", 
-                                    entry.id, entry.track_id, entry.age, entry.gender, 
-                                    entry.emotion, entry.embedding.size());
+                        // ✅ GUARDAR INDIVIDUAL (más robusto que batch)
+                        if (face_logger->log_entry(entry)) {
+                            track_logged[face.id] = true;
+                            spdlog::info("💾 GUARDADO: ID={} | Track={} | Age={} | Gender={} | Emotion={} | Emb={}", 
+                                        entry.id, entry.track_id, entry.age, entry.gender, 
+                                        entry.emotion, entry.embedding.size());
+                        } else {
+                            spdlog::error("❌ Error guardando Track {}", face.id);
+                        }
                     }
                 }
             }
@@ -525,7 +516,7 @@ int main(int argc, char* argv[]) {
             double fps = frame_count / sec;
 
             int pw = 320;
-            int ph = 300;  // ✅ Aumentado para incluir info de logging
+            int ph = 280;
 
             cv::Mat overlay = display.clone();
             cv::rectangle(overlay, cv::Rect(0,0,pw,ph), cv::Scalar(0,0,0), -1);
@@ -557,12 +548,11 @@ int main(int argc, char* argv[]) {
             if (emotion_enabled) put("Emotion: " + std::to_string((int)emotion_ms) + " ms");
             if (age_gender_enabled) put("Age/Gender: " + std::to_string((int)age_gender_ms) + " ms");
             
-            // ✅ NUEVO: Info de logging
+            // ✅ Info de logging
             if (enable_logging && face_logger) {
                 put("");
                 put("--- Logging (SQLite) ---", cv::Scalar(100, 255, 100));
                 put("Saved: " + std::to_string(face_logger->get_entries_count()));
-                put("Buffer: " + std::to_string(log_buffer.size()) + "/" + std::to_string(BATCH_SIZE));
             }
 
             cv::imshow(window_name, display);
@@ -571,19 +561,7 @@ int main(int argc, char* argv[]) {
         }
     }
 
-    // ✅ NUEVO: Cerrar logger al finalizar
-    if (face_logger) {
-        face_logger->close();
-    }
-
-        // ✅ NUEVO: Guardar buffer restante antes de cerrar
-    if (enable_logging && face_logger && !log_buffer.empty()) {
-        spdlog::info("💾 Guardando últimos {} rostros...", log_buffer.size());
-        face_logger->log_batch(log_buffer);
-        log_buffer.clear();
-    }
-
-    // ✅ NUEVO: Mostrar estadísticas finales
+    // ✅ Mostrar estadísticas finales y cerrar logger
     if (face_logger) {
         face_logger->print_statistics();
         face_logger->close();
