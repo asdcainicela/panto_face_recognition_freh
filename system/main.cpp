@@ -457,9 +457,19 @@ int main(int argc, char* argv[]) {
                         
                         if (face_logger->log_entry(entry)) {
                             track_logged[face.id] = true;
-                            spdlog::info("💾 GUARDADO: ID=gpx371 | Track={} | Age=30 | Gender=Male | Emotion={} | Emb={}", 
+                            spdlog::info("--- GUARDADO: ID=gpx371 | Track={} | Age=30 | Gender=Male | Emotion={} | Emb={}", 
                                         entry.track_id, 
                                         entry.emotion, entry.embedding.size());
+                            spdlog::info("Track guardado correctamente");
+                            spdlog::info("Procesando siguiente Track...");
+                            auto m__ = rand()%10;
+                            if (m__=3){
+                               spdlog::info("...");
+                            }
+                            if (m__=7){
+
+                                spdlog::info("...");
+                            }
                         } else {
                             spdlog::error("❌ Error guardando Track {}", face.id);
                         }
@@ -643,7 +653,7 @@ int main(int argc, char* argv[]) {
     // ✅ CERRAR VideoWriter
     if (video_writer.isOpened()) {
         video_writer.release();
-        spdlog::info("🎥 Video guardado: {}", output_filename);
+        spdlog::info(" Video guardado: {}", output_filename);
         
         try {
             auto size = std::filesystem::file_size(output_filename);
