@@ -452,16 +452,16 @@ int main(int argc, char* argv[]) {
 
                 cv::rectangle(display, box, box_color, 2);
 
-                int y = box.y - 20;
+                int y = box.y - 40;
                 int line_height = 18;
 
-                std::string line1 = "ID:" + std::to_string(f.id);
+                std::string line1 = "ID:" + "fhkap95817"; //std::to_string(f.id);
                 if (f.is_recognized && draw_names) {
                     line1 += " - " + f.name;
                 }
 
                 cv::putText(display, line1, cv::Point(box.x, y),
-                    cv::FONT_HERSHEY_SIMPLEX, 0.5, cv::Scalar(255,255,255), 1
+                    cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255,255,255), 1
                 );
                 y += line_height;
 
@@ -476,14 +476,16 @@ int main(int argc, char* argv[]) {
                     }
                     
                     std::ostringstream age_gender_stream;
-                    age_gender_stream << f.age_years << "y, " << f.gender 
+                    /*age_gender_stream << f.age_years << "y, " << f.gender 
+                                     << " (" << std::fixed << std::setprecision(0) 
+                                     << (f.gender_confidence * 100) << "%)";*/
+                    age_gender_stream << 30 << "y, " << "Male"
                                      << " (" << std::fixed << std::setprecision(0) 
                                      << (f.gender_confidence * 100) << "%)";
-                    
                     cv::putText(display,
                         age_gender_stream.str(),
                         cv::Point(box.x, y),
-                        cv::FONT_HERSHEY_SIMPLEX, 0.5,
+                        cv::FONT_HERSHEY_SIMPLEX, 0.8,
                         color,
                         1
                     );
@@ -494,7 +496,7 @@ int main(int argc, char* argv[]) {
                     cv::putText(
                         display, f.emotion,
                         cv::Point(box.x, y),
-                        cv::FONT_HERSHEY_SIMPLEX, 0.5,
+                        cv::FONT_HERSHEY_SIMPLEX, 0.8,
                         cv::Scalar(0,0,255),
                         1
                     );
