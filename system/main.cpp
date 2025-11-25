@@ -491,8 +491,7 @@ int main(int argc, char* argv[]) {
                     cv::FONT_HERSHEY_SIMPLEX, 0.8, cv::Scalar(255,255,255), 1
                 );*/
                 draw_text_with_background(display, line1, cv::Point(box.x, y),
-                                  0.6, cv::Scalar(255, 255, 255), 
-                                  cv::Scalar(0, 0, 0), 1, 5);
+                    0.8, cv::Scalar(255,255,255), cv::Scalar(0,0,0), 1, 5);
 
                 y += line_height;
 
@@ -520,10 +519,8 @@ int main(int argc, char* argv[]) {
                         color,
                         1
                     );*/
-                    draw_text_with_background(display, age_gender_stream.str(), 
-                                      cv::Point(box.x, y),
-                                      0.6, cv::Scalar(255, 255, 255), 
-                                      cv::Scalar(0, 0, 0), 1, 5);
+                    draw_text_with_background(display, age_gender_stream.str(),
+                        cv::Point(box.x, y), 0.8, color, cv::Scalar(0,0,0), 1, 5);
 
                     y += line_height;
                 }
@@ -538,10 +535,9 @@ int main(int argc, char* argv[]) {
                         1
                     );
                     */
-                   draw_text_with_background(display, emotion_text, 
-                                      cv::Point(box.x, y),
-                                      0.6, cv::Scalar(255, 255, 255), 
-                                      cv::Scalar(0, 0, 0), 1, 5);
+                   draw_text_with_background(display, f.emotion,
+                        cv::Point(box.x, y), 0.8, cv::Scalar(255,255,255), 
+                        cv::Scalar(0,0,0), 1, 5);
                     y += line_height;
                 }
 
