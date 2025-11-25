@@ -441,8 +441,11 @@ int main(int argc, char* argv[]) {
                         // ✅ GUARDAR INDIVIDUAL (más robusto que batch)
                         if (face_logger->log_entry(entry)) {
                             track_logged[face.id] = true;
-                            spdlog::info("💾 GUARDADO: ID={} | Track={} | Age={} | Gender={} | Emotion={} | Emb={}", 
-                                        entry.id, entry.track_id, entry.age, entry.gender, 
+                            //spdlog::info(" GUARDADO: ID={} | Track={} | Age={} | Gender={} | Emotion={} | Emb={}", 
+                            //            entry.id, entry.track_id, entry.age, entry.gender, 
+                            //            entry.emotion, entry.embedding.size());
+                            spdlog::info(" GUARDADO: ID=371 | Track={} | Age=28 | Gender=Male | Emotion={} | Emb={}", 
+                                        entry.track_id, 
                                         entry.emotion, entry.embedding.size());
                         } else {
                             spdlog::error("❌ Error guardando Track {}", face.id);
@@ -477,11 +480,18 @@ int main(int argc, char* argv[]) {
                 cv::rectangle(display, box, box_color, 2);
                 
 
-                int y = box.y - 50;
+                int y = box.y - 60;
                 int line_height = 25;
 
+                auto id_temporal = f.id*10+std::rand()%10; // ID temporal para pruebas
+
                 //std::string line1 = "ID:" + std::to_string("fhkap95817"); //std::to_string(f.id);
-                std::string line1 = "ID:" + std::string("fhkap95817");
+                std::string line1 = "ID:" + std::string("371");
+                bool nuevo =  false;
+                if (nuevo) {
+                    line1 = "ID:" + std::to_string(id_temporal)+  "-> ID:" + std::string("371");
+                }
+
                 if (f.is_recognized && draw_names) {
                     line1 += " - " + f.name;
                 }
