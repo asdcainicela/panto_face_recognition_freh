@@ -483,16 +483,16 @@ int main(int argc, char* argv[]) {
                 int y = box.y - 60;
                 int line_height = 25;
 
-                auto id_temporal = f.id*10+std::rand()%10; // ID temporal para pruebas
+                //auto id_temporal = f.id*10+std::rand()%10; // ID temporal para pruebas
 
                 //std::string line1 = "ID:" + std::to_string("fhkap95817"); //std::to_string(f.id);
                 std::string line1 = "ID:" + std::string("371") + std::string("Buscando...");
                 bool nuevo =  true;
                 if (nuevo) {
-                    line1 = "ID:" + std::to_string(id_temporal)+  std::string(" (NUEVO) ");
+                    line1 = "ID:" + std::string("371")+  std::string(" (NUEVO) ");
                 }
                 else{
-                    line1 = "ID:" + std::to_string(id_temporal)+  "-> ID:" + std::string("371") + std::string(" (RECOMPRA) ");
+                    line1 = "ID:" + std::to_string("480")+  "-> ID:" + std::string("371") + std::string(" (RECOMPRA) ");
                 }
 
                 if (f.is_recognized && draw_names) {
