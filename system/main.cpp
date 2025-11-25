@@ -492,7 +492,7 @@ int main(int argc, char* argv[]) {
                     line1 = "ID:" + std::string("gpx371")+  std::string(" (NUEVO) ");
                 }
                 else{
-                    line1 = "ID:" + std::to_string("jpe480")+  "-> ID:" + std::string("gpx371") + std::string(" (RECOMPRA) ");
+                    line1 = "ID:" + std::string("jpe480")+  "-> ID:" + std::string("gpx371") + std::string(" (RECOMPRA) ");
                 }
 
                 if (f.is_recognized && draw_names) {
