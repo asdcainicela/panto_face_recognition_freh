@@ -486,13 +486,13 @@ int main(int argc, char* argv[]) {
                 auto id_temporal = f.id*10+std::rand()%10; // ID temporal para pruebas
 
                 //std::string line1 = "ID:" + std::to_string("fhkap95817"); //std::to_string(f.id);
-                std::string line1 = "ID:" + std::string("371") ;
+                std::string line1 = "ID:" + std::string("371") + std::string("Buscando...");
                 bool nuevo =  true;
                 if (nuevo) {
-                    line1 = "ID:" + std::to_string(id_temporal)+  std::string(" (NEW) ");
+                    line1 = "ID:" + std::to_string(id_temporal)+  std::string(" (NUEVO) ");
                 }
                 else{
-                    line1 = "ID:" + std::to_string(id_temporal)+  "-> ID:" + std::string("371");
+                    line1 = "ID:" + std::to_string(id_temporal)+  "-> ID:" + std::string("371") + std::string(" (RECOMPRA) ");
                 }
 
                 if (f.is_recognized && draw_names) {
