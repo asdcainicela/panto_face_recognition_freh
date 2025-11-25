@@ -495,10 +495,10 @@ int main(int argc, char* argv[]) {
                 int y = box.y - 60;
                 int line_height = 25;
 
-                std::string line1 = "ID:" + std::string("gpx371");
-                bool nuevo = true;
+                std::string line1 = "ID:" + std::string("msd")+std::to_string(rand()%100) + std::string("Buscando..");
+                bool nuevo = false;
                 if (nuevo) {
-                    line1 += std::string(" (NUEVO) ");
+                    line1 = "ID:" + std::string("gpx371") + std::string(" (NUEVO) ");
                 } else {
                     line1 = "ID:" + std::string("jpe480") + " -> ID:" + std::string("gpx371") + std::string(" (RECOMPRA) ");
                 }
