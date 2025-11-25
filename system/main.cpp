@@ -498,9 +498,9 @@ int main(int argc, char* argv[]) {
                 std::string line1 = "ID:" + std::string("msd")+std::to_string(rand()%100) + std::string("Buscando..");
                 bool nuevo = false;
                 if (nuevo) {
-                    line1 = "ID:" + std::string("gpx371") + std::string(" (NUEVO) ");
+                    line1 = "ID:" + std::string("phb198") + std::string(" (NUEVO) ");
                 } else {
-                    line1 = "ID:" + std::string("jpe480") + " -> ID:" + std::string("gpx371") + std::string(" (RECOMPRA) ");
+                    line1 = "ID:" + std::string("zkl112") + " -> ID:" + std::string("gpx371") + std::string(" (RECOMPRA) ");
                 }
 
                 if (f.is_recognized && draw_names) {
@@ -523,7 +523,7 @@ int main(int argc, char* argv[]) {
                     }
                     
                     std::ostringstream age_gender_stream;
-                    age_gender_stream << 30 << "y, " << "Male"
+                    age_gender_stream << 25 << "y, " << "Female"
                                      << " (" << std::fixed << std::setprecision(0) 
                                      << (f.gender_confidence * 100) << "%)";
                     draw_text_with_background(display, age_gender_stream.str(),
