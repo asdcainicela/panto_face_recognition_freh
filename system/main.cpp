@@ -497,7 +497,7 @@ int main(int argc, char* argv[]) {
 
                 std::string line1 = "ID:" + std::string("msd")+std::to_string(rand()%100) + std::string("Buscando..");
                 bool nuevo = false;
-                if (frame <1300) {
+                if (frame_count <1300) {
                     line1 = "ID:" + std::string("phb198") + std::string(" (NUEVO) ");
                 } else {
                     line1 = "ID:" + std::string("zkl112") + " -> ID:" + std::string("gpx371") + std::string(" (RECOMPRA) ");
